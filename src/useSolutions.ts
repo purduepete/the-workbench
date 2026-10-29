@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Solution } from '../shared/contracts';
 
 export const SOLUTIONS_STORAGE_KEY = 'idea-notes.solutions';
@@ -35,23 +35,28 @@ export interface SolutionsState {
     solutions: Solution[];
     /** Saves the setting for every device. Returns an error message, or null when saved. */
     setDisabled: (id: string, disabled: boolean) => Promise<string | null>;
+    refresh: () => Promise<void>;
 }
 
 /** Solution Directory's list, cached in this browser so offline capture can still link a solution. */
 export function useSolutions(): SolutionsState {
     const [solutions, setSolutions] = useState(readCached);
-    useEffect(() => {
-        let active = true;
-        const refresh = () =>
+    const active = useRef(true);
+    const refresh = useCallback(
+        () =>
             fetch('/api/solutions')
                 .then(async (response) => {
                     if (!response.ok) return;
                     const body = (await response.json()) as { solutions?: unknown };
-                    if (!active || !isSolutionList(body.solutions)) return;
+                    if (!active.current || !isSolutionList(body.solutions)) return;
                     setSolutions(body.solutions);
                     writeCached(body.solutions);
                 })
-                .catch(() => undefined);
+                .catch(() => undefined),
+        []
+    );
+    useEffect(() => {
+        active.current = true;
         // Solution Directory is the source of truth, so new solutions appear when the tab regains focus.
         const onVisible = () => {
             if (document.visibilityState === 'visible') void refresh();
@@ -59,10 +64,10 @@ export function useSolutions(): SolutionsState {
         void refresh();
         document.addEventListener('visibilitychange', onVisible);
         return () => {
-            active = false;
+            active.current = false;
             document.removeEventListener('visibilitychange', onVisible);
         };
-    }, []);
+    }, [refresh]);
 
     const setDisabled = useCallback(async (id: string, disabled: boolean) => {
         const apply = (value: boolean) =>
@@ -86,5 +91,5 @@ export function useSolutions(): SolutionsState {
         return 'The solution setting could not be saved. Check the connection and try again.';
     }, []);
 
-    return { solutions, setDisabled };
+    return { solutions, setDisabled, refresh };
 }

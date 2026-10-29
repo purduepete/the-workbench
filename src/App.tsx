@@ -18,6 +18,7 @@ import {
     Search,
     Settings2,
     Tag,
+    Trash2,
     X,
 } from 'lucide-react';
 import { filterIdeas, formatIdeaTimestamp, parseTags, readIdeaView, writeIdeaView } from './ideas';
@@ -45,6 +46,7 @@ interface IdeaDialogProps {
     defaultSolution: string | null;
     onClose: () => void;
     onSave: (value: IdeaInput) => string | null;
+    onDelete: (id: string) => string | null;
 }
 
 const statusOptions: { value: IdeaStatus; label: string }[] = [
@@ -286,10 +288,11 @@ function ThemeMenu() {
     );
 }
 
-function IdeaDialog({ idea, solutions, defaultSolution, onClose, onSave }: IdeaDialogProps) {
+function IdeaDialog({ idea, solutions, defaultSolution, onClose, onSave, onDelete }: IdeaDialogProps) {
     const dialogRef = useRef<HTMLDialogElement>(null);
     const titleRef = useRef<HTMLInputElement>(null);
     const [formError, setFormError] = useState<string | null>(null);
+    const [confirmingDelete, setConfirmingDelete] = useState(false);
     const [solution, setSolution] = useState<string | null>(idea ? idea.solution : defaultSolution);
     const [status, setStatus] = useState<IdeaStatus>(() => statusForSolution(solution, idea?.status));
     const statusIndex = statusOptions.findIndex((option) => option.value === status);
@@ -320,6 +323,20 @@ function IdeaDialog({ idea, solutions, defaultSolution, onClose, onSave }: IdeaD
             solution,
             status,
         });
+        if (error) {
+            setFormError(error);
+            return;
+        }
+        onClose();
+    };
+
+    const handleDelete = () => {
+        if (!idea) return;
+        if (!confirmingDelete) {
+            setConfirmingDelete(true);
+            return;
+        }
+        const error = onDelete(idea.id);
         if (error) {
             setFormError(error);
             return;
@@ -439,6 +456,19 @@ function IdeaDialog({ idea, solutions, defaultSolution, onClose, onSave }: IdeaD
                     </p>
                 )}
                 <div className="dialog-footer">
+                    {idea && (
+                        <button
+                            type="button"
+                            className="danger-button"
+                            data-confirming={confirmingDelete}
+                            aria-label={confirmingDelete ? 'Confirm delete' : 'Delete idea'}
+                            onClick={handleDelete}
+                            onBlur={() => setConfirmingDelete(false)}
+                        >
+                            <Trash2 size={15} aria-hidden="true" />
+                            {confirmingDelete ? 'Confirm' : 'Delete'}
+                        </button>
+                    )}
                     <button type="button" className="secondary-button" onClick={onClose}>
                         Cancel
                     </button>
@@ -585,7 +615,7 @@ export function App() {
     const [solutionFilter, setSolutionFilter] = useState<SolutionFilter>('all');
     const [editingIdea, setEditingIdea] = useState<Idea | null | undefined>(undefined);
     const [managingSolutions, setManagingSolutions] = useState(false);
-    const { solutions, setDisabled: setSolutionDisabled } = useSolutions();
+    const { solutions, setDisabled: setSolutionDisabled, refresh: refreshSolutions } = useSolutions();
     const linkedIds = Array.from(new Set(ideas.flatMap((idea) => (idea.solution ? [idea.solution] : []))));
     const filterOptions = [
         { value: 'all', label: 'All solutions' },
@@ -663,10 +693,24 @@ export function App() {
                         <button
                             type="button"
                             className="primary-button control-height"
+                            aria-label="New idea"
                             onClick={() => setEditingIdea(null)}
                         >
                             <Plus size={16} aria-hidden="true" />
-                            New idea
+                            <span className="button-label">New idea</span>
+                        </button>
+                        <button
+                            type="button"
+                            className="icon-button control-height refresh-button"
+                            aria-label="Refresh ideas"
+                            aria-busy={sync.refreshing}
+                            data-refreshing={sync.refreshing}
+                            onClick={() => {
+                                void sync.refresh();
+                                void refreshSolutions();
+                            }}
+                        >
+                            <RefreshCw size={16} aria-hidden="true" />
                         </button>
                         <ThemeMenu />
                     </div>
@@ -839,6 +883,7 @@ export function App() {
                     defaultSolution={solutionFilter === 'all' || solutionFilter === 'none' ? null : solutionFilter}
                     onClose={() => setEditingIdea(undefined)}
                     onSave={saveIdea}
+                    onDelete={sync.remove}
                 />
             )}
             {managingSolutions && (

@@ -31,6 +31,8 @@
     --accent-soft: rgb(107 140 174 / 16%);
     --input: #020617;
     --shadow: 0 24px 80px rgb(0 0 0 / 38%);
+    --danger: #f87171;
+    --danger-soft: rgb(248 113 113 / 14%);
     color-scheme: dark;
 }
 
@@ -49,6 +51,8 @@
     --accent-soft: rgb(47 71 123 / 10%);
     --input: #ffffff;
     --shadow: 0 24px 80px rgb(15 23 42 / 15%);
+    --danger: #b91c1c;
+    --danger-soft: rgb(185 28 28 / 10%);
     color-scheme: light;
 }
 
@@ -837,8 +841,42 @@ main.page-width {
 }
 
 .dialog-footer .primary-button,
-.dialog-footer .secondary-button {
+.dialog-footer .secondary-button,
+.dialog-footer .danger-button {
     min-height: 38px;
+    white-space: nowrap;
+}
+
+.danger-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin-right: auto;
+    padding: 0 12px;
+    border: 1px solid var(--border);
+    color: var(--danger);
+    background: transparent;
+    font-size: 13px;
+    cursor: pointer;
+    transition:
+        background-color 0.2s ease,
+        border-color 0.2s ease;
+}
+
+.danger-button:hover,
+.danger-button[data-confirming='true'] {
+    border-color: var(--danger);
+    background: var(--danger-soft);
+}
+
+.refresh-button[data-refreshing='true'] svg {
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
 }
 
 @keyframes fade-up {
@@ -1140,7 +1178,10 @@ main.page-width {
     .top-actions > .primary-button {
         width: 36px;
         padding: 0;
-        font-size: 0;
+    }
+
+    .top-actions > .primary-button .button-label {
+        display: none;
     }
 
     .top-actions > .primary-button svg {

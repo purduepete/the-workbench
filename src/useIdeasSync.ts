@@ -6,6 +6,7 @@ import {
     localIdeas,
     markAttempted,
     queueCreate,
+    queueDelete,
     queueUpdate,
     readSyncState,
     replaceServer,
@@ -140,8 +141,11 @@ export function useIdeasSync() {
         status,
         waiting,
         notice,
+        refreshing: phase === 'syncing',
+        refresh: sync,
         clearNotice: () => setNotice(null),
         create: (idea: Idea) => change(queueCreate(stateRef.current, idea)),
         update: (idea: Idea) => change(queueUpdate(stateRef.current, idea)),
+        remove: (id: string) => change(queueDelete(stateRef.current, id)),
     };
 }
