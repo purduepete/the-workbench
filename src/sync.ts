@@ -1,5 +1,6 @@
 import type { IdeaFields, Mutation, MutationResponse, ServerIdea } from '../shared/contracts';
 import type { Idea } from './types';
+import { statusForSolution } from '../shared/status';
 
 export const SYNC_STORAGE_KEY = 'idea-notes.sync';
 export const LEGACY_IDEAS_KEY = 'idea-notes.ideas';
@@ -24,14 +25,17 @@ export const fieldsOf = (idea: Idea): IdeaFields => ({
     pinned: idea.pinned,
     archived: idea.archived,
     solution: idea.solution,
-    status: idea.status,
+    status: statusForSolution(idea.solution, idea.status),
     updatedAt: idea.updatedAt,
 });
 
 /** Data saved before solutions and status existed gets the same defaults the server applies. */
 const withDefaults = <T extends object>(value: T) => ({ solution: null, status: 'open' as const, ...value });
 
-const stripVersion = ({ version: _version, ...idea }: ServerIdea): Idea => idea;
+const stripVersion = ({ version: _version, ...idea }: ServerIdea): Idea => ({
+    ...idea,
+    status: statusForSolution(idea.solution, idea.status),
+});
 
 /** The ideas to show: the confirmed server rows with every queued change applied on top. */
 export function localIdeas(state: SyncState): Idea[] {
@@ -43,7 +47,13 @@ export function localIdeas(state: SyncState): Idea[] {
         }
         const current = ideas.get(entry.id);
         const createdAt = current?.createdAt ?? (entry.kind === 'create' ? entry.createdAt : entry.fields.updatedAt);
-        ideas.set(entry.id, { id: entry.id, createdAt, ...entry.fields, tags: [...entry.fields.tags] });
+        ideas.set(entry.id, {
+            id: entry.id,
+            createdAt,
+            ...entry.fields,
+            status: statusForSolution(entry.fields.solution, entry.fields.status),
+            tags: [...entry.fields.tags],
+        });
     }
     return [...ideas.values()];
 }

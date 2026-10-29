@@ -1,11 +1,12 @@
 import { z } from 'zod';
+import { ideaStatuses, statusForSolution } from './status.js';
+
+export { ideaStatuses } from './status.js';
+export type { IdeaStatus } from './status.js';
 
 export const limits = { title: 140, body: 20_000, tag: 40, tags: 12 } as const;
 
 const isoTimestamp = z.iso.datetime({ offset: true });
-
-export const ideaStatuses = ['open', 'in-progress', 'done'] as const;
-export type IdeaStatus = (typeof ideaStatuses)[number];
 
 /** Solution ids match the hyphenated ids in Solution Directory's sites.json. */
 export const solutionIdPattern = /^[a-z0-9][a-z0-9-]{0,62}$/;
@@ -22,7 +23,8 @@ export const ideaFieldsSchema = z
         status: z.enum(ideaStatuses).default('open'),
         updatedAt: isoTimestamp,
     })
-    .strict();
+    .strict()
+    .transform((fields) => ({ ...fields, status: statusForSolution(fields.solution, fields.status) }));
 
 export type IdeaFields = z.infer<typeof ideaFieldsSchema>;
 
@@ -74,7 +76,13 @@ export interface MutationResponse extends MutationReceipt {
 export interface Solution {
     id: string;
     name: string;
+    /** Hidden from the pickers on every device; linked ideas keep the link. */
+    disabled?: boolean;
 }
+
+export const solutionSettingSchema = z
+    .object({ id: z.string().regex(solutionIdPattern), disabled: z.boolean() })
+    .strict();
 
 export const ideaQuerySchema = z.object({
     solution: z.union([z.literal('none'), z.string().regex(solutionIdPattern)]).optional(),

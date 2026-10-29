@@ -9,6 +9,8 @@ export interface IdeasStore {
     /** Applies a mutation once. Repeating a mutationId returns the first receipt without writing again. */
     apply(mutation: Mutation): Promise<MutationResponse>;
     ready(): Promise<void>;
+    listDisabledSolutions(): Promise<string[]>;
+    setSolutionDisabled(id: string, disabled: boolean): Promise<void>;
 }
 
 export const copyTitle = (title: string) => `${title.slice(0, limits.title - 7)} (copy)`;
@@ -16,6 +18,7 @@ export const copyTitle = (title: string) => `${title.slice(0, limits.title - 7)}
 export class MemoryIdeasStore implements IdeasStore {
     private readonly ideas = new Map<string, ServerIdea>();
     private readonly receipts = new Map<string, MutationReceipt>();
+    private readonly disabledSolutions = new Set<string>();
     failing = false;
 
     async list(): Promise<ServerIdea[]> {
@@ -33,6 +36,17 @@ export class MemoryIdeasStore implements IdeasStore {
 
     async ready(): Promise<void> {
         this.check();
+    }
+
+    async listDisabledSolutions(): Promise<string[]> {
+        this.check();
+        return [...this.disabledSolutions].sort();
+    }
+
+    async setSolutionDisabled(id: string, disabled: boolean): Promise<void> {
+        this.check();
+        if (disabled) this.disabledSolutions.add(id);
+        else this.disabledSolutions.delete(id);
     }
 
     private check() {
@@ -144,6 +158,23 @@ export class PostgresIdeasStore implements IdeasStore {
             throw new Error(`Idea Notes schema version is not ${SCHEMA_VERSION}.`);
         await this.pool.query('SELECT id FROM public.ideas LIMIT 1');
         await this.pool.query('SELECT mutation_id FROM public.applied_mutations LIMIT 1');
+        await this.pool.query('SELECT solution_id FROM public.disabled_solutions LIMIT 1');
+    }
+
+    async listDisabledSolutions(): Promise<string[]> {
+        const result = await this.pool.query<{ solution_id: string }>(
+            'SELECT solution_id FROM public.disabled_solutions ORDER BY solution_id'
+        );
+        return result.rows.map((row) => row.solution_id);
+    }
+
+    async setSolutionDisabled(id: string, disabled: boolean): Promise<void> {
+        await this.pool.query(
+            disabled
+                ? 'INSERT INTO public.disabled_solutions (solution_id) VALUES ($1) ON CONFLICT DO NOTHING'
+                : 'DELETE FROM public.disabled_solutions WHERE solution_id = $1',
+            [id]
+        );
     }
 
     private async receipt(db: Pool | PoolClient, mutationId: string): Promise<MutationReceipt | null> {

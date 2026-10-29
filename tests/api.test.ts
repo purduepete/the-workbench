@@ -208,7 +208,29 @@ describe('solutions and status', () => {
     it('defaults solution and status for changes queued by an older client', () => {
         const { solution: _solution, status: _status, ...oldFields } = fields('Old client');
         const parsed = mutationSchema.parse({ ...create('Old client'), fields: oldFields });
-        expect(parsed.kind === 'create' && parsed.fields).toMatchObject({ solution: null, status: 'open' });
+        expect(parsed.kind === 'create' && parsed.fields).toMatchObject({ solution: null, status: 'n/a' });
+    });
+
+    it('sets N/A on unlinked writes and Open when linking an N/A idea', async () => {
+        const mutation = linked('Loose thought', null, 'done');
+        expect(await (await post('/api/mutations', mutation)).json()).toMatchObject({
+            idea: { solution: null, status: 'n/a' },
+        });
+        const edit = update(mutation.id, 1, 'Now linked');
+        if (edit.kind !== 'update') throw new Error('Expected update.');
+        edit.fields = { ...edit.fields, solution: 'ferry-tracker', status: 'n/a' };
+        expect(await (await post('/api/mutations', edit)).json()).toMatchObject({
+            idea: { solution: 'ferry-tracker', status: 'open' },
+        });
+        const unlink = update(mutation.id, 2, 'Unlinked again');
+        if (unlink.kind !== 'update') throw new Error('Expected update.');
+        unlink.fields.status = 'in-progress';
+        expect(await (await post('/api/mutations', unlink)).json()).toMatchObject({
+            idea: { solution: null, status: 'n/a' },
+        });
+        const response = await fetch(`${origin}/api/ideas?solution=none&status=n%2Fa`);
+        expect(response.status).toBe(200);
+        expect(await response.json()).toMatchObject({ ideas: [{ id: mutation.id, status: 'n/a' }] });
     });
 
     it('filters ideas by solution and status and rejects bad filters', async () => {
@@ -257,8 +279,8 @@ describe('solutions and status', () => {
             solutions = createSolutionSource(`http://127.0.0.1:${address.port}/sites.json`);
             const expected = {
                 solutions: [
-                    { id: 'ferry-tracker', name: 'Ferry Tracker' },
-                    { id: 'work-log', name: 'Work Log' },
+                    { id: 'ferry-tracker', name: 'Ferry Tracker', disabled: false },
+                    { id: 'work-log', name: 'Work Log', disabled: false },
                 ],
             };
             expect(await (await fetch(`${origin}/api/solutions`)).json()).toEqual(expected);
@@ -273,6 +295,45 @@ describe('solutions and status', () => {
         expect(await (await fetch(`${origin}/api/solutions`)).json()).toEqual({ solutions: [] });
         solutions = createSolutionSource('C:\\missing\\sites.json');
         expect((await fetch(`${origin}/api/solutions`)).status).toBe(503);
+    });
+
+    it('disables and re-enables a solution for every client and keeps linked ideas', async () => {
+        solutions = async () => [
+            { id: 'ferry-tracker', name: 'Ferry Tracker' },
+            { id: 'work-log', name: 'Work Log' },
+        ];
+        const linked = create('Linked');
+        if (linked.kind === 'create') linked.fields = { ...linked.fields, solution: 'work-log', status: 'open' };
+        await post('/api/mutations', linked);
+
+        const disabled = await post('/api/solution-settings', { id: 'work-log', disabled: true });
+        expect(await disabled.json()).toEqual({ id: 'work-log', disabled: true });
+        expect((await post('/api/solution-settings', { id: 'work-log', disabled: true })).status).toBe(200);
+        expect(await (await fetch(`${origin}/api/solutions`)).json()).toEqual({
+            solutions: [
+                { id: 'ferry-tracker', name: 'Ferry Tracker', disabled: false },
+                { id: 'work-log', name: 'Work Log', disabled: true },
+            ],
+        });
+        const { ideas } = (await (await fetch(`${origin}/api/ideas?solution=work-log`)).json()) as {
+            ideas: { title: string }[];
+        };
+        expect(ideas.map((idea) => idea.title)).toEqual(['Linked']);
+
+        await post('/api/solution-settings', { id: 'work-log', disabled: false });
+        expect(await store.listDisabledSolutions()).toEqual([]);
+    });
+
+    it('guards and validates solution settings', async () => {
+        const body = { id: 'work-log', disabled: true };
+        expect((await post('/api/solution-settings', body, { Origin: 'https://evil.example' })).status).toBe(403);
+        expect((await post('/api/solution-settings', body, { 'Sec-Fetch-Site': 'cross-site' })).status).toBe(403);
+        expect((await post('/api/solution-settings', { id: 'Work Log', disabled: true })).status).toBe(400);
+        expect((await post('/api/solution-settings', { id: 'work-log', disabled: 'yes' })).status).toBe(400);
+        expect((await post('/api/solution-settings', { ...body, extra: 1 })).status).toBe(400);
+        expect(await store.listDisabledSolutions()).toEqual([]);
+        store.failing = true;
+        expect((await post('/api/solution-settings', body)).status).toBe(503);
     });
 });
 

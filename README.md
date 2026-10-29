@@ -31,10 +31,16 @@ the browser tests against the server on port 4180.
 
 ## Solutions
 
-An idea can link to one solution from Solution Directory and carries a status: open, in progress or done. The server
+An idea can link to one solution from Solution Directory and carries a status: open, in progress or done. Without a
+solution, status is automatically N/A and cannot be changed. Selecting a solution changes N/A to Open. The server
 reads the directory's `sites.json` from `SOLUTIONS_SOURCE` on every `/api/solutions` request, so a solution added to the
 directory appears with no change here. If the directory is down, the server returns the last list it read; the browser
 also keeps a copy for offline capture. An idea linked to a solution that later leaves the directory keeps its id.
+
+The settings button beside the solution filter opens Manage solutions. Unchecking a solution hides it from the filter
+and the idea dialog on every device; the server stores the setting in `public.disabled_solutions` and
+`/api/solutions` returns it as `disabled`. Ideas already linked to it keep the link and still show its name. Changing
+the setting needs a connection.
 
 [docs/agent.md](docs/agent.md) describes how Copilot reads and updates ideas for a solution.
 

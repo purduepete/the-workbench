@@ -45,6 +45,18 @@ async function drain(state: SyncState, store: MemoryIdeasStore): Promise<SyncSta
 }
 
 describe('outbox', () => {
+    it('normalizes status for new writes and displays older unlinked notes as N/A', () => {
+        const note = idea('Unlinked');
+        expect(fieldsOf({ ...note, status: 'done' }).status).toBe('n/a');
+        expect(fieldsOf({ ...note, solution: 'ferry-tracker', status: 'n/a' }).status).toBe('open');
+        expect(fieldsOf({ ...note, solution: 'ferry-tracker', status: 'done' }).status).toBe('done');
+        const state = {
+            ...queueCreate(emptySyncState(), note),
+            server: [{ ...idea('Previously saved'), version: 1 }],
+        };
+        expect(localIdeas(state).map(({ status }) => status)).toEqual(['n/a', 'n/a']);
+    });
+
     it('collapses two offline edits to one note into a single update with no copy', async () => {
         const store = new MemoryIdeasStore();
         const note = idea('Draft');
@@ -156,8 +168,8 @@ describe('readSyncState', () => {
         expect(entry.kind !== 'delete' && entry.fields).toMatchObject({ solution: null, status: 'open' });
         expect(localIdeas(state).map((item) => [item.id, item.status])).toEqual(
             expect.arrayContaining([
-                ['old-1', 'open'],
-                ['old-2', 'open'],
+                ['old-1', 'n/a'],
+                ['old-2', 'n/a'],
             ])
         );
     });

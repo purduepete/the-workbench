@@ -16,6 +16,7 @@ import {
     Plus,
     RefreshCw,
     Search,
+    Settings2,
     Tag,
     X,
 } from 'lucide-react';
@@ -28,6 +29,7 @@ import type { Solution } from '../shared/contracts';
 import { useIdeasSync } from './useIdeasSync';
 import type { SyncStatus } from './useIdeasSync';
 import { useSolutions } from './useSolutions';
+import { statusForSolution } from '../shared/status';
 
 interface IdeaInput {
     title: string;
@@ -54,10 +56,96 @@ const statusOptions: { value: IdeaStatus; label: string }[] = [
 /** Shows the directory name, or the raw id when a solution was removed from the directory. */
 const solutionName = (solutions: Solution[], id: string) => solutions.find((item) => item.id === id)?.name ?? id;
 
+/** Enabled solutions, plus the current value so a link to a disabled or removed solution stays visible. */
 function solutionOptions(solutions: Solution[], current: string | null) {
-    const listed = solutions.map((item) => ({ value: item.id, label: item.name }));
-    if (current && !solutions.some((item) => item.id === current)) listed.push({ value: current, label: current });
+    const listed = solutions.filter((item) => !item.disabled).map((item) => ({ value: item.id, label: item.name }));
+    if (current && !listed.some((item) => item.value === current))
+        listed.push({ value: current, label: solutionName(solutions, current) });
     return listed;
+}
+
+interface SolutionsDialogProps {
+    solutions: Solution[];
+    onToggle: (id: string, disabled: boolean) => Promise<string | null>;
+    onClose: () => void;
+}
+
+function SolutionsDialog({ solutions, onToggle, onClose }: SolutionsDialogProps) {
+    const dialogRef = useRef<HTMLDialogElement>(null);
+    const [error, setError] = useState<string | null>(null);
+    const enabledCount = solutions.filter((item) => !item.disabled).length;
+
+    useEffect(() => {
+        const dialog = dialogRef.current;
+        if (dialog && !dialog.open) dialog.showModal();
+        return () => {
+            if (dialog?.open) dialog.close();
+        };
+    }, []);
+
+    return (
+        <dialog
+            ref={dialogRef}
+            className="dialog-backdrop"
+            aria-labelledby="solutions-dialog-title"
+            onCancel={(event) => {
+                event.preventDefault();
+                onClose();
+            }}
+            onClick={(event) => {
+                if (event.target === dialogRef.current) onClose();
+            }}
+        >
+            <div className="idea-form">
+                <div className="dialog-heading">
+                    <div>
+                        <p className="eyebrow">Applies on every device</p>
+                        <h2 id="solutions-dialog-title">Manage solutions</h2>
+                        <p>Unchecked solutions leave the pickers. Ideas already linked keep their link.</p>
+                    </div>
+                    <button type="button" className="icon-button" aria-label="Close dialog" onClick={onClose}>
+                        <X size={17} aria-hidden="true" />
+                    </button>
+                </div>
+                {solutions.length > 0 ? (
+                    <>
+                        <p className="field-hint" aria-live="polite">
+                            {enabledCount} of {solutions.length} enabled
+                        </p>
+                        <ul className="solution-settings">
+                            {solutions.map((item) => (
+                                <li key={item.id}>
+                                    <label className="solution-setting">
+                                        <input
+                                            type="checkbox"
+                                            checked={!item.disabled}
+                                            onChange={(event) => {
+                                                setError(null);
+                                                void onToggle(item.id, !event.target.checked).then(setError);
+                                            }}
+                                        />
+                                        <span>{item.name}</span>
+                                    </label>
+                                </li>
+                            ))}
+                        </ul>
+                    </>
+                ) : (
+                    <p className="field-hint">The solution list is unavailable. Reconnect and try again.</p>
+                )}
+                {error && (
+                    <p className="dialog-error" role="alert">
+                        {error}
+                    </p>
+                )}
+                <div className="dialog-footer">
+                    <button type="button" className="primary-button" onClick={onClose}>
+                        Done
+                    </button>
+                </div>
+            </div>
+        </dialog>
+    );
 }
 
 const views: { id: IdeaView; label: string; icon: typeof Lightbulb }[] = [
@@ -203,7 +291,7 @@ function IdeaDialog({ idea, solutions, defaultSolution, onClose, onSave }: IdeaD
     const titleRef = useRef<HTMLInputElement>(null);
     const [formError, setFormError] = useState<string | null>(null);
     const [solution, setSolution] = useState<string | null>(idea ? idea.solution : defaultSolution);
-    const [status, setStatus] = useState<IdeaStatus>(idea?.status ?? 'open');
+    const [status, setStatus] = useState<IdeaStatus>(() => statusForSolution(solution, idea?.status));
     const statusIndex = statusOptions.findIndex((option) => option.value === status);
     const statusStyle: CSSProperties & { '--segment-index': number } = { '--segment-index': statusIndex };
 
@@ -312,24 +400,36 @@ function IdeaDialog({ idea, solutions, defaultSolution, onClose, onSave }: IdeaD
                             className="field-select"
                             value={solution ?? ''}
                             options={[{ value: '', label: 'No solution' }, ...solutionOptions(solutions, solution)]}
-                            onChange={(next) => setSolution(next || null)}
+                            onChange={(next) => {
+                                const selected = next || null;
+                                setSolution(selected);
+                                setStatus(statusForSolution(selected, status));
+                            }}
                         />
                     </div>
                     <div className="field-group">
                         <span className="field-label">Status</span>
                         <div className="segmented status-segmented" role="group" aria-label="Status">
-                            <span className="segment-fill" style={statusStyle} aria-hidden="true" />
-                            {statusOptions.map((option) => (
-                                <button
-                                    key={option.value}
-                                    type="button"
-                                    className="segment-button"
-                                    aria-pressed={status === option.value}
-                                    onClick={() => setStatus(option.value)}
-                                >
-                                    {option.label}
+                            {solution === null ? (
+                                <button type="button" className="segment-button" aria-pressed="true" disabled>
+                                    N/A
                                 </button>
-                            ))}
+                            ) : (
+                                <>
+                                    <span className="segment-fill" style={statusStyle} aria-hidden="true" />
+                                    {statusOptions.map((option) => (
+                                        <button
+                                            key={option.value}
+                                            type="button"
+                                            className="segment-button"
+                                            aria-pressed={status === option.value}
+                                            onClick={() => setStatus(option.value)}
+                                        >
+                                            {option.label}
+                                        </button>
+                                    ))}
+                                </>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -417,7 +517,9 @@ function IdeaCard({
                         </button>
                     )}
                     <span className="status-chip" data-status={idea.status}>
-                        {statusOptions.find((option) => option.value === idea.status)?.label}
+                        {idea.status === 'n/a'
+                            ? 'N/A'
+                            : statusOptions.find((option) => option.value === idea.status)?.label}
                     </span>
                 </div>
             )}
@@ -482,14 +584,17 @@ export function App() {
     const [selectedTag, setSelectedTag] = useState<string | null>(null);
     const [solutionFilter, setSolutionFilter] = useState<SolutionFilter>('all');
     const [editingIdea, setEditingIdea] = useState<Idea | null | undefined>(undefined);
-    const solutions = useSolutions();
+    const [managingSolutions, setManagingSolutions] = useState(false);
+    const { solutions, setDisabled: setSolutionDisabled } = useSolutions();
     const linkedIds = Array.from(new Set(ideas.flatMap((idea) => (idea.solution ? [idea.solution] : []))));
     const filterOptions = [
         { value: 'all', label: 'All solutions' },
         { value: 'none', label: 'No solution' },
-        ...solutionOptions(solutions, null),
+        ...solutionOptions(solutions, solutionFilter === 'all' || solutionFilter === 'none' ? null : solutionFilter),
         // Ideas linked to a solution that has left the directory stay reachable by id.
-        ...linkedIds.filter((id) => !solutions.some((item) => item.id === id)).map((id) => ({ value: id, label: id })),
+        ...linkedIds
+            .filter((id) => id !== solutionFilter && !solutions.some((item) => item.id === id))
+            .map((id) => ({ value: id, label: id })),
     ];
 
     const activeIdeas = ideas.filter((idea) => !idea.archived);
@@ -609,14 +714,24 @@ export function App() {
                                 onChange={(event) => setQuery(event.target.value)}
                             />
                         </label>
-                        <SelectField
-                            ariaLabel="Filter by solution"
-                            icon={Boxes}
-                            className="filter-select"
-                            value={solutionFilter}
-                            options={filterOptions}
-                            onChange={setSolutionFilter}
-                        />
+                        <div className="solution-tools">
+                            <SelectField
+                                ariaLabel="Filter by solution"
+                                icon={Boxes}
+                                className="filter-select"
+                                value={solutionFilter}
+                                options={filterOptions}
+                                onChange={setSolutionFilter}
+                            />
+                            <button
+                                type="button"
+                                className="icon-button manage-solutions"
+                                aria-label="Manage solutions"
+                                onClick={() => setManagingSolutions(true)}
+                            >
+                                <Settings2 size={16} aria-hidden="true" />
+                            </button>
+                        </div>
                         <div className="segmented" role="group" aria-label="Idea view">
                             <span className="segment-fill" style={segmentStyle} aria-hidden="true" />
                             {views.map(({ id, label, icon: Icon }) => (
@@ -724,6 +839,13 @@ export function App() {
                     defaultSolution={solutionFilter === 'all' || solutionFilter === 'none' ? null : solutionFilter}
                     onClose={() => setEditingIdea(undefined)}
                     onSave={saveIdea}
+                />
+            )}
+            {managingSolutions && (
+                <SolutionsDialog
+                    solutions={solutions}
+                    onToggle={setSolutionDisabled}
+                    onClose={() => setManagingSolutions(false)}
                 />
             )}
         </>

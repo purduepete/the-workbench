@@ -16,10 +16,15 @@ $base = 'https://jimbrownhome1.tail8ad282.ts.net:8802'
 | Query      | Values                                      |
 | ---------- | ------------------------------------------- |
 | `solution` | a solution id, or `none` for unlinked ideas |
-| `status`   | `open`, `in-progress` or `done`             |
+| `status`   | `n/a`, `open`, `in-progress` or `done`      |
 | neither    | every idea, archived ones included          |
 
-`GET /api/solutions` lists the ids and names the app accepts. A bad filter returns 400.
+`GET /api/solutions` lists the ids and names the app accepts, with `disabled: true` for solutions @jimb has hidden
+from the pickers. A disabled solution still accepts links and keeps its ideas, so read its ideas the same way. A bad
+filter returns 400.
+
+Unlinked ideas always have status `n/a`. Removing a solution automatically sets it; assigning a solution changes
+`n/a` to `open`. The server applies this rule to every write, including changes queued by older clients.
 
 Treat archived ideas as parked and skip them unless asked. Times are UTC; show them in local time.
 

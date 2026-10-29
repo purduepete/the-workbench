@@ -1,6 +1,12 @@
 import express from 'express';
 import type { ErrorRequestHandler } from 'express';
-import { ideaQuerySchema, mutationSchema, THEME_COOKIE, themePreferenceSchema } from '../shared/contracts.js';
+import {
+    ideaQuerySchema,
+    mutationSchema,
+    solutionSettingSchema,
+    THEME_COOKIE,
+    themePreferenceSchema,
+} from '../shared/contracts.js';
 import type { SolutionSource } from './solutions.js';
 import type { IdeasStore } from './store.js';
 
@@ -65,12 +71,25 @@ export function createApp(options: {
         res.json({ ideas });
     });
     app.get('/api/solutions', async (_req, res) => {
+        let listed;
         try {
-            res.json({ solutions: options.solutions ? await options.solutions() : [] });
+            listed = options.solutions ? await options.solutions() : [];
         } catch (error) {
             console.error('Solution list failed:', error instanceof Error ? error.message : 'Unknown error');
             res.status(503).json({ error: 'The solution list is unavailable.' });
+            return;
         }
+        const disabled = new Set(await options.store.listDisabledSolutions());
+        res.json({ solutions: listed.map((solution) => ({ ...solution, disabled: disabled.has(solution.id) })) });
+    });
+    app.post('/api/solution-settings', async (req, res) => {
+        const parsed = solutionSettingSchema.safeParse(req.body);
+        if (!parsed.success) {
+            res.status(400).json({ error: 'Send a solution id and disabled true or false.' });
+            return;
+        }
+        await options.store.setSolutionDisabled(parsed.data.id, parsed.data.disabled);
+        res.json(parsed.data);
     });
     app.post('/api/mutations', async (req, res) => {
         const parsed = mutationSchema.safeParse(req.body);
