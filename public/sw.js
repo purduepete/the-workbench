@@ -1,5 +1,5 @@
 // Caches only the app shell so Idea Notes can reopen offline. API responses are never cached.
-const CACHE = 'idea-notes-shell-v1';
+const CACHE = 'idea-notes-shell-v2';
 
 self.addEventListener('install', (event) => {
     event.waitUntil(caches.open(CACHE).then((cache) => cache.add('/')));
@@ -36,6 +36,8 @@ self.addEventListener('fetch', (event) => {
     }
 
     // Built assets have content hashes in their names, so a cached copy never goes stale.
+    // Icons and the manifest keep fixed names, so they always come from the network.
+    if (!url.pathname.startsWith('/assets/')) return;
     event.respondWith(
         caches.match(request).then(
             (cached) =>
