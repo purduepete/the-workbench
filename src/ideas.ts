@@ -21,17 +21,27 @@ export function writeIdeaView(view: IdeaView): string | null {
     }
 }
 
-export function filterIdeas(ideas: Idea[], view: IdeaView, query: string, selectedTag: string | null): Idea[] {
+/** 'all' shows every idea, 'none' only unlinked ideas, otherwise one solution id. */
+export type SolutionFilter = 'all' | 'none' | (string & {});
+
+export function filterIdeas(
+    ideas: Idea[],
+    view: IdeaView,
+    query: string,
+    selectedTag: string | null,
+    solution: SolutionFilter = 'all'
+): Idea[] {
     const normalizedQuery = query.trim().toLocaleLowerCase();
     return ideas
         .filter((idea) => {
             if (view === 'archived' ? !idea.archived : idea.archived) return false;
             if (view === 'pinned' && !idea.pinned) return false;
+            if (solution !== 'all' && idea.solution !== (solution === 'none' ? null : solution)) return false;
             if (selectedTag && !idea.tags.some((tag) => tag.toLocaleLowerCase() === selectedTag.toLocaleLowerCase())) {
                 return false;
             }
             if (!normalizedQuery) return true;
-            return [idea.title, idea.body, ...idea.tags].some((value) =>
+            return [idea.title, idea.body, ...idea.tags, idea.solution ?? ''].some((value) =>
                 value.toLocaleLowerCase().includes(normalizedQuery)
             );
         })

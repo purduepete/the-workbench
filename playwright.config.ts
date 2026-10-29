@@ -19,6 +19,11 @@ export default defineConfig({
         url: `http://127.0.0.1:${port}/api/health`,
         reuseExistingServer: false,
         timeout: 120_000,
-        env: { STORAGE_BACKEND: 'memory', PORT: String(port), ALLOWED_ORIGINS: `http://127.0.0.1:${port}` },
+        env: {
+            STORAGE_BACKEND: 'memory',
+            PORT: String(port),
+            ALLOWED_ORIGINS: `http://127.0.0.1:${port}`,
+            SOLUTIONS_SOURCE: 'tests/fixtures/sites.json',
+        },
     },
 });

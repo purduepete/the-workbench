@@ -1,19 +1,22 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { MemoryIdeasStore } from '../server/store';
 import {
     acknowledge,
     emptySyncState,
+    fieldsOf,
     localIdeas,
     markAttempted,
     queueCreate,
     queueDelete,
     queueUpdate,
+    readSyncState,
     replaceServer,
+    SYNC_STORAGE_KEY,
 } from './sync';
 import type { SyncState } from './sync';
 import type { Idea } from './types';
 
-const idea = (title: string, id = crypto.randomUUID()): Idea => ({
+const idea = (title: string, id: string = crypto.randomUUID()): Idea => ({
     id,
     title,
     body: '',
@@ -22,6 +25,8 @@ const idea = (title: string, id = crypto.randomUUID()): Idea => ({
     updatedAt: '2026-10-29T18:00:00.000Z',
     pinned: false,
     archived: false,
+    solution: null,
+    status: 'open',
 });
 
 /** Sends the head of the outbox the way the hook does: mark attempted, apply, acknowledge. */
@@ -117,5 +122,43 @@ describe('outbox', () => {
         const state = queueDelete(queueUpdate(queueCreate(emptySyncState(), note), note), note.id);
         expect(state.outbox).toEqual([]);
         expect(localIdeas(state)).toEqual([]);
+    });
+});
+
+describe('readSyncState', () => {
+    afterEach(() => vi.unstubAllGlobals());
+
+    const withStorage = (values: Record<string, string>) =>
+        vi.stubGlobal('window', { localStorage: { getItem: (key: string) => values[key] ?? null } });
+
+    it('gives data saved before solutions existed the server defaults', () => {
+        const { solution: _solution, status: _status, ...old } = idea('Saved last month', 'old-1');
+        const { solution: _s, status: _st, ...oldFields } = fieldsOf(idea('Queued offline', 'old-2'));
+        withStorage({
+            [SYNC_STORAGE_KEY]: JSON.stringify({
+                server: [{ ...old, version: 3 }],
+                outbox: [
+                    {
+                        kind: 'create',
+                        mutationId: 'm-1',
+                        id: 'old-2',
+                        createdAt: old.createdAt,
+                        fields: oldFields,
+                        attempted: false,
+                    },
+                ],
+            }),
+        });
+        const { state, error } = readSyncState();
+        expect(error).toBeNull();
+        expect(state.server[0]).toMatchObject({ id: 'old-1', solution: null, status: 'open', version: 3 });
+        const entry = state.outbox[0];
+        expect(entry.kind !== 'delete' && entry.fields).toMatchObject({ solution: null, status: 'open' });
+        expect(localIdeas(state).map((item) => [item.id, item.status])).toEqual(
+            expect.arrayContaining([
+                ['old-1', 'open'],
+                ['old-2', 'open'],
+            ])
+        );
     });
 });

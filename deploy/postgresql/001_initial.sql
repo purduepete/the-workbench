@@ -17,6 +17,9 @@ CREATE TABLE public.ideas (
     tags TEXT[] NOT NULL DEFAULT '{}' CHECK (cardinality(tags) <= 12),
     pinned BOOLEAN NOT NULL DEFAULT FALSE,
     archived BOOLEAN NOT NULL DEFAULT FALSE,
+    -- Solution Directory id (sites.json), such as team-scoreboard. Not a foreign key: the list lives in solution-deploy.
+    solution TEXT NULL CHECK (solution ~ '^[a-z0-9][a-z0-9-]{0,62}$'),
+    status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'in-progress', 'done')),
     created_at TIMESTAMPTZ NOT NULL,
     updated_at TIMESTAMPTZ NOT NULL,
     version INTEGER NOT NULL CHECK (version > 0)

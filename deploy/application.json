@@ -26,6 +26,7 @@
     "environment": {
       "PORT": "8802",
       "STORAGE_BACKEND": "postgresql",
+      "SOLUTIONS_SOURCE": "http://127.0.0.1:18798/sites.json",
       "ALLOWED_ORIGINS": "https://idea-notes.jimlertech.com,https://jimbrownhome1.tail8ad282.ts.net:8802,http://127.0.0.1:8802"
     },
     "secretFile": "app.env",

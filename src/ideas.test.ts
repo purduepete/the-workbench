@@ -12,6 +12,8 @@ const ideas: Idea[] = [
         updatedAt: '2026-10-27T18:00:00.000Z',
         pinned: false,
         archived: false,
+        solution: null,
+        status: 'open',
     },
     {
         id: 'pinned',
@@ -22,6 +24,8 @@ const ideas: Idea[] = [
         updatedAt: '2026-10-28T18:00:00.000Z',
         pinned: true,
         archived: false,
+        solution: null,
+        status: 'open',
     },
     {
         id: 'archived',
@@ -32,6 +36,8 @@ const ideas: Idea[] = [
         updatedAt: '2026-10-29T18:00:00.000Z',
         pinned: false,
         archived: true,
+        solution: null,
+        status: 'open',
     },
 ];
 
@@ -49,6 +55,13 @@ describe('filterIdeas', () => {
         expect(filterIdeas(ideas, 'pinned', '', null).map((idea) => idea.id)).toEqual(['pinned']);
         expect(filterIdeas(ideas, 'archived', '', null).map((idea) => idea.id)).toEqual(['archived']);
         expect(filterIdeas(ideas, 'all', '', 'garden').map((idea) => idea.id)).toEqual(['older']);
+    });
+
+    it('filters by linked solution, unlinked ideas, and searches the solution id', () => {
+        const linked = ideas.map((idea) => (idea.id === 'older' ? { ...idea, solution: 'ferry-tracker' } : idea));
+        expect(filterIdeas(linked, 'all', '', null, 'ferry-tracker').map((idea) => idea.id)).toEqual(['older']);
+        expect(filterIdeas(linked, 'all', '', null, 'none').map((idea) => idea.id)).toEqual(['pinned']);
+        expect(filterIdeas(linked, 'all', 'ferry', null).map((idea) => idea.id)).toEqual(['older']);
     });
 });
 

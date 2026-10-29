@@ -4,12 +4,16 @@ import { randomUUID } from 'node:crypto';
 import type { Pool } from 'pg';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { createApp } from '../server/app.js';
+import { createSolutionSource } from '../server/solutions.js';
+import type { SolutionSource } from '../server/solutions.js';
 import { MemoryIdeasStore, PostgresIdeasStore } from '../server/store.js';
+import { mutationSchema } from '../shared/contracts.js';
 import type { IdeaFields, Mutation } from '../shared/contracts.js';
 
 let server: Server;
 let origin: string;
 let store: MemoryIdeasStore;
+let solutions: SolutionSource | undefined;
 
 const fields = (title: string): IdeaFields => ({
     title,
@@ -17,6 +21,8 @@ const fields = (title: string): IdeaFields => ({
     tags: ['home'],
     pinned: false,
     archived: false,
+    solution: null,
+    status: 'open',
     updatedAt: '2026-10-29T18:00:00.000Z',
 });
 
@@ -50,11 +56,12 @@ beforeAll(async () => {
     const address = server.address();
     if (!address || typeof address === 'string') throw new Error('Test server did not bind.');
     origin = `http://127.0.0.1:${address.port}`;
-    server.on('request', (req, res) => createApp({ store, allowedOrigins: [origin] })(req, res));
+    server.on('request', (req, res) => createApp({ store, allowedOrigins: [origin], solutions })(req, res));
 });
 
 beforeEach(() => {
     store = new MemoryIdeasStore();
+    solutions = undefined;
 });
 
 afterAll(async () => {
@@ -186,6 +193,86 @@ describe('mutations', () => {
         await store.apply(removal);
         expect(await store.apply(removal)).toMatchObject({ outcome: 'deleted', idea: null });
         expect(await store.list()).toEqual([]);
+    });
+});
+
+describe('solutions and status', () => {
+    const linked = (title: string, solution: string | null, status: IdeaFields['status']): Mutation => ({
+        kind: 'create',
+        mutationId: randomUUID(),
+        id: randomUUID(),
+        createdAt: '2026-10-29T18:00:00.000Z',
+        fields: { ...fields(title), solution, status },
+    });
+
+    it('defaults solution and status for changes queued by an older client', () => {
+        const { solution: _solution, status: _status, ...oldFields } = fields('Old client');
+        const parsed = mutationSchema.parse({ ...create('Old client'), fields: oldFields });
+        expect(parsed.kind === 'create' && parsed.fields).toMatchObject({ solution: null, status: 'open' });
+    });
+
+    it('filters ideas by solution and status and rejects bad filters', async () => {
+        await store.apply(linked('Tide alerts', 'ferry-tracker', 'open'));
+        await store.apply(linked('Shipped already', 'ferry-tracker', 'done'));
+        await store.apply(linked('Loose thought', null, 'open'));
+        const titles = async (query: string) =>
+            ((await (await fetch(`${origin}/api/ideas${query}`)).json()) as { ideas: { title: string }[] }).ideas
+                .map((idea) => idea.title)
+                .sort();
+        expect(await titles('?solution=ferry-tracker&status=open')).toEqual(['Tide alerts']);
+        expect(await titles('?solution=ferry-tracker')).toEqual(['Shipped already', 'Tide alerts']);
+        expect(await titles('?solution=none')).toEqual(['Loose thought']);
+        expect(await titles('?status=done')).toEqual(['Shipped already']);
+        expect((await fetch(`${origin}/api/ideas?solution=Bad%20Id`)).status).toBe(400);
+        expect((await fetch(`${origin}/api/ideas?status=later`)).status).toBe(400);
+    });
+
+    it('rejects a solution id outside the directory id format', async () => {
+        const response = await post('/api/mutations', linked('Bad link', '../etc', 'open'));
+        expect(response.status).toBe(400);
+    });
+
+    it('serves the directory list and keeps the last good copy when it fails', async () => {
+        let fail = false;
+        const directory = createServer((_req, res) => {
+            if (fail) {
+                res.writeHead(500).end();
+                return;
+            }
+            res.setHeader('Content-Type', 'application/json');
+            res.end(
+                JSON.stringify({
+                    host: 'test',
+                    sites: [
+                        { id: 'work-log', name: 'Work Log', url: 'x' },
+                        { id: 'ferry-tracker', name: 'Ferry Tracker' },
+                    ],
+                })
+            );
+        });
+        await new Promise<void>((resolve) => directory.listen(0, '127.0.0.1', resolve));
+        const address = directory.address();
+        if (!address || typeof address === 'string') throw new Error('Directory server did not bind.');
+        try {
+            solutions = createSolutionSource(`http://127.0.0.1:${address.port}/sites.json`);
+            const expected = {
+                solutions: [
+                    { id: 'ferry-tracker', name: 'Ferry Tracker' },
+                    { id: 'work-log', name: 'Work Log' },
+                ],
+            };
+            expect(await (await fetch(`${origin}/api/solutions`)).json()).toEqual(expected);
+            fail = true;
+            expect(await (await fetch(`${origin}/api/solutions`)).json()).toEqual(expected);
+        } finally {
+            await new Promise((resolve) => directory.close(resolve));
+        }
+    });
+
+    it('reports 503 when the directory has never answered and [] when none is configured', async () => {
+        expect(await (await fetch(`${origin}/api/solutions`)).json()).toEqual({ solutions: [] });
+        solutions = createSolutionSource('C:\\missing\\sites.json');
+        expect((await fetch(`${origin}/api/solutions`)).status).toBe(503);
     });
 });
 

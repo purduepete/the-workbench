@@ -29,6 +29,15 @@ the browser tests against the server on port 4180.
   are kept.
 - Edits made before a change is sent fold into it. Edits made after it is sent queue behind it and rebase onto the result.
 
+## Solutions
+
+An idea can link to one solution from Solution Directory and carries a status: open, in progress or done. The server
+reads the directory's `sites.json` from `SOLUTIONS_SOURCE` on every `/api/solutions` request, so a solution added to the
+directory appears with no change here. If the directory is down, the server returns the last list it read; the browser
+also keeps a copy for offline capture. An idea linked to a solution that later leaves the directory keeps its id.
+
+[docs/agent.md](docs/agent.md) describes how Copilot reads and updates ideas for a solution.
+
 ## Hosting
 
 `deploy/application.json` describes the hosted release: port 8802, database `idea_notes`, readiness at `/api/health` and

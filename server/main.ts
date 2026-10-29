@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import { resolve } from 'node:path';
 import pg from 'pg';
 import { createApp } from './app.js';
+import { createSolutionSource } from './solutions.js';
 import { MemoryIdeasStore, PostgresIdeasStore } from './store.js';
 import type { IdeasStore } from './store.js';
 
@@ -48,7 +49,14 @@ if (backend === 'postgresql') {
     console.warn('STORAGE_BACKEND=memory: ideas are lost when the process stops.');
     store = new MemoryIdeasStore();
 }
-const app = createApp({ store, allowedOrigins: origins, staticDirectory: resolve('dist'), contentSecurityPolicy: csp });
+const app = createApp({
+    store,
+    allowedOrigins: origins,
+    // Solution Directory's loopback origin on the host; a file path works for local tests.
+    solutions: createSolutionSource(process.env.SOLUTIONS_SOURCE),
+    staticDirectory: resolve('dist'),
+    contentSecurityPolicy: csp,
+});
 const server = app.listen(port, '127.0.0.1', () => console.warn(`Idea Notes listening on loopback port ${port}`));
 let stopping = false;
 async function stop() {

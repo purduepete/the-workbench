@@ -1,5 +1,8 @@
+import type { IdeaStatus } from '../shared/contracts';
+
 export type ThemePreference = 'system' | 'light' | 'midnight';
 export type IdeaView = 'all' | 'pinned' | 'archived';
+export type { IdeaStatus };
 
 export interface Idea {
     id: string;
@@ -10,4 +13,7 @@ export interface Idea {
     updatedAt: string;
     pinned: boolean;
     archived: boolean;
+    /** Solution Directory id this idea is for, or null. */
+    solution: string | null;
+    status: IdeaStatus;
 }

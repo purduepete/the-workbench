@@ -1,0 +1,8 @@
+{
+  "host": "test",
+  "sites": [
+    { "id": "ferry-tracker", "name": "Ferry Tracker" },
+    { "id": "work-log", "name": "Work Log" },
+    { "id": "solution-deploy", "name": "Solution Directory" }
+  ]
+}

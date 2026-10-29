@@ -17,14 +17,19 @@ export const emptySyncState = (): SyncState => ({ server: [], outbox: [] });
 
 const uuid = () => globalThis.crypto.randomUUID();
 
-const fieldsOf = (idea: Idea): IdeaFields => ({
+export const fieldsOf = (idea: Idea): IdeaFields => ({
     title: idea.title,
     body: idea.body,
     tags: [...idea.tags],
     pinned: idea.pinned,
     archived: idea.archived,
+    solution: idea.solution,
+    status: idea.status,
     updatedAt: idea.updatedAt,
 });
+
+/** Data saved before solutions and status existed gets the same defaults the server applies. */
+const withDefaults = <T extends object>(value: T) => ({ solution: null, status: 'open' as const, ...value });
 
 const stripVersion = ({ version: _version, ...idea }: ServerIdea): Idea => idea;
 
@@ -155,7 +160,15 @@ export function readSyncState(): { state: SyncState; error: string | null } {
         const saved = window.localStorage.getItem(SYNC_STORAGE_KEY);
         if (saved !== null) {
             const parsed: unknown = JSON.parse(saved);
-            if (isSyncState(parsed)) return { state: parsed, error: null };
+            if (isSyncState(parsed)) {
+                const state: SyncState = {
+                    server: parsed.server.map(withDefaults),
+                    outbox: parsed.outbox.map((entry) =>
+                        entry.kind === 'delete' ? entry : { ...entry, fields: withDefaults(entry.fields) }
+                    ),
+                };
+                return { state, error: null };
+            }
             return {
                 state: emptySyncState(),
                 error: 'Saved ideas could not be read because the stored data has an unexpected format.',
@@ -165,7 +178,7 @@ export function readSyncState(): { state: SyncState; error: string | null } {
         const legacy = window.localStorage.getItem(LEGACY_IDEAS_KEY);
         const legacyIdeas: unknown = legacy === null ? [] : JSON.parse(legacy);
         const state = Array.isArray(legacyIdeas)
-            ? legacyIdeas.filter(isLegacyIdea).reduce(queueCreate, emptySyncState())
+            ? legacyIdeas.filter(isLegacyIdea).map(withDefaults).reduce(queueCreate, emptySyncState())
             : emptySyncState();
         return { state, error: null };
     } catch {

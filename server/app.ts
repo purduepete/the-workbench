@@ -1,11 +1,13 @@
 import express from 'express';
 import type { ErrorRequestHandler } from 'express';
-import { mutationSchema, THEME_COOKIE, themePreferenceSchema } from '../shared/contracts.js';
+import { ideaQuerySchema, mutationSchema, THEME_COOKIE, themePreferenceSchema } from '../shared/contracts.js';
+import type { SolutionSource } from './solutions.js';
 import type { IdeasStore } from './store.js';
 
 export function createApp(options: {
     store: IdeasStore;
     allowedOrigins: string[];
+    solutions?: SolutionSource;
     staticDirectory?: string;
     contentSecurityPolicy?: string;
 }) {
@@ -48,8 +50,27 @@ export function createApp(options: {
             res.status(503).json({ ok: false, error: 'Database unavailable or schema not initialized.' });
         }
     });
-    app.get('/api/ideas', async (_req, res) => {
-        res.json({ ideas: await options.store.list() });
+    app.get('/api/ideas', async (req, res) => {
+        const query = ideaQuerySchema.safeParse(req.query);
+        if (!query.success) {
+            res.status(400).json({ error: 'Filter by a solution id or "none", and by open, in-progress or done.' });
+            return;
+        }
+        const { solution, status } = query.data;
+        const ideas = (await options.store.list()).filter(
+            (idea) =>
+                (solution === undefined || idea.solution === (solution === 'none' ? null : solution)) &&
+                (status === undefined || idea.status === status)
+        );
+        res.json({ ideas });
+    });
+    app.get('/api/solutions', async (_req, res) => {
+        try {
+            res.json({ solutions: options.solutions ? await options.solutions() : [] });
+        } catch (error) {
+            console.error('Solution list failed:', error instanceof Error ? error.message : 'Unknown error');
+            res.status(503).json({ error: 'The solution list is unavailable.' });
+        }
     });
     app.post('/api/mutations', async (req, res) => {
         const parsed = mutationSchema.safeParse(req.body);

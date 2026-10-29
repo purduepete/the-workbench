@@ -74,12 +74,14 @@ interface IdeaRow {
     tags: string[];
     pinned: boolean;
     archived: boolean;
+    solution: string | null;
+    status: IdeaFields['status'];
     created_at: Date;
     updated_at: Date;
     version: number;
 }
 
-const ideaColumns = 'id, title, body, tags, pinned, archived, created_at, updated_at, version';
+const ideaColumns = 'id, title, body, tags, pinned, archived, solution, status, created_at, updated_at, version';
 
 const toIdea = (row: IdeaRow): ServerIdea => ({
     id: row.id,
@@ -88,6 +90,8 @@ const toIdea = (row: IdeaRow): ServerIdea => ({
     tags: row.tags,
     pinned: row.pinned,
     archived: row.archived,
+    solution: row.solution,
+    status: row.status,
     createdAt: row.created_at.toISOString(),
     updatedAt: row.updated_at.toISOString(),
     version: row.version,
@@ -153,10 +157,22 @@ export class PostgresIdeasStore implements IdeasStore {
 
     private async insert(client: PoolClient, id: string, createdAt: string | null, fields: IdeaFields) {
         const inserted = await client.query<{ version: number }>(
-            `INSERT INTO public.ideas (id, title, body, tags, pinned, archived, created_at, updated_at, version)
-             VALUES ($1, $2, $3, $4, $5, $6, COALESCE($7::timestamptz, CURRENT_TIMESTAMP), $8, 1)
+            `INSERT INTO public.ideas
+                 (id, title, body, tags, pinned, archived, solution, status, created_at, updated_at, version)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, COALESCE($9::timestamptz, CURRENT_TIMESTAMP), $10, 1)
              ON CONFLICT (id) DO NOTHING RETURNING version`,
-            [id, fields.title, fields.body, fields.tags, fields.pinned, fields.archived, createdAt, fields.updatedAt]
+            [
+                id,
+                fields.title,
+                fields.body,
+                fields.tags,
+                fields.pinned,
+                fields.archived,
+                fields.solution,
+                fields.status,
+                createdAt,
+                fields.updatedAt,
+            ]
         );
         if (inserted.rows[0]) return inserted.rows[0].version;
         const existing = await client.query<{ version: number }>('SELECT version FROM public.ideas WHERE id = $1', [
@@ -177,7 +193,8 @@ export class PostgresIdeasStore implements IdeasStore {
         const { fields } = mutation;
         const updated = await client.query<{ version: number }>(
             `UPDATE public.ideas
-             SET title = $3, body = $4, tags = $5, pinned = $6, archived = $7, updated_at = $8, version = version + 1
+             SET title = $3, body = $4, tags = $5, pinned = $6, archived = $7, solution = $8, status = $9,
+                 updated_at = $10, version = version + 1
              WHERE id = $1 AND version = $2 RETURNING version`,
             [
                 mutation.id,
@@ -187,6 +204,8 @@ export class PostgresIdeasStore implements IdeasStore {
                 fields.tags,
                 fields.pinned,
                 fields.archived,
+                fields.solution,
+                fields.status,
                 fields.updatedAt,
             ]
         );

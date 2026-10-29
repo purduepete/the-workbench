@@ -3,6 +3,7 @@ import type { FormEvent, KeyboardEvent, CSSProperties } from 'react';
 import {
     Archive,
     ArrowDownLeft,
+    Boxes,
     Check,
     CircleAlert,
     Clock3,
@@ -19,21 +20,44 @@ import {
     X,
 } from 'lucide-react';
 import { filterIdeas, formatIdeaTimestamp, parseTags, readIdeaView, writeIdeaView } from './ideas';
+import type { SolutionFilter } from './ideas';
+import { SelectField } from './SelectField';
 import { useTheme } from './ThemeContext';
-import type { Idea, IdeaView, ThemePreference } from './types';
+import type { Idea, IdeaStatus, IdeaView, ThemePreference } from './types';
+import type { Solution } from '../shared/contracts';
 import { useIdeasSync } from './useIdeasSync';
 import type { SyncStatus } from './useIdeasSync';
+import { useSolutions } from './useSolutions';
 
 interface IdeaInput {
     title: string;
     body: string;
     tags: string[];
+    solution: string | null;
+    status: IdeaStatus;
 }
 
 interface IdeaDialogProps {
     idea: Idea | null;
+    solutions: Solution[];
+    defaultSolution: string | null;
     onClose: () => void;
     onSave: (value: IdeaInput) => string | null;
+}
+
+const statusOptions: { value: IdeaStatus; label: string }[] = [
+    { value: 'open', label: 'Open' },
+    { value: 'in-progress', label: 'In progress' },
+    { value: 'done', label: 'Done' },
+];
+
+/** Shows the directory name, or the raw id when a solution was removed from the directory. */
+const solutionName = (solutions: Solution[], id: string) => solutions.find((item) => item.id === id)?.name ?? id;
+
+function solutionOptions(solutions: Solution[], current: string | null) {
+    const listed = solutions.map((item) => ({ value: item.id, label: item.name }));
+    if (current && !solutions.some((item) => item.id === current)) listed.push({ value: current, label: current });
+    return listed;
 }
 
 const views: { id: IdeaView; label: string; icon: typeof Lightbulb }[] = [
@@ -174,10 +198,14 @@ function ThemeMenu() {
     );
 }
 
-function IdeaDialog({ idea, onClose, onSave }: IdeaDialogProps) {
+function IdeaDialog({ idea, solutions, defaultSolution, onClose, onSave }: IdeaDialogProps) {
     const dialogRef = useRef<HTMLDialogElement>(null);
     const titleRef = useRef<HTMLInputElement>(null);
     const [formError, setFormError] = useState<string | null>(null);
+    const [solution, setSolution] = useState<string | null>(idea ? idea.solution : defaultSolution);
+    const [status, setStatus] = useState<IdeaStatus>(idea?.status ?? 'open');
+    const statusIndex = statusOptions.findIndex((option) => option.value === status);
+    const statusStyle: CSSProperties & { '--segment-index': number } = { '--segment-index': statusIndex };
 
     useEffect(() => {
         const dialog = dialogRef.current;
@@ -201,6 +229,8 @@ function IdeaDialog({ idea, onClose, onSave }: IdeaDialogProps) {
             title,
             body: String(formData.get('body') ?? '').trim(),
             tags: parseTags(String(formData.get('tags') ?? '')),
+            solution,
+            status,
         });
         if (error) {
             setFormError(error);
@@ -271,6 +301,38 @@ function IdeaDialog({ idea, onClose, onSave }: IdeaDialogProps) {
                         Separate tags with commas. Up to 12 tags.
                     </span>
                 </label>
+                <div className="field-row">
+                    <div className="field-group">
+                        <span className="field-label" id="solution-label">
+                            Solution
+                        </span>
+                        <SelectField
+                            ariaLabel="Solution"
+                            icon={Boxes}
+                            className="field-select"
+                            value={solution ?? ''}
+                            options={[{ value: '', label: 'No solution' }, ...solutionOptions(solutions, solution)]}
+                            onChange={(next) => setSolution(next || null)}
+                        />
+                    </div>
+                    <div className="field-group">
+                        <span className="field-label">Status</span>
+                        <div className="segmented status-segmented" role="group" aria-label="Status">
+                            <span className="segment-fill" style={statusStyle} aria-hidden="true" />
+                            {statusOptions.map((option) => (
+                                <button
+                                    key={option.value}
+                                    type="button"
+                                    className="segment-button"
+                                    aria-pressed={status === option.value}
+                                    onClick={() => setStatus(option.value)}
+                                >
+                                    {option.label}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                </div>
                 {formError && (
                     <p className="dialog-error" role="alert">
                         {formError}
@@ -292,13 +354,23 @@ function IdeaDialog({ idea, onClose, onSave }: IdeaDialogProps) {
 
 interface IdeaCardProps {
     idea: Idea;
+    solutions: Solution[];
     onEdit: (idea: Idea) => void;
     onTogglePin: (idea: Idea) => void;
     onToggleArchive: (idea: Idea) => void;
     onSelectTag: (tag: string) => void;
+    onSelectSolution: (solution: string) => void;
 }
 
-function IdeaCard({ idea, onEdit, onTogglePin, onToggleArchive, onSelectTag }: IdeaCardProps) {
+function IdeaCard({
+    idea,
+    solutions,
+    onEdit,
+    onTogglePin,
+    onToggleArchive,
+    onSelectTag,
+    onSelectSolution,
+}: IdeaCardProps) {
     return (
         <article className="idea-card">
             <div className="idea-card-top">
@@ -331,6 +403,24 @@ function IdeaCard({ idea, onEdit, onTogglePin, onToggleArchive, onSelectTag }: I
                 </div>
             </div>
             <h4 className="idea-title">{idea.title}</h4>
+            {(idea.solution || idea.status !== 'open') && (
+                <div className="idea-meta">
+                    {idea.solution && (
+                        <button
+                            type="button"
+                            className="solution-chip"
+                            aria-label={`Filter by solution ${solutionName(solutions, idea.solution)}`}
+                            onClick={() => onSelectSolution(idea.solution ?? '')}
+                        >
+                            <Boxes size={11} aria-hidden="true" />
+                            {solutionName(solutions, idea.solution)}
+                        </button>
+                    )}
+                    <span className="status-chip" data-status={idea.status}>
+                        {statusOptions.find((option) => option.value === idea.status)?.label}
+                    </span>
+                </div>
+            )}
             {idea.body && <p className="idea-body">{idea.body}</p>}
             <div className="idea-tags">
                 {idea.tags.map((tag) => (
@@ -390,12 +480,23 @@ export function App() {
     };
     const [query, setQuery] = useState('');
     const [selectedTag, setSelectedTag] = useState<string | null>(null);
+    const [solutionFilter, setSolutionFilter] = useState<SolutionFilter>('all');
     const [editingIdea, setEditingIdea] = useState<Idea | null | undefined>(undefined);
+    const solutions = useSolutions();
+    const linkedIds = Array.from(new Set(ideas.flatMap((idea) => (idea.solution ? [idea.solution] : []))));
+    const filterOptions = [
+        { value: 'all', label: 'All solutions' },
+        { value: 'none', label: 'No solution' },
+        ...solutionOptions(solutions, null),
+        // Ideas linked to a solution that has left the directory stay reachable by id.
+        ...linkedIds.filter((id) => !solutions.some((item) => item.id === id)).map((id) => ({ value: id, label: id })),
+    ];
 
     const activeIdeas = ideas.filter((idea) => !idea.archived);
     const pinnedIdeas = activeIdeas.filter((idea) => idea.pinned);
     const archivedIdeas = ideas.filter((idea) => idea.archived);
-    const visibleIdeas = filterIdeas(ideas, view, query, selectedTag);
+    const visibleIdeas = filterIdeas(ideas, view, query, selectedTag, solutionFilter);
+    const filtering = Boolean(query || selectedTag) || solutionFilter !== 'all';
     const allTags = Array.from(new Set(ideas.flatMap((idea) => idea.tags))).sort((a, b) => a.localeCompare(b));
     const activeView = views.find((item) => item.id === view) ?? views[0];
     const selectedViewIndex = views.findIndex((item) => item.id === view);
@@ -405,16 +506,18 @@ export function App() {
         if (error) setStorageNotice(error);
     };
 
-    const saveIdea = ({ title, body, tags }: IdeaInput): string | null => {
+    const saveIdea = ({ title, body, tags, solution, status }: IdeaInput): string | null => {
         const now = new Date().toISOString();
         const current = editingIdea ? ideas.find((idea) => idea.id === editingIdea.id) : undefined;
         return current
-            ? sync.update({ ...current, title, body, tags, updatedAt: now })
+            ? sync.update({ ...current, title, body, tags, solution, status, updatedAt: now })
             : sync.create({
                   id: window.crypto.randomUUID(),
                   title,
                   body,
                   tags,
+                  solution,
+                  status,
                   createdAt: now,
                   updatedAt: now,
                   pinned: false,
@@ -506,6 +609,14 @@ export function App() {
                                 onChange={(event) => setQuery(event.target.value)}
                             />
                         </label>
+                        <SelectField
+                            ariaLabel="Filter by solution"
+                            icon={Boxes}
+                            className="filter-select"
+                            value={solutionFilter}
+                            options={filterOptions}
+                            onChange={setSolutionFilter}
+                        />
                         <div className="segmented" role="group" aria-label="Idea view">
                             <span className="segment-fill" style={segmentStyle} aria-hidden="true" />
                             {views.map(({ id, label, icon: Icon }) => (
@@ -559,6 +670,7 @@ export function App() {
                                 <IdeaCard
                                     key={idea.id}
                                     idea={idea}
+                                    solutions={solutions}
                                     onEdit={setEditingIdea}
                                     onTogglePin={(target) => updateIdea(target, { pinned: !target.pinned })}
                                     onToggleArchive={(target) => updateIdea(target, { archived: !target.archived })}
@@ -566,16 +678,17 @@ export function App() {
                                         setSelectedTag(tag);
                                         chooseView('all');
                                     }}
+                                    onSelectSolution={setSolutionFilter}
                                 />
                             ))}
                         </div>
                     ) : (
                         <div className="empty-state">
                             <span className="empty-icon" aria-hidden="true">
-                                {query || selectedTag ? <Search size={21} /> : <Lightbulb size={22} />}
+                                {filtering ? <Search size={21} /> : <Lightbulb size={22} />}
                             </span>
                             <h4>
-                                {query || selectedTag
+                                {filtering
                                     ? 'No ideas match this search'
                                     : view === 'pinned'
                                       ? 'Nothing pinned yet'
@@ -584,15 +697,15 @@ export function App() {
                                         : 'Your idea space is ready'}
                             </h4>
                             <p>
-                                {query || selectedTag
-                                    ? 'Try another phrase or clear the tag filter to see more notes.'
+                                {filtering
+                                    ? 'Try another phrase or clear the tag and solution filters.'
                                     : view === 'pinned'
                                       ? 'Pin the thoughts you want to keep within easy reach.'
                                       : view === 'archived'
                                         ? 'Ideas you archive will be kept here until you restore them.'
                                         : 'Start with a quick note. Add the context now, and sort it out later.'}
                             </p>
-                            {!query && !selectedTag && view === 'all' && (
+                            {!filtering && view === 'all' && (
                                 <button type="button" className="primary-button" onClick={() => setEditingIdea(null)}>
                                     <Plus size={15} aria-hidden="true" />
                                     Capture your first idea
@@ -607,6 +720,8 @@ export function App() {
                 <IdeaDialog
                     key={editingIdea?.id ?? 'new'}
                     idea={editingIdea}
+                    solutions={solutions}
+                    defaultSolution={solutionFilter === 'all' || solutionFilter === 'none' ? null : solutionFilter}
                     onClose={() => setEditingIdea(undefined)}
                     onSave={saveIdea}
                 />
