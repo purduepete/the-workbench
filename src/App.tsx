@@ -348,7 +348,7 @@ function IdeaDialog({ idea, solutions, defaultSolution, onClose, onSave, onDelet
         <dialog
             ref={dialogRef}
             className="dialog-backdrop"
-            aria-labelledby="idea-dialog-title"
+            aria-label={idea ? 'Edit idea' : 'New idea'}
             onCancel={(event) => {
                 event.preventDefault();
                 onClose();
@@ -359,11 +359,6 @@ function IdeaDialog({ idea, solutions, defaultSolution, onClose, onSave, onDelet
         >
             <form className="idea-form" onSubmit={handleSubmit}>
                 <div className="dialog-heading">
-                    <div>
-                        <p className="eyebrow">{idea ? 'Refine your thought' : 'Save a new thought'}</p>
-                        <h2 id="idea-dialog-title">{idea ? 'Edit idea' : 'New idea'}</h2>
-                        <p>Get the thought down. You can organize it later.</p>
-                    </div>
                     <button type="button" className="icon-button" aria-label="Close dialog" onClick={onClose}>
                         <X size={17} aria-hidden="true" />
                     </button>
@@ -736,10 +731,7 @@ export function App() {
                     </div>
                 )}
 
-                <section className="intro" aria-labelledby="page-title">
-                    <div>
-                        <h2 id="page-title">Catch the thought. Come back to it.</h2>
-                    </div>
+                <section className="intro" aria-label="Sync status">
                     <div className="intro-aside">
                         <SyncBadge status={sync.status} waiting={sync.waiting} />
                     </div>

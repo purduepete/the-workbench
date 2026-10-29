@@ -365,16 +365,6 @@ main.page-width {
     content: '';
 }
 
-.intro h2 {
-    max-width: none;
-    margin: 0;
-    font-size: clamp(20px, 2.2vw, 26px);
-    font-weight: 580;
-    letter-spacing: -0.055em;
-    line-height: 1.04;
-    white-space: nowrap;
-}
-
 .intro-aside {
     display: flex;
     min-width: 0;
@@ -1198,13 +1188,8 @@ main.page-width {
         padding: 0 0 10px;
     }
 
-    .intro h2 {
-        font-size: clamp(16px, 5.2vw, 21px);
-    }
-
     .intro-aside {
         align-items: flex-start;
-        margin-top: 6px;
     }
 
     .workspace-tools {
