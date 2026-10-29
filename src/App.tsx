@@ -1,0 +1,616 @@
+import { useEffect, useRef, useState } from 'react';
+import type { FormEvent, KeyboardEvent, CSSProperties } from 'react';
+import {
+    Archive,
+    ArrowDownLeft,
+    Check,
+    CircleAlert,
+    Clock3,
+    Cloud,
+    CloudOff,
+    CloudUpload,
+    Lightbulb,
+    Palette,
+    Pin,
+    Plus,
+    RefreshCw,
+    Search,
+    Tag,
+    X,
+} from 'lucide-react';
+import { filterIdeas, formatIdeaTimestamp, parseTags, readIdeaView, writeIdeaView } from './ideas';
+import { useTheme } from './ThemeContext';
+import type { Idea, IdeaView, ThemePreference } from './types';
+import { useIdeasSync } from './useIdeasSync';
+import type { SyncStatus } from './useIdeasSync';
+
+interface IdeaInput {
+    title: string;
+    body: string;
+    tags: string[];
+}
+
+interface IdeaDialogProps {
+    idea: Idea | null;
+    onClose: () => void;
+    onSave: (value: IdeaInput) => string | null;
+}
+
+const views: { id: IdeaView; label: string; icon: typeof Lightbulb }[] = [
+    { id: 'all', label: 'All ideas', icon: Lightbulb },
+    { id: 'pinned', label: 'Pinned', icon: Pin },
+    { id: 'archived', label: 'Archived', icon: Archive },
+];
+
+const themeOptions: { value: ThemePreference; label: string }[] = [
+    { value: 'light', label: 'Light' },
+    { value: 'midnight', label: 'Midnight' },
+    { value: 'system', label: 'System' },
+];
+
+function ThemeMenu() {
+    const { preference, setPreference } = useTheme();
+    const [open, setOpen] = useState(false);
+    const wrapperRef = useRef<HTMLDivElement>(null);
+    const triggerRef = useRef<HTMLButtonElement>(null);
+    const pressingTrigger = useRef(false);
+    const optionRefs = useRef<Array<HTMLButtonElement | null>>([]);
+    const preferenceIndex = themeOptions.findIndex((option) => option.value === preference);
+    const selectedLabel = themeOptions[preferenceIndex]?.label ?? 'Theme';
+
+    useEffect(() => {
+        if (!open) return;
+        optionRefs.current[preferenceIndex]?.focus();
+        const handlePointerDown = (event: PointerEvent) => {
+            if (event.target instanceof Node && !wrapperRef.current?.contains(event.target)) setOpen(false);
+        };
+        document.addEventListener('pointerdown', handlePointerDown);
+        return () => document.removeEventListener('pointerdown', handlePointerDown);
+    }, [open, preferenceIndex]);
+
+    const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+        if (event.key === 'Escape') {
+            event.preventDefault();
+            setOpen(false);
+            triggerRef.current?.focus();
+            return;
+        }
+        const currentIndex = optionRefs.current.findIndex((option) => option === document.activeElement);
+        let nextIndex: number | undefined;
+        if (event.key === 'ArrowDown' || event.key === 'ArrowRight') {
+            nextIndex = (currentIndex + 1) % themeOptions.length;
+        } else if (event.key === 'ArrowUp' || event.key === 'ArrowLeft') {
+            nextIndex = (currentIndex - 1 + themeOptions.length) % themeOptions.length;
+        } else if (event.key === 'Home') {
+            nextIndex = 0;
+        } else if (event.key === 'End') {
+            nextIndex = themeOptions.length - 1;
+        }
+        if (nextIndex === undefined) return;
+        event.preventDefault();
+        const next = themeOptions[nextIndex];
+        if (!next) return;
+        setPreference(next.value);
+        optionRefs.current[nextIndex]?.focus();
+    };
+
+    return (
+        <div
+            ref={wrapperRef}
+            className="theme-wrap"
+            onBlur={(event) => {
+                if (pressingTrigger.current) return;
+                const nextTarget = event.relatedTarget;
+                if (!(nextTarget instanceof Node) || !event.currentTarget.contains(nextTarget)) setOpen(false);
+            }}
+        >
+            <button
+                ref={triggerRef}
+                type="button"
+                className="icon-button control-height"
+                aria-label={`Theme: ${selectedLabel}`}
+                aria-haspopup="dialog"
+                aria-expanded={open}
+                aria-controls="theme-picker-popover"
+                onPointerDown={(event) => {
+                    if (event.button !== 0) return;
+                    pressingTrigger.current = true;
+                    event.preventDefault();
+                }}
+                onPointerCancel={() => {
+                    pressingTrigger.current = false;
+                }}
+                onClick={() => {
+                    pressingTrigger.current = false;
+                    if (open) {
+                        setOpen(false);
+                        triggerRef.current?.focus();
+                    } else {
+                        setOpen(true);
+                    }
+                }}
+                onKeyDown={(event) => {
+                    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+                        event.preventDefault();
+                        setOpen(true);
+                    }
+                }}
+            >
+                <Palette size={17} aria-hidden="true" />
+            </button>
+            <div
+                className="theme-picker-popover"
+                id="theme-picker-popover"
+                role="dialog"
+                aria-label="Appearance settings"
+                hidden={!open}
+                onKeyDown={handleKeyDown}
+            >
+                <span className="theme-popover-label">Theme</span>
+                <div className="theme-picker-options" role="radiogroup" aria-label="Theme">
+                    <span
+                        className="theme-selection"
+                        aria-hidden="true"
+                        style={{ '--theme-index': preferenceIndex } as CSSProperties}
+                    />
+                    {themeOptions.map(({ value, label }, index) => (
+                        <button
+                            key={value}
+                            ref={(element) => {
+                                optionRefs.current[index] = element;
+                            }}
+                            type="button"
+                            role="radio"
+                            aria-checked={preference === value}
+                            tabIndex={preference === value ? 0 : -1}
+                            onClick={() => setPreference(value)}
+                        >
+                            <span>{label}</span>
+                        </button>
+                    ))}
+                </div>
+            </div>
+        </div>
+    );
+}
+
+function IdeaDialog({ idea, onClose, onSave }: IdeaDialogProps) {
+    const dialogRef = useRef<HTMLDialogElement>(null);
+    const titleRef = useRef<HTMLInputElement>(null);
+    const [formError, setFormError] = useState<string | null>(null);
+
+    useEffect(() => {
+        const dialog = dialogRef.current;
+        if (dialog && !dialog.open) dialog.showModal();
+        titleRef.current?.focus();
+        return () => {
+            if (dialog?.open) dialog.close();
+        };
+    }, []);
+
+    const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+        event.preventDefault();
+        const formData = new FormData(event.currentTarget);
+        const title = String(formData.get('title') ?? '').trim();
+        if (!title) {
+            setFormError('Add a title before saving this idea.');
+            titleRef.current?.focus();
+            return;
+        }
+        const error = onSave({
+            title,
+            body: String(formData.get('body') ?? '').trim(),
+            tags: parseTags(String(formData.get('tags') ?? '')),
+        });
+        if (error) {
+            setFormError(error);
+            return;
+        }
+        onClose();
+    };
+
+    return (
+        <dialog
+            ref={dialogRef}
+            className="dialog-backdrop"
+            aria-labelledby="idea-dialog-title"
+            onCancel={(event) => {
+                event.preventDefault();
+                onClose();
+            }}
+            onClick={(event) => {
+                if (event.target === dialogRef.current) onClose();
+            }}
+        >
+            <form className="idea-form" onSubmit={handleSubmit}>
+                <div className="dialog-heading">
+                    <div>
+                        <p className="eyebrow">{idea ? 'Refine your thought' : 'Save a new thought'}</p>
+                        <h2 id="idea-dialog-title">{idea ? 'Edit idea' : 'New idea'}</h2>
+                        <p>Get the thought down. You can organize it later.</p>
+                    </div>
+                    <button type="button" className="icon-button" aria-label="Close dialog" onClick={onClose}>
+                        <X size={17} aria-hidden="true" />
+                    </button>
+                </div>
+                <label className="field-group">
+                    <span className="field-label">Idea title</span>
+                    <input
+                        ref={titleRef}
+                        className="field-input"
+                        name="title"
+                        type="text"
+                        maxLength={100}
+                        placeholder="A thought worth keeping"
+                        defaultValue={idea?.title ?? ''}
+                        required
+                    />
+                </label>
+                <label className="field-group">
+                    <span className="field-label">Details</span>
+                    <textarea
+                        className="field-textarea"
+                        name="body"
+                        maxLength={5000}
+                        placeholder="Add context, questions, links, or the next step..."
+                        defaultValue={idea?.body ?? ''}
+                    />
+                </label>
+                <label className="field-group">
+                    <span className="field-label">Tags</span>
+                    <input
+                        className="field-input"
+                        name="tags"
+                        type="text"
+                        maxLength={300}
+                        placeholder="work, writing, someday"
+                        defaultValue={idea?.tags.join(', ') ?? ''}
+                        aria-describedby="tag-hint"
+                    />
+                    <span className="field-hint" id="tag-hint">
+                        Separate tags with commas. Up to 12 tags.
+                    </span>
+                </label>
+                {formError && (
+                    <p className="dialog-error" role="alert">
+                        {formError}
+                    </p>
+                )}
+                <div className="dialog-footer">
+                    <button type="button" className="secondary-button" onClick={onClose}>
+                        Cancel
+                    </button>
+                    <button type="submit" className="primary-button">
+                        <Check size={15} aria-hidden="true" />
+                        Save idea
+                    </button>
+                </div>
+            </form>
+        </dialog>
+    );
+}
+
+interface IdeaCardProps {
+    idea: Idea;
+    onEdit: (idea: Idea) => void;
+    onTogglePin: (idea: Idea) => void;
+    onToggleArchive: (idea: Idea) => void;
+    onSelectTag: (tag: string) => void;
+}
+
+function IdeaCard({ idea, onEdit, onTogglePin, onToggleArchive, onSelectTag }: IdeaCardProps) {
+    return (
+        <article className="idea-card">
+            <div className="idea-card-top">
+                <span className="card-label">
+                    {idea.pinned ? <Pin size={12} aria-hidden="true" /> : <Lightbulb size={12} aria-hidden="true" />}
+                    {idea.pinned ? 'Pinned thought' : 'Saved thought'}
+                </span>
+                <div className="card-actions">
+                    <button
+                        type="button"
+                        className="card-action"
+                        aria-label={idea.pinned ? `Unpin ${idea.title}` : `Pin ${idea.title}`}
+                        aria-pressed={idea.pinned}
+                        onClick={() => onTogglePin(idea)}
+                    >
+                        <Pin size={15} aria-hidden="true" />
+                    </button>
+                    <button
+                        type="button"
+                        className="card-action"
+                        aria-label={idea.archived ? `Restore ${idea.title}` : `Archive ${idea.title}`}
+                        onClick={() => onToggleArchive(idea)}
+                    >
+                        {idea.archived ? (
+                            <ArrowDownLeft size={15} aria-hidden="true" />
+                        ) : (
+                            <Archive size={15} aria-hidden="true" />
+                        )}
+                    </button>
+                </div>
+            </div>
+            <h4 className="idea-title">{idea.title}</h4>
+            {idea.body && <p className="idea-body">{idea.body}</p>}
+            <div className="idea-tags">
+                {idea.tags.map((tag) => (
+                    <button
+                        key={tag.toLocaleLowerCase()}
+                        className="tag-chip tag-filter"
+                        type="button"
+                        aria-label={`Filter by ${tag}`}
+                        onClick={() => onSelectTag(tag)}
+                    >
+                        <Tag size={10} aria-hidden="true" />
+                        {tag}
+                    </button>
+                ))}
+            </div>
+            <div className="idea-card-bottom">
+                <span className="idea-date">
+                    <Clock3 size={12} aria-hidden="true" />
+                    <time dateTime={idea.updatedAt}>{formatIdeaTimestamp(idea.updatedAt)}</time>
+                </span>
+                <button type="button" className="edit-button" onClick={() => onEdit(idea)}>
+                    Edit
+                </button>
+            </div>
+        </article>
+    );
+}
+
+function SyncBadge({ status, waiting }: { status: SyncStatus; waiting: number }) {
+    const pending = `${waiting} ${waiting === 1 ? 'change' : 'changes'} waiting`;
+    const { icon: Icon, label } = {
+        synced: { icon: Cloud, label: 'Synced' },
+        syncing: { icon: RefreshCw, label: 'Syncing' },
+        waiting: { icon: CloudUpload, label: pending },
+        offline: { icon: CloudOff, label: waiting > 0 ? `Offline, ${pending}` : 'Offline' },
+        paused: { icon: CircleAlert, label: waiting > 0 ? `Sync paused, ${pending}` : 'Sync paused' },
+    }[status];
+    return (
+        <span className="local-badge" data-sync-status={status} role="status">
+            <Icon size={14} aria-hidden="true" />
+            {label}
+        </span>
+    );
+}
+
+export function App() {
+    const { storageWarning: themeStorageWarning } = useTheme();
+    const sync = useIdeasSync();
+    const { ideas } = sync;
+    const [initialView] = useState(readIdeaView);
+    const [view, setView] = useState<IdeaView>(initialView.view);
+    const [viewNotice, setViewNotice] = useState<string | null>(initialView.error);
+    const storageNotice = sync.notice ?? viewNotice;
+    const setStorageNotice = (notice: string | null) => {
+        if (notice === null) sync.clearNotice();
+        setViewNotice(notice);
+    };
+    const [query, setQuery] = useState('');
+    const [selectedTag, setSelectedTag] = useState<string | null>(null);
+    const [editingIdea, setEditingIdea] = useState<Idea | null | undefined>(undefined);
+
+    const activeIdeas = ideas.filter((idea) => !idea.archived);
+    const pinnedIdeas = activeIdeas.filter((idea) => idea.pinned);
+    const archivedIdeas = ideas.filter((idea) => idea.archived);
+    const visibleIdeas = filterIdeas(ideas, view, query, selectedTag);
+    const allTags = Array.from(new Set(ideas.flatMap((idea) => idea.tags))).sort((a, b) => a.localeCompare(b));
+    const activeView = views.find((item) => item.id === view) ?? views[0];
+    const selectedViewIndex = views.findIndex((item) => item.id === view);
+    const segmentStyle: CSSProperties & { '--segment-index': number } = { '--segment-index': selectedViewIndex };
+
+    const showStorageError = (error: string | null) => {
+        if (error) setStorageNotice(error);
+    };
+
+    const saveIdea = ({ title, body, tags }: IdeaInput): string | null => {
+        const now = new Date().toISOString();
+        const current = editingIdea ? ideas.find((idea) => idea.id === editingIdea.id) : undefined;
+        return current
+            ? sync.update({ ...current, title, body, tags, updatedAt: now })
+            : sync.create({
+                  id: window.crypto.randomUUID(),
+                  title,
+                  body,
+                  tags,
+                  createdAt: now,
+                  updatedAt: now,
+                  pinned: false,
+                  archived: false,
+              });
+    };
+
+    const updateIdea = (target: Idea, update: Partial<Pick<Idea, 'pinned' | 'archived'>>) => {
+        const current = ideas.find((idea) => idea.id === target.id);
+        if (current) sync.update({ ...current, ...update, updatedAt: new Date().toISOString() });
+    };
+
+    const chooseView = (nextView: IdeaView) => {
+        setView(nextView);
+        showStorageError(writeIdeaView(nextView));
+    };
+
+    const viewCounts: Record<IdeaView, number> = {
+        all: activeIdeas.length,
+        pinned: pinnedIdeas.length,
+        archived: archivedIdeas.length,
+    };
+
+    return (
+        <>
+            <header className="topbar">
+                <div className="page-width topbar-inner">
+                    <div className="brand">
+                        <span className="brand-mark" aria-hidden="true">
+                            <Lightbulb size={19} />
+                        </span>
+                        <div>
+                            <h1 className="brand-name">Idea Notes</h1>
+                            <p className="brand-caption">Your thoughts, kept close</p>
+                        </div>
+                    </div>
+                    <div className="top-actions">
+                        <button
+                            type="button"
+                            className="primary-button control-height"
+                            onClick={() => setEditingIdea(null)}
+                        >
+                            <Plus size={16} aria-hidden="true" />
+                            New idea
+                        </button>
+                        <ThemeMenu />
+                    </div>
+                </div>
+            </header>
+
+            <main className="page-width">
+                {storageNotice && (
+                    <div className="storage-notice" role="alert">
+                        <span>{storageNotice}</span>
+                        <button
+                            type="button"
+                            aria-label="Dismiss storage notice"
+                            onClick={() => setStorageNotice(null)}
+                        >
+                            <X size={16} aria-hidden="true" />
+                        </button>
+                    </div>
+                )}
+                {themeStorageWarning && !storageNotice && (
+                    <div className="storage-notice" role="alert">
+                        <span>{themeStorageWarning}</span>
+                    </div>
+                )}
+
+                <section className="intro" aria-labelledby="page-title">
+                    <div>
+                        <h2 id="page-title">Catch the thought. Come back to it.</h2>
+                    </div>
+                    <div className="intro-aside">
+                        <SyncBadge status={sync.status} waiting={sync.waiting} />
+                    </div>
+                </section>
+
+                <section className="workspace" aria-label="Your ideas">
+                    <div className="workspace-tools">
+                        <label className="search-wrap">
+                            <Search size={16} aria-hidden="true" />
+                            <span className="sr-only">Search ideas</span>
+                            <input
+                                className="search-input"
+                                type="search"
+                                placeholder="Search a thought, detail, or tag..."
+                                value={query}
+                                onChange={(event) => setQuery(event.target.value)}
+                            />
+                        </label>
+                        <div className="segmented" role="group" aria-label="Idea view">
+                            <span className="segment-fill" style={segmentStyle} aria-hidden="true" />
+                            {views.map(({ id, label, icon: Icon }) => (
+                                <button
+                                    key={id}
+                                    type="button"
+                                    className="segment-button"
+                                    aria-pressed={view === id}
+                                    onClick={() => chooseView(id)}
+                                >
+                                    <Icon size={13} aria-hidden="true" />
+                                    {label}
+                                    <span>{viewCounts[id]}</span>
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
+                    {allTags.length > 0 && (
+                        <div className="tag-filter-row" aria-label="Filter by tag">
+                            <span className="tag-filter-label">TAGS</span>
+                            {allTags.map((tag) => (
+                                <button
+                                    key={tag.toLocaleLowerCase()}
+                                    type="button"
+                                    className="tag-filter"
+                                    aria-pressed={selectedTag === tag}
+                                    onClick={() => setSelectedTag((current) => (current === tag ? null : tag))}
+                                >
+                                    {tag}
+                                </button>
+                            ))}
+                            {selectedTag && (
+                                <button className="text-button" type="button" onClick={() => setSelectedTag(null)}>
+                                    Clear tag
+                                </button>
+                            )}
+                        </div>
+                    )}
+
+                    <div className="content-heading">
+                        <h3>{selectedTag ? `Tagged “${selectedTag}”` : activeView.label}</h3>
+                        <span className="result-count" aria-live="polite">
+                            {visibleIdeas.length} {visibleIdeas.length === 1 ? 'note' : 'notes'}
+                        </span>
+                    </div>
+
+                    {visibleIdeas.length > 0 ? (
+                        <div className="idea-grid">
+                            {visibleIdeas.map((idea) => (
+                                <IdeaCard
+                                    key={idea.id}
+                                    idea={idea}
+                                    onEdit={setEditingIdea}
+                                    onTogglePin={(target) => updateIdea(target, { pinned: !target.pinned })}
+                                    onToggleArchive={(target) => updateIdea(target, { archived: !target.archived })}
+                                    onSelectTag={(tag) => {
+                                        setSelectedTag(tag);
+                                        chooseView('all');
+                                    }}
+                                />
+                            ))}
+                        </div>
+                    ) : (
+                        <div className="empty-state">
+                            <span className="empty-icon" aria-hidden="true">
+                                {query || selectedTag ? <Search size={21} /> : <Lightbulb size={22} />}
+                            </span>
+                            <h4>
+                                {query || selectedTag
+                                    ? 'No ideas match this search'
+                                    : view === 'pinned'
+                                      ? 'Nothing pinned yet'
+                                      : view === 'archived'
+                                        ? 'Your archive is clear'
+                                        : 'Your idea space is ready'}
+                            </h4>
+                            <p>
+                                {query || selectedTag
+                                    ? 'Try another phrase or clear the tag filter to see more notes.'
+                                    : view === 'pinned'
+                                      ? 'Pin the thoughts you want to keep within easy reach.'
+                                      : view === 'archived'
+                                        ? 'Ideas you archive will be kept here until you restore them.'
+                                        : 'Start with a quick note. Add the context now, and sort it out later.'}
+                            </p>
+                            {!query && !selectedTag && view === 'all' && (
+                                <button type="button" className="primary-button" onClick={() => setEditingIdea(null)}>
+                                    <Plus size={15} aria-hidden="true" />
+                                    Capture your first idea
+                                </button>
+                            )}
+                        </div>
+                    )}
+                </section>
+            </main>
+
+            {editingIdea !== undefined && (
+                <IdeaDialog
+                    key={editingIdea?.id ?? 'new'}
+                    idea={editingIdea}
+                    onClose={() => setEditingIdea(undefined)}
+                    onSave={saveIdea}
+                />
+            )}
+        </>
+    );
+}

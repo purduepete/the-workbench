@@ -1,0 +1,233 @@
+import { createServer } from 'node:http';
+import type { Server } from 'node:http';
+import { randomUUID } from 'node:crypto';
+import type { Pool } from 'pg';
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { createApp } from '../server/app.js';
+import { MemoryIdeasStore, PostgresIdeasStore } from '../server/store.js';
+import type { IdeaFields, Mutation } from '../shared/contracts.js';
+
+let server: Server;
+let origin: string;
+let store: MemoryIdeasStore;
+
+const fields = (title: string): IdeaFields => ({
+    title,
+    body: 'Details',
+    tags: ['home'],
+    pinned: false,
+    archived: false,
+    updatedAt: '2026-10-29T18:00:00.000Z',
+});
+
+const create = (title: string, id = randomUUID()): Mutation => ({
+    kind: 'create',
+    mutationId: randomUUID(),
+    id,
+    createdAt: '2026-10-29T18:00:00.000Z',
+    fields: fields(title),
+});
+
+const update = (id: string, baseVersion: number, title: string): Mutation => ({
+    kind: 'update',
+    mutationId: randomUUID(),
+    id,
+    baseVersion,
+    copyId: randomUUID(),
+    fields: fields(title),
+});
+
+const post = (path: string, body: unknown, headers: Record<string, string> = {}) =>
+    fetch(`${origin}${path}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Origin: origin, ...headers },
+        body: typeof body === 'string' ? body : JSON.stringify(body),
+    });
+
+beforeAll(async () => {
+    server = createServer();
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const address = server.address();
+    if (!address || typeof address === 'string') throw new Error('Test server did not bind.');
+    origin = `http://127.0.0.1:${address.port}`;
+    server.on('request', (req, res) => createApp({ store, allowedOrigins: [origin] })(req, res));
+});
+
+beforeEach(() => {
+    store = new MemoryIdeasStore();
+});
+
+afterAll(async () => {
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+});
+
+describe('request guards', () => {
+    it('rejects writes without an allowed origin, JSON body or same-site request', async () => {
+        const mutation = create('Guarded');
+        expect((await post('/api/mutations', mutation, { Origin: 'https://evil.example' })).status).toBe(403);
+        expect((await post('/api/mutations', mutation, { 'Content-Type': 'text/plain' })).status).toBe(403);
+        expect((await post('/api/mutations', mutation, { 'Sec-Fetch-Site': 'cross-site' })).status).toBe(403);
+        expect((await post('/api/preferences', { theme: 'light' }, { Origin: 'https://evil.example' })).status).toBe(
+            403
+        );
+        expect(await store.list()).toEqual([]);
+    });
+
+    it('rejects unknown hosts except for loopback readiness', async () => {
+        const { request } = await import('node:http');
+        const status = (path: string) =>
+            new Promise<number>((resolve, reject) => {
+                const req = request(`${origin}${path}`, { headers: { Host: 'evil.example' } }, (res) => {
+                    res.resume();
+                    resolve(res.statusCode ?? 0);
+                });
+                req.on('error', reject);
+                req.end();
+            });
+        expect(await status('/api/ideas')).toBe(403);
+        expect((await fetch(`${origin}/api/health`)).status).toBe(200);
+    });
+
+    it('validates payloads and caps the body size', async () => {
+        expect((await post('/api/mutations', { ...create('x'), extra: true })).status).toBe(400);
+        expect((await post('/api/mutations', create(''))).status).toBe(400);
+        expect((await post('/api/mutations', '{not json')).status).toBe(400);
+        const huge = create('Big');
+        if (huge.kind === 'create') huge.fields.body = 'x'.repeat(70_000);
+        expect((await post('/api/mutations', huge)).status).toBe(413);
+    });
+
+    it('reports readiness failures as 503', async () => {
+        store.failing = true;
+        const response = await fetch(`${origin}/api/health`);
+        expect(response.status).toBe(503);
+        expect(await response.json()).toMatchObject({ ok: false });
+    });
+});
+
+describe('preferences', () => {
+    it('stores a valid theme in a cookie and rejects other values', async () => {
+        const response = await post('/api/preferences', { theme: 'light' });
+        expect(response.status).toBe(204);
+        const cookie = response.headers.get('set-cookie') ?? '';
+        expect(cookie).toMatch(/^idea-notes\.theme=light;/);
+        expect(cookie).toMatch(/SameSite=Lax/);
+        expect(cookie).not.toMatch(/Secure/);
+        expect((await post('/api/preferences', { theme: 'dark' })).status).toBe(400);
+    });
+});
+
+describe('mutations', () => {
+    it('creates, updates and lists ideas with versions', async () => {
+        const created = create('First');
+        expect(await (await post('/api/mutations', created)).json()).toMatchObject({
+            outcome: 'created',
+            resultVersion: 1,
+        });
+        const updated = await (await post('/api/mutations', update(created.id, 1, 'First, edited'))).json();
+        expect(updated).toMatchObject({ outcome: 'updated', resultVersion: 2, idea: { title: 'First, edited' } });
+        const { ideas } = await (await fetch(`${origin}/api/ideas`)).json();
+        expect(ideas).toHaveLength(1);
+    });
+
+    it('keeps both versions when the base version is stale', async () => {
+        const created = create('Shared');
+        await store.apply(created);
+        await store.apply(update(created.id, 1, 'Edited elsewhere'));
+        const stale = update(created.id, 1, 'Edited offline');
+        const result = await store.apply(stale);
+        expect(result).toMatchObject({ outcome: 'copied', resultVersion: 1, idea: { title: 'Edited offline (copy)' } });
+        if (stale.kind === 'update') expect(result.resultId).toBe(stale.copyId);
+        expect((await store.list()).map((idea) => idea.title).sort()).toEqual([
+            'Edited elsewhere',
+            'Edited offline (copy)',
+        ]);
+    });
+
+    it('returns the original result when a lost response is retried', async () => {
+        const created = create('Retry');
+        await store.apply(created);
+        const edit = update(created.id, 1, 'Retry, edited');
+        const first = await store.apply(edit);
+        const retry = await store.apply(edit);
+        expect(retry).toMatchObject({ outcome: 'updated', resultVersion: 2 });
+        expect(retry.outcome).toBe(first.outcome);
+
+        // Another client edits before the retry arrives; the retry still reports the first outcome.
+        await store.apply(update(created.id, 2, 'Edited elsewhere'));
+        expect(await store.apply(edit)).toMatchObject({ outcome: 'updated', resultVersion: 2 });
+        expect(await store.list()).toHaveLength(1);
+    });
+
+    it('answers concurrent duplicate retries with one result and one copy', async () => {
+        const created = create('Race');
+        await store.apply(created);
+        await store.apply(update(created.id, 1, 'Moved on'));
+        const stale = update(created.id, 1, 'Stale edit');
+        const results = await Promise.all([1, 2, 3].map(() => post('/api/mutations', stale).then((r) => r.json())));
+        expect(new Set(results.map((result) => result.resultId)).size).toBe(1);
+        expect(await store.list()).toHaveLength(2);
+    });
+
+    it('turns an edit of a deleted note into a copy', async () => {
+        const created = create('Gone');
+        await store.apply(created);
+        await store.apply({ kind: 'delete', mutationId: randomUUID(), id: created.id });
+        const result = await store.apply(update(created.id, 1, 'Edited after delete'));
+        expect(result.outcome).toBe('copied');
+        expect((await store.list()).map((idea) => idea.title)).toEqual(['Edited after delete (copy)']);
+    });
+
+    it('makes creates and deletes safe to repeat', async () => {
+        const created = create('Twice');
+        await store.apply(created);
+        await store.apply(created);
+        const removal: Mutation = { kind: 'delete', mutationId: randomUUID(), id: created.id };
+        await store.apply(removal);
+        expect(await store.apply(removal)).toMatchObject({ outcome: 'deleted', idea: null });
+        expect(await store.list()).toEqual([]);
+    });
+});
+
+describe('PostgresIdeasStore', () => {
+    const fakePool = (handler: (sql: string, values?: unknown[]) => { rows: unknown[] }) =>
+        ({ query: async (sql: string, values?: unknown[]) => handler(sql, values) }) as unknown as Pool;
+
+    it('is ready only at schema version 1', async () => {
+        const at = (version: number) =>
+            new PostgresIdeasStore(
+                fakePool((sql) => ({ rows: sql.includes('solutiondeploy_schema') ? [{ version }] : [] }))
+            );
+        await expect(at(1).ready()).resolves.toBeUndefined();
+        await expect(at(2).ready()).rejects.toThrow(/schema version/);
+    });
+
+    it('returns the recorded receipt when a concurrent retry wins the race', async () => {
+        const mutation = create('Raced');
+        const duplicate = Object.assign(new Error('duplicate key'), {
+            code: '23505',
+            constraint: 'applied_mutations_pkey',
+        });
+        const pool = {
+            connect: async () => ({
+                query: async (sql: string) => {
+                    if (sql.startsWith('INSERT INTO public.applied_mutations')) throw duplicate;
+                    if (sql.includes('FROM public.applied_mutations')) return { rows: [] };
+                    if (sql.startsWith('INSERT INTO public.ideas')) return { rows: [{ version: 1 }] };
+                    return { rows: [] };
+                },
+                release: () => undefined,
+            }),
+            query: async (sql: string) => {
+                if (sql.includes('FROM public.applied_mutations'))
+                    return { rows: [{ outcome: 'created', result_id: mutation.id, result_version: 1 }] };
+                return { rows: [] };
+            },
+        } as unknown as Pool;
+        await expect(new PostgresIdeasStore(pool).apply(mutation)).resolves.toMatchObject({
+            outcome: 'created',
+            resultId: mutation.id,
+            idea: null,
+        });
+    });
+});
