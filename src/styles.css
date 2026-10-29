@@ -1271,3 +1271,12 @@ main.page-width {
         transition-duration: 0.01ms !important;
     }
 }
+
+/* iOS zooms into any focused field under 16px and does not zoom back out. */
+@media (pointer: coarse) {
+    .search-input,
+    .field-input,
+    .field-textarea {
+        font-size: 16px;
+    }
+}
