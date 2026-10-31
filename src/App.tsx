@@ -733,7 +733,16 @@ export function App() {
                 )}
 
                 {!sync.ready ? (
-                    <PageLoading label="Loading ideas" />
+                    <PageLoading
+                        label="Loading ideas"
+                        message={
+                            sync.status === 'offline'
+                                ? 'You are offline. Ideas will load when the connection returns.'
+                                : sync.status === 'paused'
+                                  ? 'Ideas could not sync. Retrying automatically.'
+                                  : undefined
+                        }
+                    />
                 ) : (
                     <div className="data-enter">
                         <section className="intro" aria-label="Sync status">

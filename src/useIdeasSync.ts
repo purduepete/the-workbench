@@ -34,12 +34,14 @@ export function useIdeasSync() {
     const [phase, setPhase] = useState<'idle' | 'syncing' | 'offline' | 'paused'>('idle');
     // Without a saved copy, an empty list means "not fetched yet", so the page waits for the first sync.
     const [ready, setReady] = useState(() => {
+        if (initial.error) return false;
         try {
-            return window.localStorage.getItem(SYNC_STORAGE_KEY) !== null;
+            return window.localStorage.getItem(SYNC_STORAGE_KEY) !== null || initial.state.outbox.length > 0;
         } catch {
-            return true;
+            return false;
         }
     });
+    const readyRef = useRef(ready);
     const stateRef = useRef(state);
     const running = useRef(false);
     const again = useRef(false);
@@ -86,13 +88,14 @@ export function useIdeasSync() {
                 if (!response.ok) throw new Error(`Loading ideas failed with HTTP ${response.status}.`);
                 const { ideas } = await readJson<{ ideas: ServerIdea[] }>(response);
                 commit(replaceServer(stateRef.current, ideas));
+                readyRef.current = true;
+                setReady(true);
             } while (again.current || stateRef.current.outbox.length > 0);
             setPhase('idle');
         } catch {
             setPhase(navigator.onLine ? 'paused' : 'offline');
         } finally {
             running.current = false;
-            setReady(true);
         }
     }, [commit]);
 
@@ -108,9 +111,11 @@ export function useIdeasSync() {
             if (next.error) return;
             stateRef.current = next.state;
             setState(next.state);
+            readyRef.current = true;
+            setReady(true);
         };
         const timer = window.setInterval(() => {
-            if (stateRef.current.outbox.length > 0) retry();
+            if (!readyRef.current || stateRef.current.outbox.length > 0) retry();
         }, RETRY_MS);
         window.addEventListener('online', retry);
         window.addEventListener('storage', onStorage);

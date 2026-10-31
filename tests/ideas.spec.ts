@@ -1,5 +1,30 @@
 import { expect, test } from '@playwright/test';
 
+test('keeps the initial loading state until a failed sync succeeds on retry', async ({ page }) => {
+    await page.addInitScript(() => {
+        localStorage.removeItem('idea-notes.sync');
+        localStorage.removeItem('idea-notes.ideas');
+    });
+    let attempts = 0;
+    await page.route('**/api/ideas', async (route) => {
+        attempts += 1;
+        if (attempts === 1) {
+            await route.fulfill({ status: 503, contentType: 'application/json', body: '{"error":"unavailable"}' });
+            return;
+        }
+        await route.fulfill({ status: 200, contentType: 'application/json', body: '{"ideas":[]}' });
+    });
+
+    await page.goto('/');
+    await expect(page.getByRole('status')).toContainText('Loading ideas');
+    await expect(page.getByRole('alert')).toHaveText('Ideas could not sync. Retrying automatically.');
+    await expect(page.getByText('Your idea space is ready')).toHaveCount(0);
+
+    await page.evaluate(() => window.dispatchEvent(new Event('online')));
+    await expect(page.getByText('Your idea space is ready')).toBeVisible();
+    expect(attempts).toBe(2);
+});
+
 test('capture, search, pin, edit and archive an idea', async ({ page }) => {
     await page.goto('/');
     await expect(page.getByRole('heading', { name: 'Idea Notes' })).toBeVisible();

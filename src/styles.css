@@ -782,14 +782,24 @@ main.page-width {
     inset: 0;
     display: grid;
     place-items: center;
+    gap: 16px;
     background: var(--page);
     caret-color: transparent;
     user-select: none;
+    -webkit-user-select: none;
+}
+
+.page-loading-message {
+    max-width: min(420px, calc(100vw - 32px));
+    margin: 0;
+    color: var(--muted);
+    text-align: center;
 }
 
 .spinner-wrap {
     caret-color: transparent;
     user-select: none;
+    -webkit-user-select: none;
     animation: dialog-open 0.6s ease-out both;
 }
 

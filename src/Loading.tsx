@@ -15,7 +15,7 @@ export function useDelayedLoading(isLoading: boolean, delayMs = 250): boolean {
 }
 
 /** Covers the page below the header in the page color and centers the 40px ring after 250ms. */
-export function PageLoading({ label }: { label: string }) {
+export function PageLoading({ label, message }: { label: string; message?: string }) {
     const show = useDelayedLoading(true);
     return (
         <div className="page-loading">
@@ -24,6 +24,11 @@ export function PageLoading({ label }: { label: string }) {
                     <span className="spinner" aria-hidden="true" />
                     <span className="sr-only">{label}</span>
                 </div>
+            )}
+            {message && (
+                <p className="page-loading-message" role="alert">
+                    {message}
+                </p>
             )}
         </div>
     );
