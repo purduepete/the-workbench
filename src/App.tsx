@@ -292,6 +292,11 @@ function ThemeMenu() {
 function IdeaDialog({ idea, solutions, defaultSolution, onClose, onSave, onDelete }: IdeaDialogProps) {
     const dialogRef = useRef<HTMLDialogElement>(null);
     const titleRef = useRef<HTMLInputElement>(null);
+    const closeRef = useRef<HTMLButtonElement>(null);
+    const returnFocusRef = useRef(document.activeElement instanceof HTMLElement ? document.activeElement : null);
+    const isAppleTouchDevice =
+        /iPhone|iPad|iPod/i.test(navigator.userAgent) ||
+        (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
     const [formError, setFormError] = useState<string | null>(null);
     const [confirmingDelete, setConfirmingDelete] = useState(false);
     const [solution, setSolution] = useState<string | null>(idea ? idea.solution : defaultSolution);
@@ -301,12 +306,15 @@ function IdeaDialog({ idea, solutions, defaultSolution, onClose, onSave, onDelet
 
     useEffect(() => {
         const dialog = dialogRef.current;
+        const returnFocus = returnFocusRef.current;
         if (dialog && !dialog.open) dialog.showModal();
-        titleRef.current?.focus();
+        if (isAppleTouchDevice) closeRef.current?.focus();
+        else titleRef.current?.focus();
         return () => {
             if (dialog?.open) dialog.close();
+            if (returnFocus?.isConnected) returnFocus.focus();
         };
-    }, []);
+    }, [isAppleTouchDevice]);
 
     const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
@@ -360,7 +368,14 @@ function IdeaDialog({ idea, solutions, defaultSolution, onClose, onSave, onDelet
         >
             <form className="idea-form" onSubmit={handleSubmit}>
                 <div className="dialog-heading">
-                    <button type="button" className="icon-button" aria-label="Close dialog" onClick={onClose}>
+                    <button
+                        ref={closeRef}
+                        type="button"
+                        className="icon-button"
+                        aria-label="Close dialog"
+                        autoFocus={isAppleTouchDevice}
+                        onClick={onClose}
+                    >
                         <X size={17} aria-hidden="true" />
                     </button>
                 </div>

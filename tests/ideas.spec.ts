@@ -1,5 +1,61 @@
 import { expect, test } from '@playwright/test';
 
+for (const device of [
+    { name: 'desktop', platform: 'Win32', userAgent: 'Mozilla/5.0 Windows NT 10.0', maxTouchPoints: 0, touch: false },
+    {
+        name: 'iPhone',
+        platform: 'iPhone',
+        userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0)',
+        maxTouchPoints: 5,
+        touch: true,
+    },
+    { name: 'iPad', platform: 'iPad', userAgent: 'Mozilla/5.0 (iPad; CPU OS 18_0)', maxTouchPoints: 5, touch: true },
+    {
+        name: 'desktop-UA iPad',
+        platform: 'MacIntel',
+        userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15)',
+        maxTouchPoints: 5,
+        touch: true,
+    },
+]) {
+    test(`modal opening focus stays keyboard-free on ${device.name}`, async ({ page }) => {
+        await page.addInitScript(({ platform, userAgent, maxTouchPoints }) => {
+            Object.defineProperty(navigator, 'platform', { value: platform });
+            Object.defineProperty(navigator, 'userAgent', { value: userAgent });
+            Object.defineProperty(navigator, 'maxTouchPoints', { value: maxTouchPoints });
+        }, device);
+        await page.goto('/');
+        const opener = page.getByRole('button', { name: 'New idea' });
+        await opener.click();
+        const dialog = page.getByRole('dialog', { name: 'New idea' });
+        const title = dialog.getByLabel('Idea title');
+        await expect(device.touch ? dialog.getByRole('button', { name: 'Close dialog' }) : title).toBeFocused();
+        if (device.touch) {
+            await page.keyboard.press('Tab');
+            await expect(title).toBeFocused();
+        }
+        await title.click();
+        await expect(title).toBeFocused();
+        const ideaTitle = `Modal focus test ${device.name}`;
+        await title.fill(ideaTitle);
+        await dialog.getByRole('button', { name: 'Save idea' }).click();
+        const card = page.locator('.idea-card').filter({
+            has: page.getByRole('heading', { name: ideaTitle, exact: true }),
+        });
+        const edit = card.getByRole('button', { name: 'Edit' });
+        await edit.click();
+        const editDialog = page.getByRole('dialog', { name: 'Edit idea' });
+        await expect(
+            device.touch
+                ? editDialog.getByRole('button', { name: 'Close dialog' })
+                : editDialog.getByLabel('Idea title')
+        ).toBeFocused();
+        await page.keyboard.press('Escape');
+        await expect(editDialog).toHaveCount(0);
+        await expect(edit).toBeFocused();
+    });
+}
+
 test('keeps the initial loading state until a failed sync succeeds on retry', async ({ page }) => {
     await page.addInitScript(() => {
         localStorage.removeItem('idea-notes.sync');

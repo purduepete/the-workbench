@@ -3,6 +3,10 @@
 Idea Notes captures thoughts with tags, pins, search and archive. Notes sync to a PostgreSQL database through a small
 Express server. The browser keeps an outbox, so capture works offline and changes upload when the connection returns.
 
+New and edit dialogs focus Close on iPhone and iPad, including iPads using a desktop user agent.
+The keyboard stays closed until you tap a field. Desktop dialogs focus the title; closing a dialog restores focus
+to its opener.
+
 ## Local development
 
 Run `npm install`. Start the API with the in-memory store in one terminal:
