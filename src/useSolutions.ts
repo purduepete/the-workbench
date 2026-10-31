@@ -33,6 +33,7 @@ function writeCached(solutions: Solution[]) {
 
 export interface SolutionsState {
     solutions: Solution[];
+    ready: boolean;
     /** Saves the setting for every device. Returns an error message, or null when saved. */
     setDisabled: (id: string, disabled: boolean) => Promise<string | null>;
     refresh: () => Promise<void>;
@@ -41,6 +42,14 @@ export interface SolutionsState {
 /** Solution Directory's list, cached in this browser so offline capture can still link a solution. */
 export function useSolutions(): SolutionsState {
     const [solutions, setSolutions] = useState(readCached);
+    const [ready, setReady] = useState(() => {
+        try {
+            const cached = window.localStorage.getItem(SOLUTIONS_STORAGE_KEY);
+            return cached !== null && isSolutionList(JSON.parse(cached));
+        } catch {
+            return false;
+        }
+    });
     const active = useRef(true);
     const refresh = useCallback(
         () =>
@@ -52,7 +61,10 @@ export function useSolutions(): SolutionsState {
                     setSolutions(body.solutions);
                     writeCached(body.solutions);
                 })
-                .catch(() => undefined),
+                .catch(() => undefined)
+                .finally(() => {
+                    if (active.current) setReady(true);
+                }),
         []
     );
     useEffect(() => {
@@ -91,5 +103,5 @@ export function useSolutions(): SolutionsState {
         return 'The solution setting could not be saved. Check the connection and try again.';
     }, []);
 
-    return { solutions, setDisabled, refresh };
+    return { solutions, ready, setDisabled, refresh };
 }

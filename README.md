@@ -1,5 +1,12 @@
 # Idea Notes
 
+## First entry
+
+The header and page stay laid out but hidden until the first ideas sync and solution list
+settle, then enter together over 600ms. A valid saved ideas cache enters immediately.
+Sync errors reveal the header and prompt immediately. Refreshes keep the shell visible.
+Reduced motion removes the entrance animation.
+
 Idea Notes captures thoughts with tags, pins, search and archive. Notes sync to a PostgreSQL database through a small
 Express server. The browser keeps an outbox, so capture works offline and changes upload when the connection returns.
 

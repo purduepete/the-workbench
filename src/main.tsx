@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { App } from './App';
 import { ThemeProvider } from './ThemeContext';
 import './styles.css';
+import './first-load.css';
 
 if (import.meta.env.PROD && 'serviceWorker' in navigator) {
     navigator.serviceWorker.register('/sw.js').catch((error: unknown) => {

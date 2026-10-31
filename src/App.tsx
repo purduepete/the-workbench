@@ -31,6 +31,7 @@ import type { Solution } from '../shared/contracts';
 import { useIdeasSync } from './useIdeasSync';
 import type { SyncStatus } from './useIdeasSync';
 import { useSolutions } from './useSolutions';
+import { useFirstLoad } from './useFirstLoad';
 import { statusForSolution } from '../shared/status';
 
 interface IdeaInput {
@@ -612,6 +613,7 @@ function SyncBadge({ status, waiting }: { status: SyncStatus; waiting: number })
 export function App() {
     const { storageWarning: themeStorageWarning } = useTheme();
     const sync = useIdeasSync();
+    const [cachedAtEntry] = useState(sync.ready);
     const { ideas } = sync;
     const [initialView] = useState(readIdeaView);
     const [view, setView] = useState<IdeaView>(initialView.view);
@@ -626,7 +628,14 @@ export function App() {
     const [solutionFilter, setSolutionFilter] = useState<SolutionFilter>('all');
     const [editingIdea, setEditingIdea] = useState<Idea | null | undefined>(undefined);
     const [managingSolutions, setManagingSolutions] = useState(false);
-    const { solutions, setDisabled: setSolutionDisabled, refresh: refreshSolutions } = useSolutions();
+    const {
+        solutions,
+        ready: solutionsReady,
+        setDisabled: setSolutionDisabled,
+        refresh: refreshSolutions,
+    } = useSolutions();
+    const initialReady = sync.ready && (cachedAtEntry || solutionsReady);
+    useFirstLoad(initialReady, sync.status === 'offline' || sync.status === 'paused');
     const linkedIds = Array.from(new Set(ideas.flatMap((idea) => (idea.solution ? [idea.solution] : []))));
     const filterOptions = [
         { value: 'all', label: 'All solutions' },
@@ -747,7 +756,7 @@ export function App() {
                     </div>
                 )}
 
-                {!sync.ready ? (
+                {!initialReady ? (
                     <PageLoading
                         label="Loading ideas"
                         message={
