@@ -55,6 +55,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
             root.classList.add('dark', 'theme-midnight');
         }
         root.style.colorScheme = resolvedTheme === 'light' ? 'light' : 'dark';
+        root.style.backgroundColor = THEME_BACKGROUNDS[resolvedTheme];
         document.querySelector('meta[name="theme-color"]')?.setAttribute('content', THEME_BACKGROUNDS[resolvedTheme]);
     }, [resolvedTheme]);
 

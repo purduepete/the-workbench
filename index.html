@@ -13,10 +13,6 @@
         <title>Idea Notes</title>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-        <link
-            href="https://fonts.googleapis.com/css2?family=Roboto+Flex:opsz,wght@8..144,100..1000&display=block"
-            rel="stylesheet"
-        />
         <script>
             (function () {
                 var preference = 'midnight';
@@ -40,11 +36,16 @@
                 document.documentElement.classList.add(dark ? 'dark' : 'light');
                 if (dark) document.documentElement.classList.add('theme-midnight');
                 document.documentElement.style.colorScheme = dark ? 'dark' : 'light';
+                document.documentElement.style.backgroundColor = dark ? '#020617' : '#ffffff';
                 document
                     .querySelector('meta[name="theme-color"]')
                     ?.setAttribute('content', dark ? '#020617' : '#ffffff');
             })();
         </script>
+        <link
+            href="https://fonts.googleapis.com/css2?family=Roboto+Flex:opsz,wght@8..144,100..1000&display=block"
+            rel="stylesheet"
+        />
     </head>
     <body>
         <div id="root"></div>
