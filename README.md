@@ -13,6 +13,7 @@ Express server. The browser keeps an outbox, so capture works offline and change
 New and edit dialogs focus the dialog on iPhone and iPad, including iPads using a desktop user agent.
 The keyboard stays closed until you tap a field. Desktop dialogs focus the title; closing a dialog restores focus
 to its opener. Idea dialogs close from Cancel, Escape or the backdrop.
+On desktop, idea and Manage solutions dialogs open near the top of the page; touch layouts stay centered.
 
 Manage solutions closes from a subtly bordered X at the upper right, saves checkbox changes immediately and has no
 Done button.

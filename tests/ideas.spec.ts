@@ -102,6 +102,106 @@ for (const theme of ['midnight', 'light']) {
     });
 }
 
+test('positions desktop dialogs near the top and keeps their controls usable', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.goto('/');
+    await page.getByRole('button', { name: 'New idea' }).click();
+    const newDialog = page.getByRole('dialog', { name: 'New idea' });
+    await newDialog.getByLabel('Idea title').fill('Desktop dialog positioning');
+    await newDialog.getByRole('button', { name: 'Save idea' }).click();
+    const card = page.locator('.idea-card').filter({
+        has: page.getByRole('heading', { name: 'Desktop dialog positioning', exact: true }),
+    });
+    await expect(card).toBeVisible();
+
+    for (const viewport of [
+        { width: 900, height: 600 },
+        { width: 1280, height: 720 },
+        { width: 1440, height: 900 },
+        { width: 1920, height: 1080 },
+    ]) {
+        await page.setViewportSize(viewport);
+        for (const name of ['New idea', 'Edit idea', 'Manage solutions']) {
+            const opener =
+                name === 'Edit idea'
+                    ? card.getByRole('button', { name: 'Edit' })
+                    : page.getByRole('button', { name, exact: true });
+            await opener.click();
+            const dialog = page.getByRole('dialog', { name });
+            const box = await dialog.boundingBox();
+            if (!box) throw new Error(`${name} dialog is missing.`);
+            expect(box.y).toBeCloseTo(Math.min(40, Math.max(16, viewport.height * 0.04)), 0);
+            expect(box.y + box.height).toBeLessThanOrEqual(viewport.height - 15);
+
+            if (name === 'New idea') {
+                const trigger = dialog.getByRole('button', { name: /^Solution:/ });
+                await trigger.click();
+                const listbox = page.getByRole('listbox', { name: 'Solution' });
+                const panelBox = await listbox.boundingBox();
+                const triggerBox = await trigger.boundingBox();
+                if (!panelBox || !triggerBox) throw new Error('Solution dropdown is missing.');
+                expect(panelBox.x).toBeCloseTo(triggerBox.x, 0);
+                const below = Math.abs(panelBox.y - (triggerBox.y + triggerBox.height + 4)) < 1;
+                const above = Math.abs(panelBox.y + panelBox.height - (triggerBox.y - 4)) < 1;
+                expect(below || above).toBe(true);
+                await listbox.getByRole('option', { name: 'Ferry Tracker' }).click();
+                await expect(trigger).toContainText('Ferry Tracker');
+            }
+            await dialog.getByRole('button', { name: name === 'Manage solutions' ? 'Close dialog' : 'Cancel' }).click();
+        }
+    }
+});
+
+test('keeps a tall desktop dialog scrollable inside the viewport', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 480 });
+    await page.goto('/');
+    await page.getByRole('button', { name: 'New idea' }).click();
+    const dialog = page.getByRole('dialog', { name: 'New idea' });
+    await dialog.getByLabel('Details').evaluate((element) => {
+        if (!(element instanceof HTMLTextAreaElement)) throw new Error('Details field is missing.');
+        element.style.height = '800px';
+    });
+    const dimensions = await dialog.evaluate((element) => ({
+        scrollHeight: element.scrollHeight,
+        clientHeight: element.clientHeight,
+    }));
+    expect(dimensions.scrollHeight).toBeGreaterThan(dimensions.clientHeight);
+    const save = dialog.getByRole('button', { name: 'Save idea' });
+    await save.scrollIntoViewIfNeeded();
+    const dialogBox = await dialog.boundingBox();
+    const saveBox = await save.boundingBox();
+    if (!dialogBox || !saveBox) throw new Error('Dialog or Save button is missing.');
+    expect(dialogBox.y).toBeCloseTo(19.2, 0);
+    expect(dialogBox.y + dialogBox.height).toBeLessThanOrEqual(480 - 15);
+    expect(saveBox.y).toBeGreaterThanOrEqual(dialogBox.y);
+    expect(saveBox.y + saveBox.height).toBeLessThanOrEqual(dialogBox.y + dialogBox.height);
+});
+
+test.describe('touch dialog placement', () => {
+    test.use({ hasTouch: true, isMobile: true });
+
+    test('keeps phone and tablet dialogs centered', async ({ page }) => {
+        for (const viewport of [
+            { width: 390, height: 844 },
+            { width: 1280, height: 900 },
+        ]) {
+            await page.setViewportSize(viewport);
+            await page.goto('/');
+            expect(await page.evaluate(() => matchMedia('(pointer: coarse)').matches)).toBe(true);
+            for (const name of ['New idea', 'Manage solutions']) {
+                await page.getByRole('button', { name, exact: true }).click();
+                const dialog = page.getByRole('dialog', { name });
+                const box = await dialog.boundingBox();
+                if (!box) throw new Error(`${name} dialog is missing.`);
+                expect(box.y).toBeCloseTo((viewport.height - box.height) / 2, 0);
+                await dialog
+                    .getByRole('button', { name: name === 'Manage solutions' ? 'Close dialog' : 'Cancel' })
+                    .click();
+            }
+        }
+    });
+});
+
 for (const device of [
     { name: 'desktop', platform: 'Win32', userAgent: 'Mozilla/5.0 Windows NT 10.0', maxTouchPoints: 0, touch: false },
     {

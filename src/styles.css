@@ -1183,6 +1183,16 @@ form.idea-form > .field-group:first-child {
     text-decoration: line-through;
 }
 
+@media (min-width: 761px) and (pointer: fine) {
+    .dialog-backdrop {
+        --dialog-top: clamp(16px, 4dvh, 40px);
+        top: var(--dialog-top);
+        bottom: auto;
+        margin-block: 0;
+        max-height: min(90dvh, 760px, calc(100dvh - var(--dialog-top) - 16px));
+    }
+}
+
 @media (min-width: 1024px) {
     .page-width {
         padding-inline: 20px;
