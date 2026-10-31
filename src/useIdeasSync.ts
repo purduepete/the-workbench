@@ -32,6 +32,14 @@ export function useIdeasSync() {
     const [state, setState] = useState(initial.state);
     const [notice, setNotice] = useState<string | null>(initial.error);
     const [phase, setPhase] = useState<'idle' | 'syncing' | 'offline' | 'paused'>('idle');
+    // Without a saved copy, an empty list means "not fetched yet", so the page waits for the first sync.
+    const [ready, setReady] = useState(() => {
+        try {
+            return window.localStorage.getItem(SYNC_STORAGE_KEY) !== null;
+        } catch {
+            return true;
+        }
+    });
     const stateRef = useRef(state);
     const running = useRef(false);
     const again = useRef(false);
@@ -84,6 +92,7 @@ export function useIdeasSync() {
             setPhase(navigator.onLine ? 'paused' : 'offline');
         } finally {
             running.current = false;
+            setReady(true);
         }
     }, [commit]);
 
@@ -138,6 +147,7 @@ export function useIdeasSync() {
 
     return {
         ideas,
+        ready,
         status,
         waiting,
         notice,

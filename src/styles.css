@@ -761,6 +761,58 @@ main.page-width {
     backdrop-filter: blur(3px);
 }
 
+.dialog-backdrop[open],
+.dialog-backdrop[open]::backdrop {
+    animation: dialog-open 0.25s cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+@keyframes dialog-open {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+/* Covers the page under the sticky header (z-index 20) until the first sync lands. */
+.page-loading {
+    position: fixed;
+    z-index: 10;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    background: var(--page);
+    caret-color: transparent;
+    user-select: none;
+}
+
+.spinner-wrap {
+    caret-color: transparent;
+    user-select: none;
+    animation: dialog-open 0.6s ease-out both;
+}
+
+.spinner {
+    display: block;
+    width: 40px;
+    height: 40px;
+    box-sizing: border-box;
+    border: 3px solid #374151;
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+:root.light .spinner {
+    border-color: #e5e7eb;
+    border-top-color: var(--accent);
+}
+
+.data-enter {
+    animation: dialog-open 0.6s ease-out both;
+}
+
 .idea-form {
     padding: 24px;
 }
@@ -872,11 +924,9 @@ main.page-width {
 @keyframes fade-up {
     from {
         opacity: 0;
-        transform: translateY(8px);
     }
     to {
         opacity: 1;
-        transform: translateY(0);
     }
 }
 

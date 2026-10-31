@@ -24,6 +24,7 @@ import {
 import { filterIdeas, formatIdeaTimestamp, parseTags, readIdeaView, writeIdeaView } from './ideas';
 import type { SolutionFilter } from './ideas';
 import { SelectField } from './SelectField';
+import { PageLoading } from './Loading';
 import { useTheme } from './ThemeContext';
 import type { Idea, IdeaStatus, IdeaView, ThemePreference } from './types';
 import type { Solution } from '../shared/contracts';
@@ -731,140 +732,156 @@ export function App() {
                     </div>
                 )}
 
-                <section className="intro" aria-label="Sync status">
-                    <div className="intro-aside">
-                        <SyncBadge status={sync.status} waiting={sync.waiting} />
-                    </div>
-                </section>
+                {!sync.ready ? (
+                    <PageLoading label="Loading ideas" />
+                ) : (
+                    <div className="data-enter">
+                        <section className="intro" aria-label="Sync status">
+                            <div className="intro-aside">
+                                <SyncBadge status={sync.status} waiting={sync.waiting} />
+                            </div>
+                        </section>
 
-                <section className="workspace" aria-label="Your ideas">
-                    <div className="workspace-tools">
-                        <label className="search-wrap">
-                            <Search size={16} aria-hidden="true" />
-                            <span className="sr-only">Search ideas</span>
-                            <input
-                                className="search-input"
-                                type="search"
-                                placeholder="Search a thought, detail, or tag..."
-                                value={query}
-                                onChange={(event) => setQuery(event.target.value)}
-                            />
-                        </label>
-                        <div className="solution-tools">
-                            <SelectField
-                                ariaLabel="Filter by solution"
-                                icon={Boxes}
-                                className="filter-select"
-                                value={solutionFilter}
-                                options={filterOptions}
-                                onChange={setSolutionFilter}
-                            />
-                            <button
-                                type="button"
-                                className="icon-button manage-solutions"
-                                aria-label="Manage solutions"
-                                onClick={() => setManagingSolutions(true)}
-                            >
-                                <Settings2 size={16} aria-hidden="true" />
-                            </button>
-                        </div>
-                        <div className="segmented" role="group" aria-label="Idea view">
-                            <span className="segment-fill" style={segmentStyle} aria-hidden="true" />
-                            {views.map(({ id, label, icon: Icon }) => (
-                                <button
-                                    key={id}
-                                    type="button"
-                                    className="segment-button"
-                                    aria-pressed={view === id}
-                                    onClick={() => chooseView(id)}
-                                >
-                                    <Icon size={13} aria-hidden="true" />
-                                    {label}
-                                    <span>{viewCounts[id]}</span>
-                                </button>
-                            ))}
-                        </div>
-                    </div>
+                        <section className="workspace" aria-label="Your ideas">
+                            <div className="workspace-tools">
+                                <label className="search-wrap">
+                                    <Search size={16} aria-hidden="true" />
+                                    <span className="sr-only">Search ideas</span>
+                                    <input
+                                        className="search-input"
+                                        type="search"
+                                        placeholder="Search a thought, detail, or tag..."
+                                        value={query}
+                                        onChange={(event) => setQuery(event.target.value)}
+                                    />
+                                </label>
+                                <div className="solution-tools">
+                                    <SelectField
+                                        ariaLabel="Filter by solution"
+                                        icon={Boxes}
+                                        className="filter-select"
+                                        value={solutionFilter}
+                                        options={filterOptions}
+                                        onChange={setSolutionFilter}
+                                    />
+                                    <button
+                                        type="button"
+                                        className="icon-button manage-solutions"
+                                        aria-label="Manage solutions"
+                                        onClick={() => setManagingSolutions(true)}
+                                    >
+                                        <Settings2 size={16} aria-hidden="true" />
+                                    </button>
+                                </div>
+                                <div className="segmented" role="group" aria-label="Idea view">
+                                    <span className="segment-fill" style={segmentStyle} aria-hidden="true" />
+                                    {views.map(({ id, label, icon: Icon }) => (
+                                        <button
+                                            key={id}
+                                            type="button"
+                                            className="segment-button"
+                                            aria-pressed={view === id}
+                                            onClick={() => chooseView(id)}
+                                        >
+                                            <Icon size={13} aria-hidden="true" />
+                                            {label}
+                                            <span>{viewCounts[id]}</span>
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
 
-                    {allTags.length > 0 && (
-                        <div className="tag-filter-row" aria-label="Filter by tag">
-                            <span className="tag-filter-label">TAGS</span>
-                            {allTags.map((tag) => (
-                                <button
-                                    key={tag.toLocaleLowerCase()}
-                                    type="button"
-                                    className="tag-filter"
-                                    aria-pressed={selectedTag === tag}
-                                    onClick={() => setSelectedTag((current) => (current === tag ? null : tag))}
-                                >
-                                    {tag}
-                                </button>
-                            ))}
-                            {selectedTag && (
-                                <button className="text-button" type="button" onClick={() => setSelectedTag(null)}>
-                                    Clear tag
-                                </button>
+                            {allTags.length > 0 && (
+                                <div className="tag-filter-row" aria-label="Filter by tag">
+                                    <span className="tag-filter-label">TAGS</span>
+                                    {allTags.map((tag) => (
+                                        <button
+                                            key={tag.toLocaleLowerCase()}
+                                            type="button"
+                                            className="tag-filter"
+                                            aria-pressed={selectedTag === tag}
+                                            onClick={() => setSelectedTag((current) => (current === tag ? null : tag))}
+                                        >
+                                            {tag}
+                                        </button>
+                                    ))}
+                                    {selectedTag && (
+                                        <button
+                                            className="text-button"
+                                            type="button"
+                                            onClick={() => setSelectedTag(null)}
+                                        >
+                                            Clear tag
+                                        </button>
+                                    )}
+                                </div>
                             )}
-                        </div>
-                    )}
 
-                    <div className="content-heading">
-                        <h3>{selectedTag ? `Tagged “${selectedTag}”` : activeView.label}</h3>
-                        <span className="result-count" aria-live="polite">
-                            {visibleIdeas.length} {visibleIdeas.length === 1 ? 'note' : 'notes'}
-                        </span>
-                    </div>
+                            <div className="content-heading">
+                                <h3>{selectedTag ? `Tagged “${selectedTag}”` : activeView.label}</h3>
+                                <span className="result-count" aria-live="polite">
+                                    {visibleIdeas.length} {visibleIdeas.length === 1 ? 'note' : 'notes'}
+                                </span>
+                            </div>
 
-                    {visibleIdeas.length > 0 ? (
-                        <div className="idea-grid">
-                            {visibleIdeas.map((idea) => (
-                                <IdeaCard
-                                    key={idea.id}
-                                    idea={idea}
-                                    solutions={solutions}
-                                    onEdit={setEditingIdea}
-                                    onTogglePin={(target) => updateIdea(target, { pinned: !target.pinned })}
-                                    onToggleArchive={(target) => updateIdea(target, { archived: !target.archived })}
-                                    onSelectTag={(tag) => {
-                                        setSelectedTag(tag);
-                                        chooseView('all');
-                                    }}
-                                    onSelectSolution={setSolutionFilter}
-                                />
-                            ))}
-                        </div>
-                    ) : (
-                        <div className="empty-state">
-                            <span className="empty-icon" aria-hidden="true">
-                                {filtering ? <Search size={21} /> : <Lightbulb size={22} />}
-                            </span>
-                            <h4>
-                                {filtering
-                                    ? 'No ideas match this search'
-                                    : view === 'pinned'
-                                      ? 'Nothing pinned yet'
-                                      : view === 'archived'
-                                        ? 'Your archive is clear'
-                                        : 'Your idea space is ready'}
-                            </h4>
-                            <p>
-                                {filtering
-                                    ? 'Try another phrase or clear the tag and solution filters.'
-                                    : view === 'pinned'
-                                      ? 'Pin the thoughts you want to keep within easy reach.'
-                                      : view === 'archived'
-                                        ? 'Ideas you archive will be kept here until you restore them.'
-                                        : 'Start with a quick note. Add the context now, and sort it out later.'}
-                            </p>
-                            {!filtering && view === 'all' && (
-                                <button type="button" className="primary-button" onClick={() => setEditingIdea(null)}>
-                                    <Plus size={15} aria-hidden="true" />
-                                    Capture your first idea
-                                </button>
+                            {visibleIdeas.length > 0 ? (
+                                <div className="idea-grid">
+                                    {visibleIdeas.map((idea) => (
+                                        <IdeaCard
+                                            key={idea.id}
+                                            idea={idea}
+                                            solutions={solutions}
+                                            onEdit={setEditingIdea}
+                                            onTogglePin={(target) => updateIdea(target, { pinned: !target.pinned })}
+                                            onToggleArchive={(target) =>
+                                                updateIdea(target, { archived: !target.archived })
+                                            }
+                                            onSelectTag={(tag) => {
+                                                setSelectedTag(tag);
+                                                chooseView('all');
+                                            }}
+                                            onSelectSolution={setSolutionFilter}
+                                        />
+                                    ))}
+                                </div>
+                            ) : (
+                                <div className="empty-state">
+                                    <span className="empty-icon" aria-hidden="true">
+                                        {filtering ? <Search size={21} /> : <Lightbulb size={22} />}
+                                    </span>
+                                    <h4>
+                                        {filtering
+                                            ? 'No ideas match this search'
+                                            : view === 'pinned'
+                                              ? 'Nothing pinned yet'
+                                              : view === 'archived'
+                                                ? 'Your archive is clear'
+                                                : 'Your idea space is ready'}
+                                    </h4>
+                                    <p>
+                                        {filtering
+                                            ? 'Try another phrase or clear the tag and solution filters.'
+                                            : view === 'pinned'
+                                              ? 'Pin the thoughts you want to keep within easy reach.'
+                                              : view === 'archived'
+                                                ? 'Ideas you archive will be kept here until you restore them.'
+                                                : 'Start with a quick note. Add the context now, and sort it out later.'}
+                                    </p>
+                                    {!filtering && view === 'all' && (
+                                        <button
+                                            type="button"
+                                            className="primary-button"
+                                            onClick={() => setEditingIdea(null)}
+                                        >
+                                            <Plus size={15} aria-hidden="true" />
+                                            Capture your first idea
+                                        </button>
+                                    )}
+                                </div>
                             )}
-                        </div>
-                    )}
-                </section>
+                        </section>
+                    </div>
+                )}
             </main>
 
             {editingIdea !== undefined && (
