@@ -327,10 +327,21 @@ textarea:focus-visible {
     box-shadow: inset 0 0 0 2px var(--accent);
 }
 
-.theme-wrap > .icon-button[aria-expanded='true'] {
-    border-color: var(--accent);
+.top-actions .icon-button,
+.top-actions .icon-button:hover {
+    border: 0;
+    color: var(--muted);
+    background: transparent;
+}
+
+.top-actions .icon-button[aria-busy='true'],
+.top-actions .icon-button[aria-expanded='true'] {
     color: var(--text);
     background: var(--accent-soft);
+}
+
+.top-actions .icon-button:disabled {
+    cursor: wait;
 }
 
 main.page-width {
@@ -835,6 +846,15 @@ main.page-width {
     margin-bottom: 22px;
 }
 
+.dialog-close {
+    margin-left: auto;
+    border-color: color-mix(in srgb, var(--border) 55%, transparent);
+}
+
+.dialog-close:hover {
+    border-color: var(--border);
+}
+
 .dialog-heading h2 {
     margin: 0;
     font-size: 24px;
@@ -852,6 +872,10 @@ main.page-width {
     display: grid;
     gap: 7px;
     margin-top: 16px;
+}
+
+form.idea-form > .field-group:first-child {
+    margin-top: 0;
 }
 
 .field-label {

@@ -1,5 +1,107 @@
 import { expect, test } from '@playwright/test';
 
+for (const theme of ['midnight', 'light']) {
+    for (const fails of [false, true]) {
+        test(`header actions restore fill and color after ${fails ? 'failure' : 'success'} in ${theme}`, async ({
+            page,
+        }) => {
+            await page.addInitScript((value) => localStorage.setItem('idea-notes.theme-preference', value), theme);
+            await page.goto('/');
+            await expect(page.getByRole('status')).toHaveText('Synced');
+            const refresh = page.getByRole('button', { name: 'Refresh ideas' });
+            const themeButton = page.getByRole('button', { name: /^Theme:/ });
+            const idleColor = await refresh.evaluate((element) => getComputedStyle(element).color);
+            const activeColor = await page.locator('html').evaluate((element) => getComputedStyle(element).color);
+            for (const button of [refresh, themeButton]) {
+                await expect(button).toHaveCSS('border-top-width', '0px');
+                await button.hover();
+                await expect(button).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+                await expect(button).toHaveCSS('color', idleColor);
+            }
+            await themeButton.click();
+            await expect(themeButton).toHaveAttribute('aria-expanded', 'true');
+            await expect(themeButton).toHaveCSS('color', activeColor);
+            const activeFill = await themeButton.evaluate((element) => getComputedStyle(element).backgroundColor);
+            expect(activeFill).not.toBe('rgba(0, 0, 0, 0)');
+            await themeButton.click();
+            await expect(themeButton).toHaveAttribute('aria-expanded', 'false');
+            await expect(themeButton).toHaveCSS('color', idleColor);
+            await expect(themeButton).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+
+            let releaseSolutions: (() => void) | undefined;
+            const solutionsReady = new Promise<void>((resolve) => {
+                releaseSolutions = resolve;
+            });
+            await page.route('**/api/solutions', async (route) => {
+                await solutionsReady;
+                await route.continue();
+            });
+            await page.route('**/api/ideas', async (route) => {
+                await route.fulfill({
+                    status: fails ? 503 : 200,
+                    contentType: 'application/json',
+                    body: fails ? '{"error":"unavailable"}' : '{"ideas":[]}',
+                });
+            });
+            await refresh.click();
+            await expect(refresh).toHaveAttribute('aria-busy', 'true');
+            await expect(refresh).toBeDisabled();
+            await expect(refresh).toHaveCSS('color', activeColor);
+            await expect(refresh).toHaveCSS('background-color', activeFill);
+            await expect(refresh).toHaveCSS('border-top-width', '0px');
+            if (!releaseSolutions) throw new Error('Solution refresh gate is missing.');
+            releaseSolutions();
+            await expect(refresh).toHaveAttribute('aria-busy', 'false');
+            await expect(refresh).toBeEnabled();
+            await expect(refresh).toHaveCSS('color', idleColor);
+            await expect(refresh).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+        });
+    }
+
+    test(`dialog close controls and idea top spacing in ${theme}`, async ({ page }) => {
+        await page.addInitScript((value) => localStorage.setItem('idea-notes.theme-preference', value), theme);
+        for (const width of [390, 1280]) {
+            await page.setViewportSize({ width, height: 900 });
+            await page.goto('/');
+            for (const opener of ['New idea', 'Manage solutions']) {
+                await page.getByRole('button', { name: opener, exact: true }).click();
+                const dialog = page.getByRole('dialog', { name: opener });
+                if (opener === 'New idea') {
+                    await expect(dialog.getByRole('button', { name: 'Close dialog' })).toHaveCount(0);
+                    const form = dialog.locator('form.idea-form');
+                    const fields = form.locator(':scope > .field-group');
+                    const firstField = fields.first();
+                    await expect(firstField).toHaveCSS('margin-top', '0px');
+                    await expect(fields.nth(1)).toHaveCSS('margin-top', '16px');
+                    const formBox = await form.boundingBox();
+                    const fieldBox = await firstField.boundingBox();
+                    if (!formBox || !fieldBox) throw new Error('Idea form fields are missing.');
+                    const paddingTop = await form.evaluate((element) =>
+                        parseFloat(getComputedStyle(element).paddingTop)
+                    );
+                    expect(fieldBox.y - formBox.y).toBeCloseTo(paddingTop, 0);
+                    await dialog.getByRole('button', { name: 'Cancel' }).click();
+                    await expect(dialog).toHaveCount(0);
+                    continue;
+                }
+                const close = dialog.getByRole('button', { name: 'Close dialog' });
+                const heading = await dialog.locator('.dialog-heading').boundingBox();
+                const button = await close.boundingBox();
+                if (!heading || !button) throw new Error('Dialog close control is missing.');
+                expect(button.x + button.width).toBeCloseTo(heading.x + heading.width, 0);
+                expect(button.y).toBeCloseTo(heading.y, 0);
+                await expect(close).toHaveCSS('border-top-width', '1px');
+                expect(await close.evaluate((element) => getComputedStyle(element).borderTopColor)).toMatch(
+                    /(?:rgba\([^)]*, 0\.55\)|color\([^)]*\/ 0\.55\))/
+                );
+                await expect(dialog.getByRole('button', { name: 'Done', exact: true })).toHaveCount(0);
+                await close.click();
+                await expect(dialog).toHaveCount(0);
+            }
+        }
+    });
+}
+
 for (const device of [
     { name: 'desktop', platform: 'Win32', userAgent: 'Mozilla/5.0 Windows NT 10.0', maxTouchPoints: 0, touch: false },
     {
@@ -25,12 +127,23 @@ for (const device of [
             Object.defineProperty(navigator, 'maxTouchPoints', { value: maxTouchPoints });
         }, device);
         await page.goto('/');
+        await page.evaluate(() => {
+            document.addEventListener('focusin', (event) => {
+                if (
+                    event.target instanceof Element &&
+                    event.target.matches('dialog input, dialog textarea, dialog [contenteditable]')
+                ) {
+                    document.documentElement.dataset.ideaInputFocused = 'true';
+                }
+            });
+        });
         const opener = page.getByRole('button', { name: 'New idea' });
         await opener.click();
         const dialog = page.getByRole('dialog', { name: 'New idea' });
         const title = dialog.getByLabel('Idea title');
-        await expect(device.touch ? dialog.getByRole('button', { name: 'Close dialog' }) : title).toBeFocused();
+        await expect(device.touch ? dialog : title).toBeFocused();
         if (device.touch) {
+            await expect(page.locator('html')).not.toHaveAttribute('data-idea-input-focused', 'true');
             await page.keyboard.press('Tab');
             await expect(title).toBeFocused();
         }
@@ -43,13 +156,14 @@ for (const device of [
             has: page.getByRole('heading', { name: ideaTitle, exact: true }),
         });
         const edit = card.getByRole('button', { name: 'Edit' });
+        await page.evaluate(() => {
+            delete document.documentElement.dataset.ideaInputFocused;
+        });
         await edit.click();
         const editDialog = page.getByRole('dialog', { name: 'Edit idea' });
-        await expect(
-            device.touch
-                ? editDialog.getByRole('button', { name: 'Close dialog' })
-                : editDialog.getByLabel('Idea title')
-        ).toBeFocused();
+        await expect(device.touch ? editDialog : editDialog.getByLabel('Idea title')).toBeFocused();
+        if (device.touch) await expect(page.locator('html')).not.toHaveAttribute('data-idea-input-focused', 'true');
+        await expect(editDialog.locator('form.idea-form > .field-group').first()).toHaveCSS('margin-top', '0px');
         await page.keyboard.press('Escape');
         await expect(editDialog).toHaveCount(0);
         await expect(edit).toBeFocused();

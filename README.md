@@ -10,9 +10,14 @@ Reduced motion removes the entrance animation.
 Idea Notes captures thoughts with tags, pins, search and archive. Notes sync to a PostgreSQL database through a small
 Express server. The browser keeps an outbox, so capture works offline and changes upload when the connection returns.
 
-New and edit dialogs focus Close on iPhone and iPad, including iPads using a desktop user agent.
+New and edit dialogs focus the dialog on iPhone and iPad, including iPads using a desktop user agent.
 The keyboard stays closed until you tap a field. Desktop dialogs focus the title; closing a dialog restores focus
-to its opener.
+to its opener. Idea dialogs close from Cancel, Escape or the backdrop.
+
+Manage solutions closes from a subtly bordered X at the upper right, saves checkbox changes immediately and has no
+Done button.
+The borderless header Refresh and Theme buttons change fill and text color only while active.
+Refresh stays active until both ideas and solutions finish refreshing, including after a failed request.
 
 ## Local development
 

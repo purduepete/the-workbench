@@ -107,7 +107,12 @@ function SolutionsDialog({ solutions, onToggle, onClose }: SolutionsDialogProps)
                         <h2 id="solutions-dialog-title">Manage solutions</h2>
                         <p>Unchecked solutions leave the pickers. Ideas already linked keep their link.</p>
                     </div>
-                    <button type="button" className="icon-button" aria-label="Close dialog" onClick={onClose}>
+                    <button
+                        type="button"
+                        className="icon-button dialog-close"
+                        aria-label="Close dialog"
+                        onClick={onClose}
+                    >
                         <X size={17} aria-hidden="true" />
                     </button>
                 </div>
@@ -142,11 +147,6 @@ function SolutionsDialog({ solutions, onToggle, onClose }: SolutionsDialogProps)
                         {error}
                     </p>
                 )}
-                <div className="dialog-footer">
-                    <button type="button" className="primary-button" onClick={onClose}>
-                        Done
-                    </button>
-                </div>
             </div>
         </dialog>
     );
@@ -292,8 +292,8 @@ function ThemeMenu() {
 
 function IdeaDialog({ idea, solutions, defaultSolution, onClose, onSave, onDelete }: IdeaDialogProps) {
     const dialogRef = useRef<HTMLDialogElement>(null);
+    const formRef = useRef<HTMLFormElement>(null);
     const titleRef = useRef<HTMLInputElement>(null);
-    const closeRef = useRef<HTMLButtonElement>(null);
     const returnFocusRef = useRef(document.activeElement instanceof HTMLElement ? document.activeElement : null);
     const isAppleTouchDevice =
         /iPhone|iPad|iPod/i.test(navigator.userAgent) ||
@@ -308,8 +308,10 @@ function IdeaDialog({ idea, solutions, defaultSolution, onClose, onSave, onDelet
     useEffect(() => {
         const dialog = dialogRef.current;
         const returnFocus = returnFocusRef.current;
+        // React ignores autoFocus on forms; set it before showModal to avoid focusing the title.
+        formRef.current?.toggleAttribute('autofocus', isAppleTouchDevice);
         if (dialog && !dialog.open) dialog.showModal();
-        if (isAppleTouchDevice) closeRef.current?.focus();
+        if (isAppleTouchDevice) dialog?.focus();
         else titleRef.current?.focus();
         return () => {
             if (dialog?.open) dialog.close();
@@ -359,6 +361,7 @@ function IdeaDialog({ idea, solutions, defaultSolution, onClose, onSave, onDelet
             ref={dialogRef}
             className="dialog-backdrop"
             aria-label={idea ? 'Edit idea' : 'New idea'}
+            tabIndex={-1}
             onCancel={(event) => {
                 event.preventDefault();
                 onClose();
@@ -367,19 +370,12 @@ function IdeaDialog({ idea, solutions, defaultSolution, onClose, onSave, onDelet
                 if (event.target === dialogRef.current) onClose();
             }}
         >
-            <form className="idea-form" onSubmit={handleSubmit}>
-                <div className="dialog-heading">
-                    <button
-                        ref={closeRef}
-                        type="button"
-                        className="icon-button"
-                        aria-label="Close dialog"
-                        autoFocus={isAppleTouchDevice}
-                        onClick={onClose}
-                    >
-                        <X size={17} aria-hidden="true" />
-                    </button>
-                </div>
+            <form
+                ref={formRef}
+                className="idea-form"
+                tabIndex={isAppleTouchDevice ? -1 : undefined}
+                onSubmit={handleSubmit}
+            >
                 <label className="field-group">
                     <span className="field-label">Idea title</span>
                     <input
@@ -628,12 +624,23 @@ export function App() {
     const [solutionFilter, setSolutionFilter] = useState<SolutionFilter>('all');
     const [editingIdea, setEditingIdea] = useState<Idea | null | undefined>(undefined);
     const [managingSolutions, setManagingSolutions] = useState(false);
+    const [headerRefreshing, setHeaderRefreshing] = useState(false);
     const {
         solutions,
         ready: solutionsReady,
         setDisabled: setSolutionDisabled,
         refresh: refreshSolutions,
     } = useSolutions();
+    const refreshBusy = sync.refreshing || headerRefreshing;
+    const refreshAll = async () => {
+        if (refreshBusy) return;
+        setHeaderRefreshing(true);
+        try {
+            await Promise.all([sync.refresh(), refreshSolutions()]);
+        } finally {
+            setHeaderRefreshing(false);
+        }
+    };
     const initialReady = sync.ready && (cachedAtEntry || solutionsReady);
     useFirstLoad(initialReady, sync.status === 'offline' || sync.status === 'paused');
     const linkedIds = Array.from(new Set(ideas.flatMap((idea) => (idea.solution ? [idea.solution] : []))));
@@ -723,11 +730,11 @@ export function App() {
                             type="button"
                             className="icon-button control-height refresh-button"
                             aria-label="Refresh ideas"
-                            aria-busy={sync.refreshing}
-                            data-refreshing={sync.refreshing}
+                            aria-busy={refreshBusy}
+                            data-refreshing={refreshBusy}
+                            disabled={refreshBusy}
                             onClick={() => {
-                                void sync.refresh();
-                                void refreshSolutions();
+                                void refreshAll();
                             }}
                         >
                             <RefreshCw size={16} aria-hidden="true" />
