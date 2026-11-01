@@ -709,7 +709,7 @@ export function App() {
                 <div className="page-width topbar-inner">
                     <div className="brand">
                         <span className="brand-mark" aria-hidden="true">
-                            <Lightbulb size={19} />
+                            <img src="/favicon.svg" alt="" />
                         </span>
                         <div>
                             <h1 className="brand-name">Idea Notes</h1>
