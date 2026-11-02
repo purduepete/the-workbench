@@ -364,25 +364,25 @@ test('switches themes and keeps the page inside a phone viewport', async ({ page
     await page.setViewportSize({ width: 390, height: 844 });
     await page.emulateMedia({ colorScheme: 'light' });
     await page.goto('/');
-    const heroHeading = page.getByRole('heading', { name: 'Catch the thought. Come back to it.' });
+    const brandHeading = page.getByRole('heading', { name: 'The Workbench', exact: true });
     await expect(page.locator('.stats')).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Capture an idea' })).toHaveCount(0);
-    await expect(heroHeading.locator('br')).toHaveCount(0);
-    const headingWidth = await heroHeading.evaluate((element) => ({
-        clientWidth: element.clientWidth,
-        scrollWidth: element.scrollWidth,
-    }));
-    expect(headingWidth.scrollWidth).toBeLessThanOrEqual(headingWidth.clientWidth);
+    await expect(brandHeading.locator('br')).toHaveCount(0);
+    await expect(page.locator('.brand-mark img')).toBeVisible();
     await expect(page.getByText(/Keep ideas, half-formed plans/)).toHaveCount(0);
     await page.getByRole('button', { name: 'Theme: Midnight' }).click();
     await page.getByRole('radio', { name: 'Light' }).click();
     await expect(page.locator('html')).toHaveClass(/light/);
     await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute('content', '#ffffff');
+    await expect(page.locator('.brand-mark img')).toHaveAttribute('src', '/favicon-light.svg');
+    await expect(page.locator('link[rel="icon"]')).toHaveAttribute('href', '/favicon-light.svg');
     await page.getByRole('radio', { name: 'System' }).click();
     await expect(page.locator('html')).toHaveClass(/light/);
     await page.emulateMedia({ colorScheme: 'dark' });
     await expect(page.locator('html')).toHaveClass(/theme-midnight/);
     await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute('content', '#020617');
+    await expect(page.locator('.brand-mark img')).toHaveAttribute('src', '/favicon.svg');
+    await expect(page.locator('link[rel="icon"]')).toHaveAttribute('href', '/favicon.svg');
     await page.reload();
     await expect(page.getByRole('button', { name: 'Theme: System' })).toBeVisible();
     const dimensions = await page.evaluate(() => ({

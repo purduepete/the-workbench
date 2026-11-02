@@ -42,6 +42,9 @@
                 document
                     .querySelector('meta[name="theme-color"]')
                     ?.setAttribute('content', dark ? '#020617' : '#ffffff');
+                document
+                    .querySelector('link[rel="icon"]')
+                    ?.setAttribute('href', dark ? '/favicon.svg' : '/favicon-light.svg');
             })();
         </script>
         <link

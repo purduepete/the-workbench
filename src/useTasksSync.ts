@@ -13,12 +13,15 @@ import {
 } from './tasksSync';
 import type { TasksState } from './tasksSync';
 import type { SyncStatus } from './useIdeasSync';
+import { syncFetch } from './syncFetch';
 
 export function useTasksSync() {
     const [initial] = useState(readTasksState);
     const [state, setState] = useState(initial.state);
     const [notice, setNotice] = useState(initial.error);
-    const [phase, setPhase] = useState<'idle' | 'syncing' | 'offline' | 'paused'>('idle');
+    const [phase, setPhase] = useState<'idle' | 'syncing' | 'offline' | 'paused'>(() =>
+        navigator.onLine ? 'idle' : 'offline'
+    );
     const [ready, setReady] = useState(() => {
         try {
             return !initial.error && window.localStorage.getItem(TASKS_STORAGE_KEY) !== null;
@@ -30,6 +33,7 @@ export function useTasksSync() {
     const stateRef = useRef(state);
     const running = useRef(false);
     const again = useRef(false);
+    const retryNeeded = useRef(false);
     const commit = useCallback((next: TasksState) => {
         stateRef.current = next;
         setState(next);
@@ -39,6 +43,10 @@ export function useTasksSync() {
     }, []);
 
     const sync = useCallback(async () => {
+        if (!navigator.onLine) {
+            retryNeeded.current = true;
+            return;
+        }
         if (running.current) {
             again.current = true;
             return;
@@ -50,9 +58,10 @@ export function useTasksSync() {
                 again.current = false;
                 while (stateRef.current.outbox.length) {
                     const change = stateRef.current.outbox[0];
-                    commit(markTaskAttempted(stateRef.current, change.mutationId));
+                    const storageError = commit(markTaskAttempted(stateRef.current, change.mutationId));
+                    if (storageError) throw new Error(storageError);
                     const { attempted: _attempted, ...mutation } = change;
-                    const response = await fetch('/api/tasks/mutations', {
+                    const response = await syncFetch('/api/tasks/mutations', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(mutation),
@@ -71,7 +80,7 @@ export function useTasksSync() {
                             'This task was moved or removed on another device. The list was refreshed and your action was not applied.'
                         );
                 }
-                const response = await fetch('/api/tasks?includeDeleted=true');
+                const response = await syncFetch('/api/tasks?includeDeleted=true');
                 if (!response.ok) throw new Error(`Tasks could not be loaded (HTTP ${response.status}).`);
                 if (!response.headers.get('content-type')?.includes('application/json'))
                     throw new Error('The server did not return tasks as JSON.');
@@ -89,7 +98,9 @@ export function useTasksSync() {
                 setReady(true);
             } while (again.current || stateRef.current.outbox.length);
             setPhase('idle');
+            retryNeeded.current = false;
         } catch (error) {
+            retryNeeded.current = true;
             setPhase(navigator.onLine ? 'paused' : 'offline');
             setNotice(error instanceof Error ? error.message : 'Task sync failed. Your changes remain on this device.');
         } finally {
@@ -100,6 +111,7 @@ export function useTasksSync() {
     useEffect(() => {
         void sync();
         const retry = () => void sync();
+        const offline = () => setPhase('offline');
         const visible = () => {
             if (document.visibilityState === 'visible') retry();
         };
@@ -117,14 +129,16 @@ export function useTasksSync() {
             retry();
         };
         const timer = window.setInterval(() => {
-            if (!readyRef.current || stateRef.current.outbox.length) retry();
+            if (!readyRef.current || stateRef.current.outbox.length || retryNeeded.current) retry();
         }, 30_000);
         window.addEventListener('online', retry);
+        window.addEventListener('offline', offline);
         window.addEventListener('storage', storage);
         document.addEventListener('visibilitychange', visible);
         return () => {
             window.clearInterval(timer);
             window.removeEventListener('online', retry);
+            window.removeEventListener('offline', offline);
             window.removeEventListener('storage', storage);
             document.removeEventListener('visibilitychange', visible);
         };
@@ -133,7 +147,11 @@ export function useTasksSync() {
     const change = useCallback(
         (mutation: TaskMutation) => {
             const error = commit(queueTaskMutation(stateRef.current, mutation));
-            if (!error) void sync();
+            if (!error) {
+                readyRef.current = true;
+                setReady(true);
+                void sync();
+            }
             return error;
         },
         [commit, sync]

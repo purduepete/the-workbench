@@ -9,6 +9,10 @@ const THEME_BACKGROUNDS: Record<'light' | 'midnight', string> = {
     light: '#ffffff',
     midnight: '#020617',
 };
+export const THEME_ICONS: Record<'light' | 'midnight', string> = {
+    light: '/favicon-light.svg',
+    midnight: '/favicon.svg',
+};
 
 interface ThemeContextValue {
     preference: ThemePreference;
@@ -57,6 +61,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
         root.style.colorScheme = resolvedTheme === 'light' ? 'light' : 'dark';
         root.style.backgroundColor = THEME_BACKGROUNDS[resolvedTheme];
         document.querySelector('meta[name="theme-color"]')?.setAttribute('content', THEME_BACKGROUNDS[resolvedTheme]);
+        document.querySelector('link[rel="icon"]')?.setAttribute('href', THEME_ICONS[resolvedTheme]);
     }, [resolvedTheme]);
 
     useEffect(() => {

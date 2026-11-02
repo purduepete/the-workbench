@@ -11,6 +11,19 @@ The Workbench keeps ideas with tags, pins, search and archive alongside date-gro
 Data syncs to a PostgreSQL database through a small Express server. The browser keeps an outbox, so capture works
 offline and changes upload when the connection returns.
 
+## Offline use
+
+Open the app once while connected and let it finish loading. The service worker saves the complete app shell,
+both themed icons and, when available, the font. After that, you can reopen `/`, `/notes` or `/tasks` without
+Internet, search cached records, create and edit ideas and notes, and edit, complete and reorder tasks.
+Saved changes stay in this browser's outboxes across reloads and upload automatically when the connection returns.
+Retry receipts prevent a repeated upload from applying twice; the conflict rules below still apply.
+
+Offline data is specific to each browser and origin. The Cloudflare and Tailscale URLs have separate caches.
+An unvisited URL cannot open offline, and clearing browser storage removes its cached records and unsent changes.
+Manage solutions needs a connection; offline idea editors use the last downloaded solution list.
+Network requests time out after 10 seconds rather than holding refresh and sync indefinitely.
+
 New and edit dialogs focus the dialog on iPhone and iPad, including iPads using a desktop user agent.
 The keyboard stays closed until you tap a field. Desktop dialogs focus the title; closing a dialog restores focus
 to its opener. Empty idea dialogs close from Cancel, Escape or the backdrop. Editors containing title or body text require Cancel or Save.

@@ -5,6 +5,7 @@ import { IdeasPage } from './IdeasPage';
 import { localDateKey } from './journal';
 import { NotesPage } from './NotesPage';
 import { SyncBadge, worstStatus } from './SyncBadge';
+import { THEME_ICONS, useTheme } from './ThemeContext';
 import { ThemeMenu } from './ThemeMenu';
 import type { Idea } from './types';
 import { useFirstLoad } from './useFirstLoad';
@@ -27,6 +28,7 @@ const pages: { route: Route; label: string; icon: typeof Lightbulb }[] = [
 const LEAVE_MS = 250;
 
 export function App() {
+    const { resolvedTheme } = useTheme();
     const sync = useIdeasSync();
     const journal = useJournalSync();
     const globalNotes = useGlobalNotesSync();
@@ -102,7 +104,7 @@ export function App() {
                 <div className="page-width topbar-inner">
                     <div className="brand">
                         <span className="brand-mark" aria-hidden="true">
-                            <img src="/favicon.svg" alt="" />
+                            <img src={THEME_ICONS[resolvedTheme]} alt="" />
                         </span>
                         <div className="brand-text">
                             <h1 className="brand-name">The Workbench</h1>

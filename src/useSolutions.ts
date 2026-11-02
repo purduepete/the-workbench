@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Solution } from '../shared/contracts';
+import { syncFetch } from './syncFetch';
 
 export const SOLUTIONS_STORAGE_KEY = 'the-workbench.solutions';
 
@@ -53,7 +54,7 @@ export function useSolutions(): SolutionsState {
     const active = useRef(true);
     const refresh = useCallback(
         () =>
-            fetch('/api/solutions')
+            syncFetch('/api/solutions')
                 .then(async (response) => {
                     if (!response.ok) return;
                     const body = (await response.json()) as { solutions?: unknown };
@@ -74,9 +75,11 @@ export function useSolutions(): SolutionsState {
             if (document.visibilityState === 'visible') void refresh();
         };
         void refresh();
+        window.addEventListener('online', refresh);
         document.addEventListener('visibilitychange', onVisible);
         return () => {
             active.current = false;
+            window.removeEventListener('online', refresh);
             document.removeEventListener('visibilitychange', onVisible);
         };
     }, [refresh]);
@@ -90,7 +93,7 @@ export function useSolutions(): SolutionsState {
             });
         apply(disabled);
         try {
-            const response = await fetch('/api/solution-settings', {
+            const response = await syncFetch('/api/solution-settings', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ id, disabled }),

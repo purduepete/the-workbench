@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 const favicon = readFileSync(new URL('../public/favicon.svg', import.meta.url), 'utf8');
+const lightFavicon = readFileSync(new URL('../public/favicon-light.svg', import.meta.url), 'utf8');
 const touchIcon = readFileSync(new URL('../public/apple-touch-icon.svg', import.meta.url), 'utf8');
 const touchPng = readFileSync(new URL('../public/apple-touch-icon.png', import.meta.url));
 
@@ -15,13 +16,19 @@ function artwork(svg: string) {
 describe('The Workbench icons', () => {
     it('uses the same bulb artwork for the favicon and installed icon', () => {
         expect(artwork(touchIcon)).toBe(artwork(favicon));
+        expect(artwork(lightFavicon)).toBe(artwork(favicon));
         expect(artwork(favicon)).toContain('fill="#fbbf24"');
         expect(artwork(favicon)).toContain('stroke="#fb923c"');
         expect(artwork(favicon)).toContain('fill="#6b8cae"');
     });
 
+    it('matches each icon background to its theme page color', () => {
+        expect(favicon).toContain('rx="10" fill="#020617" />');
+        expect(lightFavicon).toContain('rx="10" fill="#ffffff" />');
+    });
+
     it('uses a full-bleed background for the iOS source', () => {
-        expect(touchIcon).toContain('<rect width="64" height="64" fill="#0f172a" />');
+        expect(touchIcon).toContain('<rect width="64" height="64" fill="#020617" />');
     });
 
     it('ships a 180 by 180 PNG for iOS', () => {

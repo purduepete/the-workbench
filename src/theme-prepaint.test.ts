@@ -24,12 +24,28 @@ describe('pre-paint theme', () => {
         const root = { classList: { add: () => {} }, style: { colorScheme: '', backgroundColor: '' } };
         const meta = {
             content: '',
-            setAttribute(_name: string, value: string) {
+            setAttribute(name: string, value: string) {
+                expect(name).toBe('content');
                 this.content = value;
             },
         };
+        const icon = {
+            href: '',
+            setAttribute(name: string, value: string) {
+                expect(name).toBe('href');
+                this.href = value;
+            },
+        };
         runInNewContext(script, {
-            document: { documentElement: root, cookie: '', querySelector: () => meta },
+            document: {
+                documentElement: root,
+                cookie: '',
+                querySelector: (selector: string) => {
+                    if (selector === 'meta[name="theme-color"]') return meta;
+                    if (selector === 'link[rel="icon"]') return icon;
+                    throw new Error(`Unexpected selector: ${selector}`);
+                },
+            },
             localStorage: { getItem: () => saved },
             window: { matchMedia: () => ({ matches: dark }) },
             console,
@@ -37,5 +53,6 @@ describe('pre-paint theme', () => {
         expect(root.style.backgroundColor).toBe(expected);
         expect(root.style.colorScheme).toBe(expected === '#ffffff' ? 'light' : 'dark');
         expect(meta.content).toBe(expected);
+        expect(icon.href).toBe(expected === '#ffffff' ? '/favicon-light.svg' : '/favicon.svg');
     });
 });
