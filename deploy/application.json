@@ -4,7 +4,7 @@
   "repository": "https://github.com/purduepete/the-workbench.git",
   "database": {
     "engine": "postgresql",
-    "name": "idea_notes",
+    "name": "the_workbench",
     "connectionEnvironment": "DATABASE_URL",
     "backendEnvironment": "STORAGE_BACKEND",
     "schemaVersion": 3,

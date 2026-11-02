@@ -117,7 +117,7 @@ the setting needs a connection.
 
 ## Hosting
 
-`deploy/application.json` describes the hosted release: port 8802, database `idea_notes`, readiness at `/api/health` and
+`deploy/application.json` describes the hosted release: port 8802, database `the_workbench`, readiness at `/api/health` and
 the stop file in `SOLUTIONDEPLOY_STOP_FILE`. The schema is in `deploy/postgresql`. Provisioning follows "Add a new
 solution" in `solution-deploy\docs\Deployment.md`.
 
