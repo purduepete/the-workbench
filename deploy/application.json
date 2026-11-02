@@ -7,7 +7,7 @@
     "name": "idea_notes",
     "connectionEnvironment": "DATABASE_URL",
     "backendEnvironment": "STORAGE_BACKEND",
-    "schemaVersion": 1,
+    "schemaVersion": 3,
     "migrationsDirectory": "deploy\\postgresql",
     "backupFormat": "custom"
   },

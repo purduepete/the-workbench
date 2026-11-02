@@ -89,6 +89,146 @@ export const ideaQuerySchema = z.object({
     status: z.enum(ideaStatuses).optional(),
 });
 
+/** One cap for the editor, the API and the table, so a merged entry always stays editable. */
+export const journalLimits = { body: 200_000, tag: 40, tags: 64 } as const;
+
+const isCalendarDate = (value: string) => {
+    const [year, month, day] = value.split('-').map(Number);
+    const date = new Date(Date.UTC(year, month - 1, day));
+    return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
+};
+
+/** A local calendar day, `YYYY-MM-DD`. It identifies a journal entry. */
+export const entryDateSchema = z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .refine(isCalendarDate, 'Not a calendar date.');
+
+const journalTagsSchema = z.array(z.string().trim().min(1).max(journalLimits.tag)).max(journalLimits.tags);
+
+export const journalMutationSchema = z.discriminatedUnion('kind', [
+    z
+        .object({
+            kind: z.literal('save'),
+            mutationId: z.uuid(),
+            entryDate: entryDateSchema,
+            /** The version this edit was based on; 0 when the device had not seen the entry. */
+            baseVersion: z.number().int().min(0),
+            body: z.string().trim().min(1).max(journalLimits.body),
+            tags: journalTagsSchema,
+            updatedAt: isoTimestamp,
+            /** The device's local `mm/dd/yyyy HH:mm`, used in the separator when an edit is merged. */
+            editedLabel: z.string().regex(/^\d{2}\/\d{2}\/\d{4} \d{2}:\d{2}$/),
+        })
+        .strict(),
+    z
+        .object({
+            kind: z.literal('delete'),
+            mutationId: z.uuid(),
+            entryDate: entryDateSchema,
+            baseVersion: z.number().int().min(1),
+        })
+        .strict(),
+]);
+
+export type JournalMutation = z.infer<typeof journalMutationSchema>;
+export type JournalSave = Extract<JournalMutation, { kind: 'save' }>;
+
+export interface ServerJournalEntry {
+    entryDate: string;
+    body: string;
+    tags: string[];
+    /** A deleted entry stays as a tombstone so its version keeps counting up. */
+    deleted: boolean;
+    createdAt: string;
+    updatedAt: string;
+    version: number;
+}
+
+export type JournalOutcome = 'created' | 'updated' | 'merged' | 'deleted' | 'kept';
+
+export interface JournalReceipt {
+    outcome: JournalOutcome;
+    entryDate: string;
+    resultVersion: number;
+}
+
+export interface JournalMutationResponse extends JournalReceipt {
+    entry: ServerJournalEntry | null;
+}
+
+export const globalNoteLimits = {
+    title: limits.title,
+    body: journalLimits.body,
+    tag: journalLimits.tag,
+    tags: journalLimits.tags,
+} as const;
+
+const globalNoteFieldsSchema = z
+    .object({
+        title: z.string().trim().min(1).max(globalNoteLimits.title),
+        body: z.string().max(globalNoteLimits.body),
+        tags: journalTagsSchema,
+        updatedAt: isoTimestamp,
+    })
+    .strict();
+
+export const globalNoteMutationSchema = z.discriminatedUnion('kind', [
+    z
+        .object({
+            kind: z.literal('save'),
+            mutationId: z.uuid(),
+            id: z.uuid(),
+            baseVersion: z.number().int().min(0),
+            ...globalNoteFieldsSchema.shape,
+            // Older queued saves may still contain this field; the server ignores it.
+            pinned: z.boolean().optional(),
+            editedLabel: z.string().regex(/^\d{2}\/\d{2}\/\d{4} \d{2}:\d{2}$/),
+        })
+        .strict(),
+    z
+        .object({
+            kind: z.literal('delete'),
+            mutationId: z.uuid(),
+            id: z.uuid(),
+            baseVersion: z.number().int().min(1),
+        })
+        .strict(),
+]);
+
+export type GlobalNoteMutation = z.infer<typeof globalNoteMutationSchema>;
+export type GlobalNoteSave = Extract<GlobalNoteMutation, { kind: 'save' }>;
+
+export interface ServerGlobalNote extends z.infer<typeof globalNoteFieldsSchema> {
+    id: string;
+    deleted: boolean;
+    createdAt: string;
+    version: number;
+}
+
+export interface GlobalNoteReceipt {
+    outcome: JournalOutcome;
+    id: string;
+    resultVersion: number;
+}
+
+export interface GlobalNoteMutationResponse extends GlobalNoteReceipt {
+    note: ServerGlobalNote | null;
+}
+
+export const globalNoteQuerySchema = z.object({ includeDeleted: z.enum(['true', 'false']).optional() }).strict();
+
+export const journalQuerySchema = z
+    .object({
+        from: entryDateSchema.optional(),
+        to: entryDateSchema.optional(),
+        tag: z.string().trim().min(1).max(journalLimits.tag).optional(),
+        includeDeleted: z.enum(['true', 'false']).optional(),
+    })
+    .strict();
+
+export type JournalQuery = z.infer<typeof journalQuerySchema>;
+
 export const themePreferenceSchema = z.object({ theme: z.enum(['system', 'light', 'midnight']) }).strict();
 
 export const THEME_COOKIE = 'idea-notes.theme';

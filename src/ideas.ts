@@ -55,7 +55,7 @@ export function formatIdeaTimestamp(value: string): string {
     return `${pad(date.getMonth() + 1)}/${pad(date.getDate())}/${date.getFullYear()} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
-export function parseTags(value: string): string[] {
+export function parseTags(value: string, max = 12): string[] {
     const seen = new Set<string>();
     return value
         .split(',')
@@ -66,5 +66,5 @@ export function parseTags(value: string): string[] {
             seen.add(key);
             return true;
         })
-        .slice(0, 12);
+        .slice(0, max);
 }

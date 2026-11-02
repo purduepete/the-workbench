@@ -1,12 +1,19 @@
 import express from 'express';
 import type { ErrorRequestHandler } from 'express';
+import path from 'node:path';
 import {
     ideaQuerySchema,
+    globalNoteMutationSchema,
+    globalNoteQuerySchema,
+    journalMutationSchema,
+    journalQuerySchema,
     mutationSchema,
     solutionSettingSchema,
     THEME_COOKIE,
     themePreferenceSchema,
 } from '../shared/contracts.js';
+import { JournalOverflowError } from '../shared/journal.js';
+import { taskMutationSchema, taskQuerySchema } from '../shared/tasks.js';
 import type { SolutionSource } from './solutions.js';
 import type { IdeasStore } from './store.js';
 
@@ -46,6 +53,11 @@ export function createApp(options: {
         }
         next();
     });
+    // A journal entry holds up to 200,000 characters, which can reach about 800 KB as UTF-8.
+    // This parser runs first, so the 64kb parser below skips the already-parsed body on this route only.
+    app.use('/api/journal/mutations', express.json({ limit: '1mb' }));
+    app.use('/api/global-notes/mutations', express.json({ limit: '1mb' }));
+    app.use('/api/tasks/mutations', express.json({ limit: '1mb' }));
     app.use(express.json({ limit: '64kb' }));
     app.get('/api/health', async (_req, res) => {
         try {
@@ -99,6 +111,76 @@ export function createApp(options: {
         }
         res.json(await options.store.apply(parsed.data));
     });
+    app.get('/api/journal', async (req, res) => {
+        const query = journalQuerySchema.safeParse(req.query);
+        if (!query.success) {
+            res.status(400).json({ error: 'Filter with from and to as YYYY-MM-DD, a tag, and includeDeleted.' });
+            return;
+        }
+        const { from, to, tag, includeDeleted } = query.data;
+        const wanted = tag?.toLocaleLowerCase();
+        const entries = (await options.store.listJournal()).filter(
+            (entry) =>
+                (includeDeleted === 'true' || !entry.deleted) &&
+                (from === undefined || entry.entryDate >= from) &&
+                (to === undefined || entry.entryDate <= to) &&
+                (wanted === undefined || entry.tags.some((value) => value.toLocaleLowerCase() === wanted))
+        );
+        res.json({ entries });
+    });
+    app.post('/api/journal/mutations', async (req, res) => {
+        const parsed = journalMutationSchema.safeParse(req.body);
+        if (!parsed.success) {
+            res.status(400).json({ error: 'The change is not a valid journal update.' });
+            return;
+        }
+        res.json(await options.store.applyJournal(parsed.data));
+    });
+    app.get('/api/global-notes', async (req, res) => {
+        const query = globalNoteQuerySchema.safeParse(req.query);
+        if (!query.success) {
+            res.status(400).json({ error: 'Use includeDeleted=true to include deleted global notes.' });
+            return;
+        }
+        const notes = (await options.store.listGlobalNotes()).filter(
+            (note) => query.data.includeDeleted === 'true' || !note.deleted
+        );
+        res.json({ notes });
+    });
+    app.post('/api/global-notes/mutations', async (req, res) => {
+        const parsed = globalNoteMutationSchema.safeParse(req.body);
+        if (!parsed.success) {
+            res.status(400).json({ error: 'The change is not a valid global note update.' });
+            return;
+        }
+        res.json(await options.store.applyGlobalNote(parsed.data));
+    });
+    app.get('/api/tasks', async (req, res) => {
+        const query = taskQuerySchema.safeParse(req.query);
+        if (!query.success) {
+            res.status(400).json({
+                error: 'Filter with from and to as YYYY-MM-DD, category home or work, and includeDeleted.',
+            });
+            return;
+        }
+        const { from, to, category, includeDeleted } = query.data;
+        const tasks = (await options.store.listTasks()).filter(
+            (task) =>
+                (includeDeleted === 'true' || !task.deleted) &&
+                (from === undefined || task.taskDate >= from) &&
+                (to === undefined || task.taskDate <= to) &&
+                (category === undefined || task.category === category)
+        );
+        res.json({ tasks });
+    });
+    app.post('/api/tasks/mutations', async (req, res) => {
+        const parsed = taskMutationSchema.safeParse(req.body);
+        if (!parsed.success) {
+            res.status(400).json({ error: 'The change is not a valid task update.' });
+            return;
+        }
+        res.json(await options.store.applyTask(parsed.data));
+    });
     app.post('/api/preferences', (req, res) => {
         const parsed = themePreferenceSchema.safeParse(req.body);
         if (!parsed.success) {
@@ -115,8 +197,17 @@ export function createApp(options: {
         res.status(204).end();
     });
     app.use('/api', (_req, res) => res.status(404).json({ error: 'Unknown API route.' }));
-    if (options.staticDirectory) app.use(express.static(options.staticDirectory, { dotfiles: 'deny' }));
+    if (options.staticDirectory) {
+        const staticDirectory = options.staticDirectory;
+        app.use(express.static(staticDirectory, { dotfiles: 'deny' }));
+        app.get('/notes', (_req, res) => res.sendFile(path.join(staticDirectory, 'index.html')));
+        app.get('/tasks', (_req, res) => res.sendFile(path.join(staticDirectory, 'index.html')));
+    }
     const handleError: ErrorRequestHandler = (error: unknown, _req, res, _next) => {
+        if (error instanceof JournalOverflowError) {
+            res.status(409).json({ error: error.message });
+            return;
+        }
         if (error instanceof SyntaxError) {
             res.status(400).json({ error: 'Request body must be valid JSON.' });
             return;

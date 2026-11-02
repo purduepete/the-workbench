@@ -84,18 +84,9 @@ for (const theme of ['midnight', 'light']) {
                     await expect(dialog).toHaveCount(0);
                     continue;
                 }
-                const close = dialog.getByRole('button', { name: 'Close dialog' });
-                const heading = await dialog.locator('.dialog-heading').boundingBox();
-                const button = await close.boundingBox();
-                if (!heading || !button) throw new Error('Dialog close control is missing.');
-                expect(button.x + button.width).toBeCloseTo(heading.x + heading.width, 0);
-                expect(button.y).toBeCloseTo(heading.y, 0);
-                await expect(close).toHaveCSS('border-top-width', '1px');
-                expect(await close.evaluate((element) => getComputedStyle(element).borderTopColor)).toMatch(
-                    /(?:rgba\([^)]*, 0\.55\)|color\([^)]*\/ 0\.55\))/
-                );
+                await expect(dialog.getByRole('button', { name: 'Close dialog' })).toHaveCount(0);
                 await expect(dialog.getByRole('button', { name: 'Done', exact: true })).toHaveCount(0);
-                await close.click();
+                await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
                 await expect(dialog).toHaveCount(0);
             }
         }
@@ -147,7 +138,7 @@ test('positions desktop dialogs near the top and keeps their controls usable', a
                 await listbox.getByRole('option', { name: 'Ferry Tracker' }).click();
                 await expect(trigger).toContainText('Ferry Tracker');
             }
-            await dialog.getByRole('button', { name: name === 'Manage solutions' ? 'Close dialog' : 'Cancel' }).click();
+            await dialog.getByRole('button', { name: 'Cancel' }).click();
         }
     }
 });
@@ -194,9 +185,7 @@ test.describe('touch dialog placement', () => {
                 const box = await dialog.boundingBox();
                 if (!box) throw new Error(`${name} dialog is missing.`);
                 expect(box.y).toBeCloseTo((viewport.height - box.height) / 2, 0);
-                await dialog
-                    .getByRole('button', { name: name === 'Manage solutions' ? 'Close dialog' : 'Cancel' })
-                    .click();
+                await dialog.getByRole('button', { name: 'Cancel' }).click();
             }
         }
     });
@@ -265,6 +254,9 @@ for (const device of [
         if (device.touch) await expect(page.locator('html')).not.toHaveAttribute('data-idea-input-focused', 'true');
         await expect(editDialog.locator('form.idea-form > .field-group').first()).toHaveCSS('margin-top', '0px');
         await page.keyboard.press('Escape');
+        await expect(editDialog).toBeVisible();
+        await expect(editDialog.getByLabel('Idea title')).toHaveValue(ideaTitle);
+        await editDialog.getByRole('button', { name: 'Cancel' }).click();
         await expect(editDialog).toHaveCount(0);
         await expect(edit).toBeFocused();
     });
