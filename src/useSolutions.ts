@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Solution } from '../shared/contracts';
 
-export const SOLUTIONS_STORAGE_KEY = 'idea-notes.solutions';
+export const SOLUTIONS_STORAGE_KEY = 'the-workbench.solutions';
 
 const isSolutionList = (value: unknown): value is Solution[] =>
     Array.isArray(value) &&

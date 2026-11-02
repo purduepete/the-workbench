@@ -1,5 +1,5 @@
 // Caches only the app shell so The Workbench can reopen offline. API responses are never cached.
-const CACHE = 'idea-notes-shell-v6';
+const CACHE = 'the-workbench-shell-v6';
 
 self.addEventListener('install', (event) => {
     event.waitUntil(caches.open(CACHE).then((cache) => cache.add('/')));

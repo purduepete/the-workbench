@@ -6,7 +6,7 @@ import type {
 } from '../shared/contracts';
 import { formatIdeaTimestamp } from './ideas';
 
-export const GLOBAL_NOTES_STORAGE_KEY = 'idea-notes.global-sync';
+export const GLOBAL_NOTES_STORAGE_KEY = 'the-workbench.global-sync';
 
 export type GlobalNoteOutboxEntry = GlobalNoteMutation & { attempted: boolean };
 

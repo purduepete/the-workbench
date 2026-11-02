@@ -3,9 +3,9 @@ BEGIN;
 DO $$
 BEGIN
     IF NOT EXISTS (
-        SELECT 1 FROM public.solutiondeploy_schema WHERE app_id = 'idea-notes' AND version = 2
+        SELECT 1 FROM public.solutiondeploy_schema WHERE app_id = 'the-workbench' AND version = 2
     ) THEN
-        RAISE EXCEPTION 'Idea Notes schema version 2 is required';
+        RAISE EXCEPTION 'The Workbench schema version 2 is required';
     END IF;
 END $$;
 CREATE TABLE public.tasks (
@@ -29,5 +29,5 @@ CREATE TABLE public.task_mutations (
     outcome TEXT NOT NULL CHECK (outcome IN ('created', 'updated', 'completed', 'deleted', 'reordered', 'kept')),
     applied_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
-UPDATE public.solutiondeploy_schema SET version = 3 WHERE app_id = 'idea-notes' AND version = 2;
+UPDATE public.solutiondeploy_schema SET version = 3 WHERE app_id = 'the-workbench' AND version = 2;
 COMMIT;

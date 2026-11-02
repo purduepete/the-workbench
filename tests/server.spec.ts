@@ -68,7 +68,7 @@ test('reopens offline, keeps edits, and syncs them once on reconnect', async ({ 
 });
 
 test('stops gracefully when the deployment stop file appears', async () => {
-    const folder = mkdtempSync(join(tmpdir(), 'idea-notes-stop-'));
+    const folder = mkdtempSync(join(tmpdir(), 'the-workbench-stop-'));
     const stopFile = join(folder, 'stop');
     const port = 4191;
     const child = spawn(process.execPath, ['dist-server/server/main.js'], {

@@ -39,5 +39,5 @@ CREATE TABLE public.global_note_mutations (
     result_version INTEGER NOT NULL CHECK (result_version >= 0),
     applied_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
-UPDATE public.solutiondeploy_schema SET version = 2 WHERE app_id = 'idea-notes' AND version = 1;
+UPDATE public.solutiondeploy_schema SET version = 2 WHERE app_id = 'the-workbench' AND version = 1;
 COMMIT;

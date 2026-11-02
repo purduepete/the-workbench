@@ -131,8 +131,8 @@ exist at schema version 3.
 it only runs when the database name ends in `_test`; a disposable container is enough:
 
 ```powershell
-docker run -d --rm --name idea-notes-pgtest -e POSTGRES_PASSWORD=localtest -e POSTGRES_DB=idea_notes_test -p 55432:5432 postgres:17-alpine
-$env:TEST_DATABASE_URL = 'postgres://postgres:localtest@localhost:55432/idea_notes_test'
+docker run -d --rm --name the-workbench-pgtest -e POSTGRES_PASSWORD=localtest -e POSTGRES_DB=the_workbench_test -p 55432:5432 postgres:17-alpine
+$env:TEST_DATABASE_URL = 'postgres://postgres:localtest@localhost:55432/the_workbench_test'
 npx vitest run tests/journal-postgres.test.ts
-docker stop idea-notes-pgtest
+docker stop the-workbench-pgtest
 ```

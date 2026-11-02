@@ -1,6 +1,6 @@
 import type { Idea, IdeaView } from './types';
 
-export const VIEW_STORAGE_KEY = 'idea-notes.view';
+export const VIEW_STORAGE_KEY = 'the-workbench.view';
 
 export function readIdeaView(): { view: IdeaView; error: string | null } {
     try {

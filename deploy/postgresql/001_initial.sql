@@ -41,5 +41,5 @@ CREATE TABLE public.disabled_solutions (
     solution_id TEXT PRIMARY KEY CHECK (solution_id ~ '^[a-z0-9][a-z0-9-]{0,62}$'),
     disabled_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
-INSERT INTO public.solutiondeploy_schema(app_id, version) VALUES ('idea-notes', 1);
+INSERT INTO public.solutiondeploy_schema(app_id, version) VALUES ('the-workbench', 1);
 COMMIT;

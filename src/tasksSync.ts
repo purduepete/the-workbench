@@ -1,7 +1,7 @@
 import { taskMutationSchema } from '../shared/tasks';
 import type { ServerTask, TaskCategory, TaskMutation, TaskMutationResponse } from '../shared/tasks';
 
-export const TASKS_STORAGE_KEY = 'idea-notes.tasks-sync';
+export const TASKS_STORAGE_KEY = 'the-workbench.tasks-sync';
 export type TaskOutboxEntry = TaskMutation & { attempted: boolean };
 export interface TasksState {
     server: ServerTask[];
@@ -173,7 +173,7 @@ export function writeTasksState(state: TasksState): string | null {
     }
 }
 
-const CATEGORY_KEY = 'idea-notes.task-category';
+const CATEGORY_KEY = 'the-workbench.task-category';
 export function readTaskCategory(): { category: TaskCategory; error: string | null } {
     try {
         const value = window.localStorage.getItem(CATEGORY_KEY);

@@ -17,9 +17,11 @@
             (function () {
                 var preference = 'midnight';
                 try {
-                    var saved = localStorage.getItem('idea-notes.theme-preference');
+                    var saved = localStorage.getItem('the-workbench.theme-preference');
                     if (!saved) {
-                        var match = document.cookie.match(/(?:^|; )idea-notes\.theme=(system|light|midnight)(?:;|$)/);
+                        var match = document.cookie.match(
+                            /(?:^|; )the-workbench\.theme=(system|light|midnight)(?:;|$)/
+                        );
                         saved = match && match[1];
                     }
                     if (saved === 'system' || saved === 'light' || saved === 'midnight') preference = saved;

@@ -465,9 +465,10 @@ export class PostgresIdeasStore implements IdeasStore {
         try {
             await client.query('BEGIN');
             // Category transfers and reorders share the entire day's lock, including first inserts.
-            await client.query("SELECT pg_advisory_xact_lock(hashtextextended('idea-notes:tasks:' || $1::text, 0))", [
-                mutation.taskDate,
-            ]);
+            await client.query(
+                "SELECT pg_advisory_xact_lock(hashtextextended('the-workbench:tasks:' || $1::text, 0))",
+                [mutation.taskDate]
+            );
             const prior = await this.taskReceipt(client, mutation.mutationId);
             if (prior) {
                 await client.query('COMMIT');

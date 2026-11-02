@@ -2,9 +2,9 @@ import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { ThemePreference } from './types';
 
-const THEME_STORAGE_KEY = 'idea-notes.theme-preference';
+const THEME_STORAGE_KEY = 'the-workbench.theme-preference';
 // Safari can clear localStorage after the Cloudflare Access sign-in, so the server also keeps the choice in a cookie.
-const THEME_COOKIE_PATTERN = /(?:^|; )idea-notes\.theme=(system|light|midnight)(?:;|$)/;
+const THEME_COOKIE_PATTERN = /(?:^|; )the-workbench\.theme=(system|light|midnight)(?:;|$)/;
 const THEME_BACKGROUNDS: Record<'light' | 'midnight', string> = {
     light: '#ffffff',
     midnight: '#020617',

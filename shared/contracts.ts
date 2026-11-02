@@ -231,4 +231,4 @@ export type JournalQuery = z.infer<typeof journalQuerySchema>;
 
 export const themePreferenceSchema = z.object({ theme: z.enum(['system', 'light', 'midnight']) }).strict();
 
-export const THEME_COOKIE = 'idea-notes.theme';
+export const THEME_COOKIE = 'the-workbench.theme';

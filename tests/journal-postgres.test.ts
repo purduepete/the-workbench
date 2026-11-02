@@ -41,7 +41,7 @@ describe.skipIf(!enabled)('PostgresIdeasStore journal against a real database', 
     beforeAll(async () => {
         pool = new pg.Pool({ connectionString: url, max: 6 });
         await pool.query('DROP SCHEMA public CASCADE; CREATE SCHEMA public;');
-        for (const file of ['001_initial.sql', '002_journal.sql', '003_tasks.sql']) {
+        for (const file of ['001_initial.sql', '002_journal.sql', '003_tasks.sql', '004_application_id.sql']) {
             await pool.query(await readFile(new URL(`../deploy/postgresql/${file}`, import.meta.url), 'utf8'));
         }
         store = new PostgresIdeasStore(pool);

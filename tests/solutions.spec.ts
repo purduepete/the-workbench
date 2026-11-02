@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 
 for (const theme of ['midnight', 'light']) {
     test(`automatically selects N/A without a solution in ${theme}`, async ({ page }) => {
-        await page.addInitScript((value) => localStorage.setItem('idea-notes.theme-preference', value), theme);
+        await page.addInitScript((value) => localStorage.setItem('the-workbench.theme-preference', value), theme);
         await page.goto('/');
         await expect(page.getByRole('status')).toHaveText('Synced');
         await page.getByRole('button', { name: 'New idea' }).click();
@@ -117,7 +117,7 @@ test('links an idea to a solution with the keyboard, filters by it, and reads it
 
 for (const theme of ['midnight', 'light']) {
     test(`disables a solution for every device in ${theme}`, async ({ page, baseURL }) => {
-        await page.addInitScript((value) => localStorage.setItem('idea-notes.theme-preference', value), theme);
+        await page.addInitScript((value) => localStorage.setItem('the-workbench.theme-preference', value), theme);
         await page.goto('/');
         await expect(page.getByRole('status')).toHaveText('Synced');
 

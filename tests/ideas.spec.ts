@@ -13,7 +13,7 @@ test('uses The Workbench for the site and installed app', async ({ page, request
 
 for (const theme of ['midnight', 'light']) {
     test(`site icon has no surrounding border in ${theme}`, async ({ page }) => {
-        await page.addInitScript((value) => localStorage.setItem('idea-notes.theme-preference', value), theme);
+        await page.addInitScript((value) => localStorage.setItem('the-workbench.theme-preference', value), theme);
         for (const width of [390, 1280]) {
             await page.setViewportSize({ width, height: 900 });
             await page.goto('/');
@@ -33,7 +33,7 @@ for (const theme of ['midnight', 'light']) {
         test(`header actions restore fill and color after ${fails ? 'failure' : 'success'} in ${theme}`, async ({
             page,
         }) => {
-            await page.addInitScript((value) => localStorage.setItem('idea-notes.theme-preference', value), theme);
+            await page.addInitScript((value) => localStorage.setItem('the-workbench.theme-preference', value), theme);
             await page.goto('/');
             await expect(page.getByRole('status')).toHaveText('Synced');
             const refresh = page.getByRole('button', { name: 'Refresh ideas' });
@@ -87,7 +87,7 @@ for (const theme of ['midnight', 'light']) {
     }
 
     test(`dialog close controls and idea top spacing in ${theme}`, async ({ page }) => {
-        await page.addInitScript((value) => localStorage.setItem('idea-notes.theme-preference', value), theme);
+        await page.addInitScript((value) => localStorage.setItem('the-workbench.theme-preference', value), theme);
         for (const width of [390, 1280]) {
             await page.setViewportSize({ width, height: 900 });
             await page.goto('/');
@@ -292,8 +292,8 @@ for (const device of [
 
 test('keeps the initial loading state until a failed sync succeeds on retry', async ({ page }) => {
     await page.addInitScript(() => {
-        localStorage.removeItem('idea-notes.sync');
-        localStorage.removeItem('idea-notes.ideas');
+        localStorage.removeItem('the-workbench.sync');
+        localStorage.removeItem('the-workbench.ideas');
     });
     let attempts = 0;
     await page.route('**/api/ideas', async (route) => {

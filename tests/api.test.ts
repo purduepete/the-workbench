@@ -117,7 +117,7 @@ describe('preferences', () => {
         const response = await post('/api/preferences', { theme: 'light' });
         expect(response.status).toBe(204);
         const cookie = response.headers.get('set-cookie') ?? '';
-        expect(cookie).toMatch(/^idea-notes\.theme=light;/);
+        expect(cookie).toMatch(/^the-workbench\.theme=light;/);
         expect(cookie).toMatch(/SameSite=Lax/);
         expect(cookie).not.toMatch(/Secure/);
         expect((await post('/api/preferences', { theme: 'dark' })).status).toBe(400);
@@ -596,7 +596,7 @@ describe('page routes', () => {
         const { mkdtemp, rm, writeFile } = await import('node:fs/promises');
         const { tmpdir } = await import('node:os');
         const { join } = await import('node:path');
-        const directory = await mkdtemp(join(tmpdir(), 'idea-notes-'));
+        const directory = await mkdtemp(join(tmpdir(), 'the-workbench-'));
         await writeFile(join(directory, 'index.html'), '<!doctype html><title>shell</title>');
         const shell = createServer();
         await new Promise<void>((resolve) => shell.listen(0, '127.0.0.1', resolve));

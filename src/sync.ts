@@ -2,8 +2,8 @@ import type { IdeaFields, Mutation, MutationResponse, ServerIdea } from '../shar
 import type { Idea } from './types';
 import { statusForSolution } from '../shared/status';
 
-export const SYNC_STORAGE_KEY = 'idea-notes.sync';
-export const LEGACY_IDEAS_KEY = 'idea-notes.ideas';
+export const SYNC_STORAGE_KEY = 'the-workbench.sync';
+export const LEGACY_IDEAS_KEY = 'the-workbench.ideas';
 
 /** A queued change. Once attempted, its payload is frozen so a retry repeats the exact same request. */
 export type OutboxEntry = Mutation & { attempted: boolean };

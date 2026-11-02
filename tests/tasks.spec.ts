@@ -141,7 +141,7 @@ test('creates an offline task from a maximum-length idea title', async ({ page, 
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto('/');
     await expect(page.getByRole('status').first()).toHaveText('Synced');
-    await page.waitForFunction(() => localStorage.getItem('idea-notes.tasks-sync') !== null);
+    await page.waitForFunction(() => localStorage.getItem('the-workbench.tasks-sync') !== null);
     await page.evaluate(() => navigator.serviceWorker.ready.then(() => undefined));
     await page.reload();
     const card = page.locator('.idea-card').filter({ has: page.getByRole('heading', { name: title, exact: true }) });
@@ -240,7 +240,7 @@ test('sync status matches Notes placement on phone and desktop', async ({ page }
 
 for (const theme of ['midnight', 'light']) {
     test(`tasks save, complete, move sections and fit phone/desktop in ${theme}`, async ({ page }) => {
-        await page.addInitScript((value) => localStorage.setItem('idea-notes.theme-preference', value), theme);
+        await page.addInitScript((value) => localStorage.setItem('the-workbench.theme-preference', value), theme);
         await page.goto('/');
         await page.getByRole('navigation', { name: 'Pages' }).getByRole('link', { name: 'Tasks' }).click();
         await expect(page).toHaveURL(/\/tasks$/);

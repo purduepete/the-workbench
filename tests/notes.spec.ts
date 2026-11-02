@@ -29,7 +29,7 @@ test('empty pages omit the long instructional copy', async ({ page }) => {
 
 for (const theme of ['midnight', 'light']) {
     test(`notes page saves today's entry and keeps it after reload in ${theme}`, async ({ page }) => {
-        await page.addInitScript((value) => localStorage.setItem('idea-notes.theme-preference', value), theme);
+        await page.addInitScript((value) => localStorage.setItem('the-workbench.theme-preference', value), theme);
         await page.setViewportSize({ width: 390, height: 844 });
         await page.goto('/');
         const nav = page.getByRole('navigation', { name: 'Pages' });
@@ -230,7 +230,7 @@ for (const { theme, width } of [
     { theme: 'light', width: 390 },
 ]) {
     test(`global and weekly note groups collapse independently in ${theme}`, async ({ page }) => {
-        await page.addInitScript((value) => localStorage.setItem('idea-notes.theme-preference', value), theme);
+        await page.addInitScript((value) => localStorage.setItem('the-workbench.theme-preference', value), theme);
         await page.setViewportSize({ width, height: 844 });
         await page.goto('/notes');
 

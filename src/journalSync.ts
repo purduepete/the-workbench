@@ -3,7 +3,7 @@ import { formatIdeaTimestamp } from './ideas';
 import { toJournalEntry } from './journal';
 import type { JournalEntry } from './journal';
 
-export const JOURNAL_STORAGE_KEY = 'idea-notes.journal-sync';
+export const JOURNAL_STORAGE_KEY = 'the-workbench.journal-sync';
 
 /** A queued change. Once attempted, its payload is frozen so a retry repeats the exact same request. */
 export type JournalOutboxEntry = JournalMutation & { attempted: boolean };
