@@ -552,7 +552,7 @@ export class PostgresIdeasStore implements IdeasStore {
 
     async ready(): Promise<void> {
         const result = await this.pool.query<{ version: number }>(
-            "SELECT version FROM public.solutiondeploy_schema WHERE app_id = 'idea-notes'"
+            "SELECT version FROM public.solutiondeploy_schema WHERE app_id = 'the-workbench'"
         );
         if (result.rows[0]?.version !== SCHEMA_VERSION)
             throw new Error(`The Workbench schema version is not ${SCHEMA_VERSION}.`);

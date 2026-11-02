@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "id": "idea-notes",
+  "id": "the-workbench",
   "repository": "https://github.com/purduepete/the-workbench.git",
   "database": {
     "engine": "postgresql",
@@ -27,7 +27,7 @@
       "PORT": "8802",
       "STORAGE_BACKEND": "postgresql",
       "SOLUTIONS_SOURCE": "http://127.0.0.1:18798/sites.json",
-      "ALLOWED_ORIGINS": "https://idea-notes.jimlertech.com,https://jimbrownhome1.tail8ad282.ts.net:8802,http://127.0.0.1:8802"
+      "ALLOWED_ORIGINS": "https://the-workbench.jimlertech.com,https://jimbrownhome1.tail8ad282.ts.net:8802,http://127.0.0.1:8802"
     },
     "secretFile": "app.env",
     "stopFileEnvironment": "SOLUTIONDEPLOY_STOP_FILE"
@@ -35,6 +35,6 @@
   "readiness": { "path": "/api/health", "expected": { "ok": true }, "timeoutSeconds": 60 },
   "state": [],
   "managedState": [],
-  "routes": [{ "hostname": "idea-notes.jimlertech.com" }],
-  "source": { "host": "jimbrownhome1", "root": "C:\\ProgramData\\SolutionDeploy\\apps\\idea-notes", "tasks": [] }
+  "routes": [{ "hostname": "the-workbench.jimlertech.com" }],
+  "source": { "host": "jimbrownhome1", "root": "C:\\ProgramData\\SolutionDeploy\\apps\\the-workbench", "tasks": [] }
 }
