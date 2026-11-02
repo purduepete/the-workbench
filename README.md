@@ -1,4 +1,4 @@
-# Idea Notes
+# The Workbench
 
 ## First entry
 
@@ -7,15 +7,16 @@ settle, then enter together over 600ms. A valid saved ideas cache enters immedia
 Sync errors reveal the header and prompt immediately. Refreshes keep the shell visible.
 Reduced motion removes the entrance animation.
 
-Idea Notes captures thoughts with tags, pins, search and archive. Notes sync to a PostgreSQL database through a small
-Express server. The browser keeps an outbox, so capture works offline and changes upload when the connection returns.
+The Workbench keeps ideas with tags, pins, search and archive alongside date-grouped notes and Home/Work tasks.
+Data syncs to a PostgreSQL database through a small Express server. The browser keeps an outbox, so capture works
+offline and changes upload when the connection returns.
 
 New and edit dialogs focus the dialog on iPhone and iPad, including iPads using a desktop user agent.
 The keyboard stays closed until you tap a field. Desktop dialogs focus the title; closing a dialog restores focus
 to its opener. Empty idea dialogs close from Cancel, Escape or the backdrop. Editors containing title or body text require Cancel or Save.
 On desktop, idea and Manage solutions dialogs open near the top of the page; touch layouts stay centered.
 
-Manage solutions saves checkbox changes immediately and closes with Cancel.
+Manage solutions saves checkbox changes immediately and closes with OK.
 The borderless header Refresh and Theme buttons change fill and text color only while active.
 Refresh stays active until ideas, notes, tasks and solutions finish refreshing, including after a failed request.
 
@@ -85,6 +86,9 @@ only the current week starts expanded.
 The calendar marks task days in the selected section. Selecting a populated day expands its week
 and scrolls to it; selecting an empty day opens a new task for that date. New task uses today.
 Editing a task can move it between Home and Work.
+
+On an idea card, Create task opens the task editor with the idea's title and details, today's date and the last-used
+section. You can edit the task or change the section. The idea stays unchanged.
 
 Drag a task's handle to reorder within its day and section, using a mouse or touch.
 For keyboard ordering, focus the handle, press Space, use arrow keys, then press Space again.

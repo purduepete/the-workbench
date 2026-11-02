@@ -1,6 +1,34 @@
 import { expect, test } from '@playwright/test';
 
+test('uses The Workbench for the site and installed app', async ({ page, request }) => {
+    await page.goto('/');
+    await expect(page).toHaveTitle('The Workbench');
+    await expect(page.getByRole('heading', { name: 'The Workbench', exact: true })).toBeVisible();
+    await expect(page.locator('meta[name="apple-mobile-web-app-title"]')).toHaveAttribute('content', 'The Workbench');
+    const manifest = await request.get('/manifest.webmanifest');
+    expect(manifest.ok()).toBe(true);
+    expect(await manifest.json()).toMatchObject({ name: 'The Workbench', short_name: 'The Workbench' });
+    await expect(page.locator('.brand-mark img')).toHaveAttribute('src', '/favicon.svg');
+});
+
 for (const theme of ['midnight', 'light']) {
+    test(`site icon has no surrounding border in ${theme}`, async ({ page }) => {
+        await page.addInitScript((value) => localStorage.setItem('idea-notes.theme-preference', value), theme);
+        for (const width of [390, 1280]) {
+            await page.setViewportSize({ width, height: 900 });
+            await page.goto('/');
+            const mark = page.locator('.brand-mark');
+            const icon = mark.locator('img');
+            await expect(icon).toBeVisible();
+            for (const element of [mark, icon]) {
+                for (const side of ['top', 'right', 'bottom', 'left']) {
+                    await expect(element).toHaveCSS(`border-${side}-width`, '0px');
+                }
+            }
+            await expect(mark).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+        }
+    });
+
     for (const fails of [false, true]) {
         test(`header actions restore fill and color after ${fails ? 'failure' : 'success'} in ${theme}`, async ({
             page,
@@ -86,7 +114,7 @@ for (const theme of ['midnight', 'light']) {
                 }
                 await expect(dialog.getByRole('button', { name: 'Close dialog' })).toHaveCount(0);
                 await expect(dialog.getByRole('button', { name: 'Done', exact: true })).toHaveCount(0);
-                await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+                await dialog.getByRole('button', { name: 'OK', exact: true }).click();
                 await expect(dialog).toHaveCount(0);
             }
         }
@@ -138,7 +166,7 @@ test('positions desktop dialogs near the top and keeps their controls usable', a
                 await listbox.getByRole('option', { name: 'Ferry Tracker' }).click();
                 await expect(trigger).toContainText('Ferry Tracker');
             }
-            await dialog.getByRole('button', { name: 'Cancel' }).click();
+            await dialog.getByRole('button', { name: name === 'Manage solutions' ? 'OK' : 'Cancel' }).click();
         }
     }
 });
@@ -185,7 +213,7 @@ test.describe('touch dialog placement', () => {
                 const box = await dialog.boundingBox();
                 if (!box) throw new Error(`${name} dialog is missing.`);
                 expect(box.y).toBeCloseTo((viewport.height - box.height) / 2, 0);
-                await dialog.getByRole('button', { name: 'Cancel' }).click();
+                await dialog.getByRole('button', { name: name === 'Manage solutions' ? 'OK' : 'Cancel' }).click();
             }
         }
     });
@@ -280,16 +308,17 @@ test('keeps the initial loading state until a failed sync succeeds on retry', as
     await page.goto('/');
     await expect(page.getByRole('status')).toContainText('Loading ideas');
     await expect(page.getByRole('alert')).toHaveText('Ideas could not sync. Retrying automatically.');
-    await expect(page.getByText('Your idea space is ready')).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: 'No ideas yet' })).toHaveCount(0);
 
     await page.evaluate(() => window.dispatchEvent(new Event('online')));
-    await expect(page.getByText('Your idea space is ready')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'No ideas yet' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Capture your first idea' })).toHaveCount(0);
     expect(attempts).toBe(2);
 });
 
 test('capture, search, pin, edit and archive an idea', async ({ page }) => {
     await page.goto('/');
-    await expect(page.getByRole('heading', { name: 'Idea Notes' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'The Workbench' })).toBeVisible();
     await page.getByRole('button', { name: 'New idea' }).click();
 
     const dialog = page.getByRole('dialog');

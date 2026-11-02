@@ -555,7 +555,7 @@ export class PostgresIdeasStore implements IdeasStore {
             "SELECT version FROM public.solutiondeploy_schema WHERE app_id = 'idea-notes'"
         );
         if (result.rows[0]?.version !== SCHEMA_VERSION)
-            throw new Error(`Idea Notes schema version is not ${SCHEMA_VERSION}.`);
+            throw new Error(`The Workbench schema version is not ${SCHEMA_VERSION}.`);
         await this.pool.query('SELECT id FROM public.ideas LIMIT 1');
         await this.pool.query('SELECT mutation_id FROM public.applied_mutations LIMIT 1');
         await this.pool.query('SELECT solution_id FROM public.disabled_solutions LIMIT 1');

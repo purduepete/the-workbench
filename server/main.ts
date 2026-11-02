@@ -57,7 +57,7 @@ const app = createApp({
     staticDirectory: resolve('dist'),
     contentSecurityPolicy: csp,
 });
-const server = app.listen(port, '127.0.0.1', () => console.warn(`Idea Notes listening on loopback port ${port}`));
+const server = app.listen(port, '127.0.0.1', () => console.warn(`The Workbench listening on loopback port ${port}`));
 let stopping = false;
 async function stop() {
     if (stopping) return;

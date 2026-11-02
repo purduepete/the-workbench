@@ -218,7 +218,7 @@ export function createApp(options: {
             return;
         }
         console.error('Request failed:', error instanceof Error ? error.message : 'Unknown request failure');
-        res.status(503).json({ error: 'Idea Notes could not read or save data. Please retry.' });
+        res.status(503).json({ error: 'The Workbench could not read or save data. Please retry.' });
     };
     app.use(handleError);
     return app;

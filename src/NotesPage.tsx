@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef, useState } from 'react';
 import type { FormEvent, ReactNode } from 'react';
-import { CalendarDays, CalendarPlus, Check, Clock3, NotebookPen, Plus, Search, Tag, Trash2, X } from 'lucide-react';
+import { CalendarDays, Check, Clock3, NotebookPen, Plus, Search, Tag, Trash2, X } from 'lucide-react';
 import { globalNoteLimits, journalLimits } from '../shared/contracts';
 import { formatIdeaTimestamp, parseTags } from './ideas';
 import { filterEntries, formatEntryDate, groupByWeek, weekStart } from './journal';
@@ -514,18 +514,18 @@ export function NotesPage({
                                 <button
                                     type="button"
                                     className="secondary-button"
-                                    onClick={() => setCalendarOpen(true)}
-                                >
-                                    <CalendarDays size={15} aria-hidden="true" />
-                                    Calendar
-                                </button>
-                                <button
-                                    type="button"
-                                    className="secondary-button"
                                     onClick={() => setEditingGlobalId(window.crypto.randomUUID())}
                                 >
                                     <Plus size={15} aria-hidden="true" />
                                     Global note
+                                </button>
+                                <button
+                                    type="button"
+                                    className="secondary-button"
+                                    onClick={() => setCalendarOpen(true)}
+                                >
+                                    <CalendarDays size={15} aria-hidden="true" />
+                                    Calendar
                                 </button>
                             </div>
                         </div>
@@ -617,21 +617,6 @@ export function NotesPage({
                                     {filtering ? <Search size={21} /> : <NotebookPen size={22} />}
                                 </span>
                                 <h4>{filtering ? 'No notes match this search' : 'No notes yet'}</h4>
-                                <p>
-                                    {filtering
-                                        ? 'Try another phrase or clear the tag filter.'
-                                        : 'Write one entry a day. Notes are grouped by week, newest first.'}
-                                </p>
-                                {!filtering && (
-                                    <button
-                                        type="button"
-                                        className="primary-button"
-                                        onClick={() => setEditingDate(today)}
-                                    >
-                                        <CalendarPlus size={15} aria-hidden="true" />
-                                        Write today&apos;s entry
-                                    </button>
-                                )}
                             </div>
                         ) : null}
                     </section>

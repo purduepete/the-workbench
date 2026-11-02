@@ -1,4 +1,4 @@
-// Caches only the app shell so Idea Notes can reopen offline. API responses are never cached.
+// Caches only the app shell so The Workbench can reopen offline. API responses are never cached.
 const CACHE = 'idea-notes-shell-v6';
 
 self.addEventListener('install', (event) => {

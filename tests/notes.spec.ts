@@ -1,5 +1,32 @@
 import { expect, test } from '@playwright/test';
 
+test('global note comes before calendar on phone and desktop', async ({ page }) => {
+    await page.goto('/notes');
+    const buttons = page.locator('.notes-actions > button');
+    await expect(buttons).toHaveText(['Global note', 'Calendar']);
+    for (const width of [390, 1280, 1920]) {
+        await page.setViewportSize({ width, height: 900 });
+        const globalNote = await buttons.nth(0).boundingBox();
+        const calendar = await buttons.nth(1).boundingBox();
+        if (!globalNote || !calendar) throw new Error('Notes action buttons are not visible');
+        expect(globalNote.x + globalNote.width).toBeLessThanOrEqual(calendar.x);
+        expect(globalNote.y).toBeCloseTo(calendar.y, 0);
+    }
+});
+
+test('empty pages omit the long instructional copy', async ({ page }) => {
+    const copy = [
+        'Start with a quick note. Add the context now, and sort it out later.',
+        'Write one entry a day. Notes are grouped by week, newest first.',
+        'Add a task for today or choose a day from the calendar.',
+    ];
+    for (const route of ['/', '/notes', '/tasks']) {
+        await page.goto(route);
+        for (const text of copy) await expect(page.getByText(text, { exact: true })).toHaveCount(0);
+        await expect(page.locator('.empty-state button')).toHaveCount(0);
+    }
+});
+
 for (const theme of ['midnight', 'light']) {
     test(`notes page saves today's entry and keeps it after reload in ${theme}`, async ({ page }) => {
         await page.addInitScript((value) => localStorage.setItem('idea-notes.theme-preference', value), theme);
@@ -61,7 +88,18 @@ test('calendar opens an existing entry and a blank entry for another day', async
     await expect(todayButton).toHaveAttribute('data-has-entry', 'true');
     await todayButton.press('ArrowLeft');
     await expect(calendar.getByRole('button', { name: yesterdayLabel, exact: true })).toBeFocused();
-    await calendar.getByRole('button', { name: todayLabel, exact: true }).click();
+    await calendar.getByRole('button', { name: yesterdayLabel, exact: true }).click();
+    await expect(calendar.getByRole('button', { name: yesterdayLabel, exact: true })).toHaveAttribute(
+        'aria-pressed',
+        'true'
+    );
+    await calendar.getByRole('button', { name: 'Today', exact: true }).click();
+    await expect(calendar).toBeVisible();
+    await expect(calendar.getByRole('button', { name: todayLabel, exact: true })).toHaveAttribute(
+        'aria-pressed',
+        'true'
+    );
+    await expect(page.getByRole('dialog', { name: `Entry for ${todayLabel}` })).toHaveCount(0);
     await calendar.getByRole('button', { name: `Open ${todayLabel}` }).click();
     await expect(page.getByRole('dialog').locator('textarea[name="body"]')).toHaveValue('Calendar existing-day entry');
     await page.getByRole('dialog').getByRole('button', { name: 'Cancel' }).click();

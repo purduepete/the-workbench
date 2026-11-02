@@ -141,7 +141,7 @@ for (const theme of ['midnight', 'light']) {
             await workLog.uncheck();
             expect((await saved).ok()).toBe(true);
             await expect(manage.getByText('2 of 3 enabled')).toBeVisible();
-            await manage.getByRole('button', { name: 'Cancel' }).click();
+            await manage.getByRole('button', { name: 'OK', exact: true }).click();
             await expect(manage).toBeHidden();
 
             const filter = page.getByRole('button', { name: /^Filter by solution:/ });
@@ -192,7 +192,7 @@ test('fits a phone screen with the solution filter and dialog fields', async ({ 
     await page.getByRole('button', { name: 'Manage solutions' }).click();
     await expect(page.getByRole('checkbox', { name: 'Ferry Tracker' })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
-    await page.getByRole('dialog').getByRole('button', { name: 'Cancel' }).click();
+    await page.getByRole('dialog').getByRole('button', { name: 'OK', exact: true }).click();
     await page.getByRole('button', { name: 'New idea' }).click();
     await page
         .getByRole('dialog')

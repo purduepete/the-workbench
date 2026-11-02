@@ -48,7 +48,7 @@ export function App() {
         setDialogRoute(route);
         setEditingIdea(undefined);
         setEditingDate(undefined);
-        setEditingTask(undefined);
+        if (route !== '/tasks') setEditingTask(undefined);
     }
 
     const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -105,8 +105,8 @@ export function App() {
                             <img src="/favicon.svg" alt="" />
                         </span>
                         <div className="brand-text">
-                            <h1 className="brand-name">Idea Notes</h1>
-                            <p className="brand-caption">Your thoughts, kept close</p>
+                            <h1 className="brand-name">The Workbench</h1>
+                            <p className="brand-caption">Ideas, notes and tasks</p>
                         </div>
                     </div>
                     <nav className="segmented page-nav" aria-label="Pages">
@@ -214,6 +214,16 @@ export function App() {
                             syncBadge={syncBadge}
                             editingIdea={editingIdea}
                             setEditingIdea={setEditingIdea}
+                            onCreateTask={(title, body) => {
+                                if (protectedDraft) return;
+                                setEditingTask({
+                                    id: crypto.randomUUID(),
+                                    taskDate: localDateKey(),
+                                    initialTitle: title,
+                                    initialBody: body,
+                                });
+                                navigate('/tasks');
+                            }}
                             onDraftProtectionChange={setProtectedDraft}
                         />
                     )}

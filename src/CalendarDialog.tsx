@@ -157,7 +157,16 @@ export function CalendarDialog({
                     <button type="button" className="secondary-button" onClick={onClose}>
                         Cancel
                     </button>
-                    <button type="button" className="secondary-button" onClick={() => onSelect(today)}>
+                    <button
+                        type="button"
+                        className="secondary-button"
+                        onClick={() => {
+                            const [year, monthNumber] = today.split('-').map(Number);
+                            setMonth(new Date(year, monthNumber - 1, 1, 12));
+                            setSelected(today);
+                            setFocusDate(today);
+                        }}
+                    >
                         <CalendarDays size={15} aria-hidden="true" />
                         Today
                     </button>

@@ -41,7 +41,7 @@ test('reopens offline, keeps edits, and syncs them once on reconnect', async ({ 
 
     await context.setOffline(true);
     await page.reload();
-    await expect(page.getByRole('heading', { name: 'Idea Notes' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'The Workbench' })).toBeVisible();
 
     await page.getByRole('button', { name: 'New idea' }).click();
     const dialog = page.getByRole('dialog');

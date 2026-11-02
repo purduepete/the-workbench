@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "id": "idea-notes",
-  "repository": "https://github.com/purduepete/idea-notes.git",
+  "repository": "https://github.com/purduepete/the-workbench.git",
   "database": {
     "engine": "postgresql",
     "name": "idea_notes",

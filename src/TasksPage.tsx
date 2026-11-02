@@ -25,6 +25,8 @@ export interface TaskEditorTarget {
     id: string;
     taskDate: string;
     fromCalendar?: boolean;
+    initialTitle?: string;
+    initialBody?: string;
 }
 type TaskInput = { id: string; taskDate: string; category: TaskCategory; title: string; body: string };
 
@@ -76,16 +78,24 @@ function TaskDialog({
     const dialogRef = useRef<HTMLDialogElement>(null);
     const formRef = useRef<HTMLFormElement>(null);
     const titleRef = useRef<HTMLInputElement>(null);
-    const returnFocusRef = useRef(document.activeElement instanceof HTMLElement ? document.activeElement : null);
+    const returnFocusRef = useRef(
+        target.initialTitle !== undefined
+            ? document.querySelector<HTMLElement>('.top-actions [aria-label="New task"]')
+            : document.activeElement instanceof HTMLElement
+              ? document.activeElement
+              : null
+    );
     const touch =
         /iPhone|iPad|iPod/i.test(navigator.userAgent) ||
         (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
     const [section, setSection] = useState(task?.category ?? category);
     const [error, setError] = useState<string | null>(null);
     const [confirmingDelete, setConfirmingDelete] = useState(false);
+    const initialTitle = task?.title ?? target.initialTitle ?? '';
+    const initialBody = task?.body ?? target.initialBody ?? '';
     const dismissal = useEditorDismissal(
         dialogRef,
-        Boolean(task?.title.trim() || task?.body.trim()),
+        Boolean(initialTitle.trim() || initialBody.trim()),
         onDraftProtectionChange
     );
     useLayoutEffect(() => {
@@ -168,7 +178,7 @@ function TaskDialog({
                         type="text"
                         required
                         maxLength={taskLimits.title}
-                        defaultValue={task?.title ?? ''}
+                        defaultValue={initialTitle}
                         placeholder="What needs doing?"
                     />
                 </label>
@@ -178,7 +188,7 @@ function TaskDialog({
                         className="field-textarea journal-textarea"
                         name="body"
                         maxLength={taskLimits.body}
-                        defaultValue={task?.body ?? ''}
+                        defaultValue={initialBody}
                         placeholder="Optional details..."
                     />
                 </label>
@@ -406,9 +416,12 @@ export function TasksPage({
                     }
                 />
             ) : (
-                <div className="workspace">
-                    {syncBadge}
-                    <section className="workspace-panel" aria-label="Your tasks">
+                <div className="data-enter">
+                    <section className="intro" aria-label="Sync status">
+                        <div className="intro-aside">{syncBadge}</div>
+                    </section>
+
+                    <section className="workspace" aria-label="Your tasks">
                         <div className="workspace-tools">
                             <label className="search-wrap">
                                 <Search size={16} aria-hidden="true" />
@@ -499,17 +512,6 @@ export function TasksPage({
                                         ? 'No tasks match this search'
                                         : `No ${category === 'home' ? 'home' : 'work'} tasks yet`}
                                 </h4>
-                                <p>
-                                    {needle
-                                        ? 'Try another phrase.'
-                                        : 'Add a task for today or choose a day from the calendar.'}
-                                </p>
-                                {!needle && (
-                                    <button type="button" className="primary-button" onClick={() => addTask(today)}>
-                                        <Plus size={15} aria-hidden="true" />
-                                        New task
-                                    </button>
-                                )}
                             </div>
                         )}
                     </section>

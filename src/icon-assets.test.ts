@@ -12,7 +12,7 @@ function artwork(svg: string) {
     return svg.slice(start, end).trim();
 }
 
-describe('Idea Notes icons', () => {
+describe('The Workbench icons', () => {
     it('uses the same bulb artwork for the favicon and installed icon', () => {
         expect(artwork(touchIcon)).toBe(artwork(favicon));
         expect(artwork(favicon)).toContain('fill="#fbbf24"');

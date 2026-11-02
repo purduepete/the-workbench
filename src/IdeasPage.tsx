@@ -8,7 +8,6 @@ import {
     Clock3,
     Lightbulb,
     Pin,
-    Plus,
     Search,
     Settings2,
     Tag,
@@ -139,7 +138,7 @@ function SolutionsDialog({ solutions, onToggle, onClose }: SolutionsDialogProps)
                 )}
                 <div className="dialog-footer">
                     <button type="button" className="secondary-button" onClick={onClose}>
-                        Cancel
+                        OK
                     </button>
                 </div>
             </div>
@@ -384,6 +383,7 @@ interface IdeaCardProps {
     idea: Idea;
     solutions: Solution[];
     onEdit: (idea: Idea) => void;
+    onCreateTask: (title: string, body: string) => void;
     onTogglePin: (idea: Idea) => void;
     onToggleArchive: (idea: Idea) => void;
     onSelectTag: (tag: string) => void;
@@ -394,6 +394,7 @@ function IdeaCard({
     idea,
     solutions,
     onEdit,
+    onCreateTask,
     onTogglePin,
     onToggleArchive,
     onSelectTag,
@@ -471,9 +472,19 @@ function IdeaCard({
                     <Clock3 size={12} aria-hidden="true" />
                     <time dateTime={idea.updatedAt}>{formatIdeaTimestamp(idea.updatedAt)}</time>
                 </span>
-                <button type="button" className="edit-button" onClick={() => onEdit(idea)}>
-                    Edit
-                </button>
+                <div className="card-actions">
+                    <button
+                        type="button"
+                        className="edit-button"
+                        aria-label={`Create task from ${idea.title}`}
+                        onClick={() => onCreateTask(idea.title, idea.body)}
+                    >
+                        Create task
+                    </button>
+                    <button type="button" className="edit-button" onClick={() => onEdit(idea)}>
+                        Edit
+                    </button>
+                </div>
             </div>
         </article>
     );
@@ -486,6 +497,7 @@ export interface IdeasPageProps {
     syncBadge: ReactNode;
     editingIdea: Idea | null | undefined;
     setEditingIdea: (idea: Idea | null | undefined) => void;
+    onCreateTask: (title: string, body: string) => void;
     onDraftProtectionChange: (protectedDraft: boolean) => void;
 }
 
@@ -496,6 +508,7 @@ export function IdeasPage({
     syncBadge,
     editingIdea,
     setEditingIdea,
+    onCreateTask,
     onDraftProtectionChange,
 }: IdeasPageProps) {
     const { storageWarning: themeStorageWarning } = useTheme();
@@ -692,6 +705,7 @@ export function IdeasPage({
                                         idea={idea}
                                         solutions={solutions}
                                         onEdit={setEditingIdea}
+                                        onCreateTask={onCreateTask}
                                         onTogglePin={(target) => updateIdea(target, { pinned: !target.pinned })}
                                         onToggleArchive={(target) => updateIdea(target, { archived: !target.archived })}
                                         onSelectTag={(tag) => {
@@ -714,27 +728,8 @@ export function IdeasPage({
                                           ? 'Nothing pinned yet'
                                           : view === 'archived'
                                             ? 'Your archive is clear'
-                                            : 'Your idea space is ready'}
+                                            : 'No ideas yet'}
                                 </h4>
-                                <p>
-                                    {filtering
-                                        ? 'Try another phrase or clear the tag and solution filters.'
-                                        : view === 'pinned'
-                                          ? 'Pin the thoughts you want to keep within easy reach.'
-                                          : view === 'archived'
-                                            ? 'Ideas you archive will be kept here until you restore them.'
-                                            : 'Start with a quick note. Add the context now, and sort it out later.'}
-                                </p>
-                                {!filtering && view === 'all' && (
-                                    <button
-                                        type="button"
-                                        className="primary-button"
-                                        onClick={() => setEditingIdea(null)}
-                                    >
-                                        <Plus size={15} aria-hidden="true" />
-                                        Capture your first idea
-                                    </button>
-                                )}
                             </div>
                         )}
                     </section>
