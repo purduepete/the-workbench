@@ -85,6 +85,8 @@ self.addEventListener('fetch', (event) => {
     const url = new URL(request.url);
     if (request.method !== 'GET') return;
     if (url.origin === self.location.origin && url.pathname.startsWith('/api/')) return;
+    // OAuth responses must never be replaced by the offline app shell or cached.
+    if (url.origin === self.location.origin && url.pathname === '/onedrive-auth.html') return;
 
     if (url.origin === self.location.origin && request.mode === 'navigate') {
         event.respondWith(

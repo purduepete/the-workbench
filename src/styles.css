@@ -1364,6 +1364,68 @@ form.idea-form > .field-group:first-child {
     text-underline-offset: 2px;
 }
 
+.image-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 14px;
+    margin-top: 8px;
+}
+
+.image-links a {
+    color: var(--accent);
+    overflow-wrap: anywhere;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
+.image-thumbnail,
+.image-thumbnail > a {
+    display: inline-flex;
+    flex-direction: column;
+    gap: 6px;
+    max-width: 100%;
+    vertical-align: top;
+}
+
+.image-thumbnail {
+    margin: 4px 8px 4px 0;
+    overflow-wrap: anywhere;
+}
+
+.image-thumbnail img {
+    display: block;
+    width: 120px;
+    height: 90px;
+    object-fit: contain;
+    border: 1px solid var(--border);
+    background: var(--input);
+}
+
+.image-link-editor {
+    min-width: 0;
+}
+
+.image-link-fields {
+    display: grid;
+    gap: 10px;
+    margin-top: 8px;
+    padding: 12px;
+    border: 1px solid var(--border);
+    background: var(--input);
+}
+
+.image-link-browse,
+.image-link-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+}
+
+.image-link-actions {
+    justify-content: flex-end;
+}
+
 .markdown-body code {
     padding: 0.1em 0.3em;
     background: var(--input);
@@ -1517,7 +1579,12 @@ form.idea-form > .field-group:first-child {
     display: flex;
     align-items: center;
     justify-content: space-between;
+    flex-wrap: wrap;
     gap: 10px;
+}
+
+.markdown-editor-toolbar .image-link-editor:has(.image-link-fields) {
+    flex-basis: 100%;
 }
 
 .markdown-mode {
@@ -1853,6 +1920,10 @@ form.idea-form > .field-group:first-child {
     .editor-dialog .editor-body {
         flex: 1;
         grid-template-rows: auto minmax(150px, 1fr);
+    }
+
+    .editor-dialog .image-link-body {
+        grid-template-rows: auto minmax(150px, 1fr) auto;
     }
 
     .editor-dialog .editor-body .journal-textarea {

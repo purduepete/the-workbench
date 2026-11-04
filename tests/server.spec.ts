@@ -33,6 +33,57 @@ test('restores the theme from the server cookie when localStorage is cleared', a
     await expect(page.getByRole('button', { name: 'Theme: Light' })).toBeVisible();
 });
 
+test('OneDrive runtime settings allow only the configured Microsoft endpoints and serve an isolated callback', async () => {
+    const port = 4192;
+    const origin = `http://127.0.0.1:${port}`;
+    const clientId = 'c0a99a60-f88b-4c7a-b373-af219b450399';
+    const child = spawn(process.execPath, ['dist-server/server/main.js'], {
+        env: {
+            ...process.env,
+            STORAGE_BACKEND: 'memory',
+            PORT: String(port),
+            ALLOWED_ORIGINS: origin,
+            ONEDRIVE_CLIENT_ID: clientId,
+            ONEDRIVE_TENANT_ID: 'consumers',
+            ONEDRIVE_BASE_URL: 'https://onedrive.live.com/picker',
+        },
+        stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    const exited = new Promise((resolve) => child.on('exit', resolve));
+    try {
+        await expect
+            .poll(async () => (await fetch(`${origin}/api/health`).catch(() => null))?.status ?? 0, {
+                timeout: 10_000,
+            })
+            .toBe(200);
+        const response = await fetch(`${origin}/api/onedrive`);
+        expect(await response.json()).toEqual({
+            configuration: { clientId, tenantId: 'consumers', baseUrl: 'https://onedrive.live.com/picker' },
+        });
+        const csp = response.headers.get('content-security-policy');
+        expect(csp).toContain(
+            "connect-src 'self' https://login.microsoftonline.com https://onedrive.live.com https://api.onedrive.com"
+        );
+        expect(csp).toContain("form-action 'self' https://onedrive.live.com");
+        expect(csp?.split('; ').find((directive) => directive.startsWith('connect-src'))).not.toContain(
+            '*.sharepoint.com'
+        );
+        expect(csp?.split('; ').find((directive) => directive.startsWith('img-src'))).toContain(
+            'https://*.sharepoint.com'
+        );
+        const callback = await fetch(`${origin}/onedrive-auth.html`);
+        expect(callback.status).toBe(200);
+        expect(callback.headers.get('cache-control')).toBe('no-store');
+        const html = await callback.text();
+        expect(html).toContain('Microsoft sign-in | The Workbench');
+        expect(html).not.toContain('<script');
+        expect(html).not.toContain('id="root"');
+    } finally {
+        child.kill();
+        await exited;
+    }
+});
+
 test('reopens offline, keeps edits, and syncs them once on reconnect', async ({ page, context }) => {
     await page.goto('/');
     await page.evaluate(() => navigator.serviceWorker.ready);

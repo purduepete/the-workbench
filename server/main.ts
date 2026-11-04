@@ -6,6 +6,7 @@ import { createApp } from './app.js';
 import { createSolutionSource } from './solutions.js';
 import { MemoryIdeasStore, PostgresIdeasStore } from './store.js';
 import type { IdeasStore } from './store.js';
+import { oneDriveConfig } from '../shared/oneDrive.js';
 
 const backend = process.env.STORAGE_BACKEND;
 // "memory" exists for local end-to-end tests only; the deployed manifest pins postgresql.
@@ -25,13 +26,17 @@ const html = readFileSync(resolve('dist', 'index.html'), 'utf8');
 const hashes = [...html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)]
     .filter((match) => match[1].trim())
     .map((match) => `'sha256-${createHash('sha256').update(match[1]).digest('base64')}'`);
+const oneDrive = oneDriveConfig(process.env);
+const oneDriveOrigin = oneDrive ? new URL(oneDrive.baseUrl).origin : '';
 const csp = [
     "default-src 'self'",
     `script-src 'self' ${hashes.join(' ')}`,
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     "font-src 'self' https://fonts.gstatic.com",
-    "img-src 'self' data:",
-    "connect-src 'self'",
+    "img-src 'self' data: https://*.files.1drv.com https://*.files.1drvusercontent.com https://*.storage.live.com https://*.sharepoint.com https://*.svc.ms",
+    `connect-src 'self'${oneDrive ? ` https://login.microsoftonline.com ${oneDriveOrigin}${oneDrive.tenantId === 'consumers' ? ' https://api.onedrive.com' : ''}` : ''}`,
+    `frame-src 'self'${oneDrive ? ' https://login.microsoftonline.com' : ''}`,
+    `form-action 'self'${oneDrive ? ` ${oneDriveOrigin}` : ''}`,
     "worker-src 'self'",
     "manifest-src 'self'",
     "object-src 'none'",
@@ -56,6 +61,7 @@ const app = createApp({
     solutions: createSolutionSource(process.env.SOLUTIONS_SOURCE),
     staticDirectory: resolve('dist'),
     contentSecurityPolicy: csp,
+    oneDrive,
 });
 const server = app.listen(port, '127.0.0.1', () => console.warn(`The Workbench listening on loopback port ${port}`));
 let stopping = false;

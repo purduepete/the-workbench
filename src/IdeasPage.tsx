@@ -25,6 +25,7 @@ import type { Solution } from '../shared/contracts';
 import type { useIdeasSync } from './useIdeasSync';
 import type { useSolutions } from './useSolutions';
 import { statusForSolution } from '../shared/status';
+import { ImageLinkEditor, ImageLinkedBody } from './ImageLinks';
 
 interface IdeaInput {
     title: string;
@@ -164,6 +165,7 @@ function IdeaDialog({
     const dialogRef = useRef<HTMLDialogElement>(null);
     const formRef = useRef<HTMLFormElement>(null);
     const titleRef = useRef<HTMLInputElement>(null);
+    const bodyRef = useRef<HTMLTextAreaElement>(null);
     const returnFocusRef = useRef(document.activeElement instanceof HTMLElement ? document.activeElement : null);
     const isAppleTouchDevice =
         /iPhone|iPad|iPod/i.test(navigator.userAgent) ||
@@ -278,16 +280,21 @@ function IdeaDialog({
                         required
                     />
                 </label>
-                <label className="field-group editor-body">
-                    <span className="field-label">Details</span>
+                <div className="field-group editor-body image-link-body">
+                    <label className="field-label" htmlFor="idea-body">
+                        Details
+                    </label>
                     <textarea
+                        id="idea-body"
+                        ref={bodyRef}
                         className="field-textarea"
                         name="body"
                         maxLength={5000}
                         placeholder="Add context, questions, links, or the next step..."
                         defaultValue={idea?.body ?? ''}
                     />
-                </label>
+                    <ImageLinkEditor bodyRef={bodyRef} />
+                </div>
                 <label className="field-group">
                     <span className="field-label">Tags</span>
                     <input
@@ -452,7 +459,7 @@ function IdeaCard({
                     </span>
                 </div>
             )}
-            {idea.body && <p className="idea-body">{idea.body}</p>}
+            {idea.body && <ImageLinkedBody body={idea.body} className="idea-body" />}
             <div className="idea-tags">
                 {idea.tags.map((tag) => (
                     <button

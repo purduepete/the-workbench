@@ -7,6 +7,9 @@ import remarkGfm from 'remark-gfm';
 import type { Root, RootContent } from 'mdast';
 import type { Plugin } from 'unified';
 import { ChevronDown, Info, Plus } from 'lucide-react';
+import { ImageLinkEditor } from './ImageLinks';
+import { OneDriveThumbnail } from './OneDriveThumbnail';
+import { oneDriveImageUrl } from './oneDriveLinks';
 
 interface NoteSection {
     type: 'noteSection';
@@ -103,6 +106,16 @@ export function MarkdownNoteBody({ body, className = 'markdown-body' }: { body: 
                 components={{
                     a: ({ href, children }) => {
                         const safeHref = allowedMarkdownUrl(href ?? '', 'href');
+                        if (oneDriveImageUrl(safeHref)) {
+                            return (
+                                <OneDriveThumbnail
+                                    href={safeHref}
+                                    label={
+                                        typeof children === 'string' ? children : Children.toArray(children).join('')
+                                    }
+                                />
+                            );
+                        }
                         return safeHref ? (
                             <a href={safeHref} target="_blank" rel="noopener noreferrer">
                                 {children}
@@ -359,6 +372,7 @@ export function MarkdownNoteEditor({
                         Add section
                     </button>
                 )}
+                {mode === 'edit' && <ImageLinkEditor bodyRef={bodyRef} />}
             </div>
             <textarea
                 ref={bodyRef}

@@ -69,6 +69,12 @@ afterAll(async () => {
 });
 
 describe('request guards', () => {
+    it('reports unconfigured OneDrive without exposing environment values', async () => {
+        const response = await fetch(`${origin}/api/onedrive`);
+        expect(response.status).toBe(200);
+        expect(await response.json()).toEqual({ configuration: null });
+    });
+
     it('rejects writes without an allowed origin, JSON body or same-site request', async () => {
         const mutation = create('Guarded');
         expect((await post('/api/mutations', mutation, { Origin: 'https://evil.example' })).status).toBe(403);

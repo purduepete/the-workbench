@@ -62,6 +62,69 @@ the browser tests against the server on port 4180.
 
 ## Notes
 
+Ideas, journal/global notes and tasks have an **Add image link** button. Enter an optional
+image label, sign in, then use **Browse OneDrive** to select an image. Selection inserts
+the image link directly; there is no separate URL field or Insert link button.
+Personal OneDrive and work/school SharePoint links are supported. The image stays in
+OneDrive and opens in a new tab with its existing permissions; no file is uploaded or
+made public. Links are stored as Markdown in the existing body text and work offline
+as saved references, but opening the image requires a connection. To remove a link,
+delete its `[label](url)` text in the editor.
+
+Image links show a 120 x 90 thumbnail in saved ideas, notes and tasks, including
+the note editor's Preview mode, while signed in to OneDrive. Click the thumbnail
+or label to open the original. Use **Sign in for thumbnail** after a reload.
+Thumbnails are requested with read-only Microsoft access; neither image bytes nor
+temporary thumbnail URLs are saved in the body or database. OneDrive permissions
+remain unchanged. Offline, expired access and unavailable previews show an
+explanation beside the original link. A pasted link must be accessible to the
+signed-in OneDrive account.
+
+### Browse OneDrive setup
+
+The same editor can browse OneDrive using Microsoft's v8 file picker. Sign in to
+OneDrive, then choose **Browse OneDrive**, select an image and choose **Use image**.
+The image's name and existing file URL are inserted into the body. This selects
+an existing file; it does not upload files or create/change sharing permissions.
+Recipients still need permission to open the image. Canceling leaves the body unchanged.
+Browsing needs a connection, pop-ups and Microsoft consent. Paste-link entry remains
+available by writing `[label](url)` directly in the body when browsing is unavailable.
+
+Register a Microsoft Entra application for the OneDrive account you intend to use.
+For personal OneDrive, allow personal Microsoft accounts and add delegated Microsoft
+Graph `Files.Read` permission. The consumer picker requests `OneDrive.ReadOnly`.
+For work/school OneDrive, use that account's tenant and add delegated SharePoint
+`MyFiles.Read` permission. No client secret or application-level permission is needed.
+The registration's supported account types must match the configured tenant.
+
+Add these **Single-page application** redirect URIs (not Web redirects):
+
+- `http://127.0.0.1:4181/onedrive-auth.html` for the local review preview.
+- `http://127.0.0.1:4179/onedrive-auth.html` for Vite development.
+- `https://the-workbench.jimlertech.com/onedrive-auth.html`.
+- `https://jimbrownhome1.tail8ad282.ts.net:8802/onedrive-auth.html`.
+
+The deployment manifest configures the personal OneDrive application's public client ID.
+For other installations, configure the API process with
+`ONEDRIVE_CLIENT_ID=<application-client-id>`. This public identifier is not a secret.
+Personal OneDrive is the default. For work/school OneDrive also set
+`ONEDRIVE_TENANT_ID=<tenant-guid>` and
+`ONEDRIVE_BASE_URL=https://<tenant>-my.sharepoint.com` (an origin with no trailing slash).
+Restart the API to load configuration. `/api/onedrive` exposes only these public picker
+settings, never credentials. The CSP permits only the configured OneDrive origin,
+Microsoft's sign-in endpoint and the consumer file-metadata endpoint. Without
+configuration it retains same-origin network restrictions.
+
+Microsoft tokens stay in the browser's in-memory MSAL cache and are sent only to
+Microsoft. They are never stored in notes, the Workbench database, browser localStorage
+or the service-worker cache. The OAuth callback bypasses offline shell caching.
+The signed-in session is shared by all image editors and thumbnails until the page
+is reloaded or closed. Closing a note, reopening it, or switching between ideas,
+notes and tasks does not require another sign-in.
+When a sign-in expires, sign in again before browsing. Real-account acceptance requires
+selecting and reopening a private image after configuring the registration, including
+on the intended iPhone/iPad and both production access paths.
+
 The header's `Ideas | Notes | Tasks` control switches between pages. `/notes` is a personal journal with one entry per
 local day. Journal and global note bodies support Markdown, including headings, lists, tables and links. The info button
 beside the entry label shows syntax examples. Use the Edit / Preview control while writing. **Add section** inserts a

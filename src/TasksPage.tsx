@@ -20,6 +20,7 @@ import { readTaskCategory, writeTaskCategory } from './tasksSync';
 import { useEditorDismissal } from './useEditorDismissal';
 import { useTheme } from './ThemeContext';
 import type { useTasksSync } from './useTasksSync';
+import { ImageLinkEditor, ImageLinkedBody } from './ImageLinks';
 
 export interface TaskEditorTarget {
     id: string;
@@ -78,6 +79,7 @@ function TaskDialog({
     const dialogRef = useRef<HTMLDialogElement>(null);
     const formRef = useRef<HTMLFormElement>(null);
     const titleRef = useRef<HTMLInputElement>(null);
+    const bodyRef = useRef<HTMLTextAreaElement>(null);
     const returnFocusRef = useRef(
         target.initialTitle !== undefined
             ? document.querySelector<HTMLElement>('.top-actions [aria-label="New task"]')
@@ -182,16 +184,21 @@ function TaskDialog({
                         placeholder="What needs doing?"
                     />
                 </label>
-                <label className="field-group editor-body">
-                    <span className="field-label">Details</span>
+                <div className="field-group editor-body image-link-body">
+                    <label className="field-label" htmlFor="task-body">
+                        Details
+                    </label>
                     <textarea
+                        id="task-body"
+                        ref={bodyRef}
                         className="field-textarea journal-textarea"
                         name="body"
                         maxLength={taskLimits.body}
                         defaultValue={initialBody}
                         placeholder="Optional details..."
                     />
-                </label>
+                    <ImageLinkEditor bodyRef={bodyRef} />
+                </div>
                 <div className="field-group">
                     <span className="field-label">Section</span>
                     <TaskCategories label="Task category" value={section} onChange={setSection} />
@@ -279,7 +286,7 @@ function TaskRow({
             />
             <div className="task-text">
                 <h5 className="task-title">{task.title}</h5>
-                {task.body && <p className="task-body">{task.body}</p>}
+                {task.body && <ImageLinkedBody body={task.body} className="task-body" />}
             </div>
             <button
                 type="button"

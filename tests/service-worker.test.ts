@@ -71,6 +71,16 @@ function worker() {
 }
 
 describe('offline shell', () => {
+    it('does not cache or replace Microsoft sign-in callbacks with the app shell', async () => {
+        const app = worker();
+        await app.emit('install');
+        const request = new Request(`${origin}/onedrive-auth.html`);
+        Object.defineProperty(request, 'mode', { value: 'navigate' });
+        app.fetch.mockClear();
+        expect(await app.emit('fetch', request)).toBeUndefined();
+        expect(app.fetch).not.toHaveBeenCalled();
+    });
+
     it('caches all entry assets and both icons on installation, before an online reload', async () => {
         const app = worker();
         await app.emit('install');

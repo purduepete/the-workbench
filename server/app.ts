@@ -16,6 +16,7 @@ import { JournalOverflowError } from '../shared/journal.js';
 import { taskMutationSchema, taskQuerySchema } from '../shared/tasks.js';
 import type { SolutionSource } from './solutions.js';
 import type { IdeasStore } from './store.js';
+import type { OneDriveConfig } from '../shared/oneDrive.js';
 
 export function createApp(options: {
     store: IdeasStore;
@@ -23,6 +24,7 @@ export function createApp(options: {
     solutions?: SolutionSource;
     staticDirectory?: string;
     contentSecurityPolicy?: string;
+    oneDrive?: OneDriveConfig | null;
 }) {
     const app = express();
     app.disable('x-powered-by');
@@ -67,6 +69,9 @@ export function createApp(options: {
             console.error('Readiness failed:', error instanceof Error ? error.message : 'Unknown storage failure');
             res.status(503).json({ ok: false, error: 'Database unavailable or schema not initialized.' });
         }
+    });
+    app.get('/api/onedrive', (_req, res) => {
+        res.json({ configuration: options.oneDrive ?? null });
     });
     app.get('/api/ideas', async (req, res) => {
         const query = ideaQuerySchema.safeParse(req.query);
