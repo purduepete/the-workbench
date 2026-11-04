@@ -1,4 +1,72 @@
 import { expect, test } from '@playwright/test';
+import type { Locator } from '@playwright/test';
+
+async function expectMarkerPainted(item: Locator) {
+    await item.scrollIntoViewIfNeeded();
+    const box = await item.boundingBox();
+    if (!box) throw new Error('List item is not visible.');
+    const font = await item.evaluate((element) => {
+        const style = getComputedStyle(element);
+        return { size: parseFloat(style.fontSize), line: parseFloat(style.lineHeight) };
+    });
+    const x = Math.max(0, Math.floor(box.x - 1.5 * font.size));
+    const width = Math.floor(box.x) - x - 1;
+    if (width <= 0 || !Number.isFinite(font.line)) throw new Error('List marker has no visible area.');
+    const screenshot = await item.page().screenshot({
+        animations: 'disabled',
+        clip: { x, y: Math.max(0, Math.floor(box.y)), width, height: Math.ceil(Math.min(box.height, font.line)) },
+    });
+    const visiblePixels = await item.page().evaluate(async (encoded) => {
+        const bytes = Uint8Array.from(atob(encoded), (char) => char.charCodeAt(0));
+        const image = await createImageBitmap(new Blob([bytes], { type: 'image/png' }));
+        const canvas = document.createElement('canvas');
+        canvas.width = image.width;
+        canvas.height = image.height;
+        const context = canvas.getContext('2d');
+        if (!context) throw new Error('Canvas is unavailable.');
+        context.drawImage(image, 0, 0);
+        const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
+        let count = 0;
+        for (let i = 4; i < pixels.length; i += 4) {
+            const difference = Math.max(
+                Math.abs(pixels[i] - pixels[0]),
+                Math.abs(pixels[i + 1] - pixels[1]),
+                Math.abs(pixels[i + 2] - pixels[2])
+            );
+            if (difference > 50) count++;
+        }
+        return count;
+    }, screenshot.toString('base64'));
+    expect(visiblePixels).toBeGreaterThan(1);
+}
+
+async function expectMarkdownListMarkers(container: Locator) {
+    const list = container.locator('ul').first();
+    const outer = list.locator(':scope > li').first();
+    const nested = outer.locator('ul').first().locator(':scope > li').first();
+    const deep = nested.locator('ul').first().locator(':scope > li').first();
+    const numbered = container.locator('ol').first();
+    await expect(numbered).toHaveAttribute('start', '3');
+
+    for (const [item, style] of [
+        [outer, 'disc'],
+        [nested, 'circle'],
+        [deep, 'square'],
+        [numbered.locator(':scope > li').first(), 'decimal'],
+    ] as const) {
+        await expect(item).toHaveCSS('display', 'list-item');
+        await expect(item).toHaveCSS('list-style-type', style);
+        const marker = await item.evaluate((element) => ({
+            content: getComputedStyle(element, '::marker').content,
+            color: getComputedStyle(element, '::marker').color,
+            textColor: getComputedStyle(element).color,
+        }));
+        expect(marker.content).toBe('normal');
+        expect(marker.color).toBe(marker.textColor);
+    }
+    await expectMarkerPainted(outer);
+    await expectMarkerPainted(numbered.locator(':scope > li').first());
+}
 
 test('global note comes before calendar on phone and desktop', async ({ page }) => {
     await page.goto('/notes');
@@ -340,6 +408,49 @@ test('journal notes preview Markdown safely and preserve edits when saved', asyn
         'https://example.com/reference'
     );
 });
+
+for (const { theme, width } of [
+    { theme: 'midnight', width: 1280 },
+    { theme: 'light', width: 390 },
+]) {
+    test(`Markdown lists retain markers in note previews and saved notes in ${theme}`, async ({ page }) => {
+        await page.addInitScript((value) => localStorage.setItem('the-workbench.theme-preference', value), theme);
+        await page.setViewportSize({ width, height: 900 });
+        await page.goto('/notes');
+        await page.addStyleTag({ content: 'ul, ol, li { list-style: none; } li::marker { content: ""; }' });
+
+        const markdown = [
+            'Questions:',
+            '- First item',
+            '  - Nested item',
+            '    - Deep item',
+            '- Second item',
+            '',
+            '3. Third item',
+            '4. Fourth item',
+        ].join('\n');
+        const title = `List markers ${theme}`;
+        await page.getByRole('button', { name: 'Global note', exact: true }).click();
+        let dialog = page.getByRole('dialog');
+        await dialog.locator('input[name="title"]').fill(title);
+        await dialog.locator('textarea[name="body"]').fill(markdown);
+        await dialog.getByRole('button', { name: 'Preview', exact: true }).click();
+        await expectMarkdownListMarkers(dialog.locator('.markdown-editor-preview'));
+        await dialog.getByRole('button', { name: 'Save note' }).click();
+        await expect(dialog).toBeHidden();
+        await page.getByRole('button', { name: 'Global notes', exact: true }).click();
+        await expectMarkdownListMarkers(page.locator('.global-note-card').filter({ hasText: title }));
+
+        await page.getByRole('button', { name: 'New note', exact: true }).click();
+        dialog = page.getByRole('dialog');
+        await dialog.locator('textarea[name="body"]').fill(markdown);
+        await dialog.getByRole('button', { name: 'Preview', exact: true }).click();
+        await expectMarkdownListMarkers(dialog.locator('.markdown-editor-preview'));
+        await dialog.getByRole('button', { name: 'Save entry' }).click();
+        await expect(dialog).toBeHidden();
+        await expectMarkdownListMarkers(page.locator('.journal-card').first());
+    });
+}
 
 test('note editor keeps its existing phone width', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });

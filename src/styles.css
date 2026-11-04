@@ -1339,6 +1339,17 @@ form.idea-form > .field-group:first-child {
 .markdown-body ul,
 .markdown-body ol {
     padding-left: 1.5em;
+    list-style: revert;
+}
+
+.markdown-body li {
+    display: list-item;
+    list-style: inherit;
+}
+
+.markdown-body li::marker {
+    color: currentColor;
+    content: normal;
 }
 
 .markdown-body blockquote {
