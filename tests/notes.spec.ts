@@ -27,6 +27,60 @@ test('empty pages omit the long instructional copy', async ({ page }) => {
     }
 });
 
+for (const device of [
+    { name: 'desktop', platform: 'Win32', userAgent: 'Mozilla/5.0 Windows NT 10.0', maxTouchPoints: 0, touch: false },
+    {
+        name: 'iPhone',
+        platform: 'iPhone',
+        userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0)',
+        maxTouchPoints: 5,
+        touch: true,
+    },
+    { name: 'iPad', platform: 'iPad', userAgent: 'Mozilla/5.0 (iPad; CPU OS 18_0)', maxTouchPoints: 5, touch: true },
+    {
+        name: 'desktop-UA iPad',
+        platform: 'MacIntel',
+        userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15)',
+        maxTouchPoints: 5,
+        touch: true,
+    },
+]) {
+    test(`note editors keep the expected opening focus on ${device.name}`, async ({ page }) => {
+        await page.addInitScript(({ platform, userAgent, maxTouchPoints }) => {
+            Object.defineProperty(navigator, 'platform', { value: platform });
+            Object.defineProperty(navigator, 'userAgent', { value: userAgent });
+            Object.defineProperty(navigator, 'maxTouchPoints', { value: maxTouchPoints });
+        }, device);
+        await page.goto('/notes');
+        await page.evaluate(() => {
+            document.addEventListener('focusin', (event) => {
+                if (
+                    event.target instanceof Element &&
+                    event.target.matches('dialog input, dialog textarea, dialog [contenteditable]')
+                ) {
+                    document.documentElement.dataset.noteInputFocused = 'true';
+                }
+            });
+        });
+
+        for (const editor of [
+            { button: 'New note', focus: 'Entry' },
+            { button: 'Global note', focus: 'Title' },
+        ]) {
+            await page.evaluate(() => {
+                delete document.documentElement.dataset.noteInputFocused;
+            });
+            const opener = page.getByRole('button', { name: editor.button, exact: true });
+            await opener.click();
+            const dialog = page.getByRole('dialog');
+            await expect(device.touch ? dialog : dialog.getByRole('textbox', { name: editor.focus })).toBeFocused();
+            if (device.touch) await expect(page.locator('html')).not.toHaveAttribute('data-note-input-focused', 'true');
+            await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+            await expect(opener).toBeFocused();
+        }
+    });
+}
+
 for (const theme of ['midnight', 'light']) {
     test(`notes page saves today's entry and keeps it after reload in ${theme}`, async ({ page }) => {
         await page.addInitScript((value) => localStorage.setItem('the-workbench.theme-preference', value), theme);
@@ -122,7 +176,7 @@ test('editors keep text open through Escape, backdrop and browser Back', async (
     const dialog = page.getByRole('dialog');
     await expect(dialog.locator('.dialog-close')).toHaveCount(0);
     const initialBox = await dialog.boundingBox();
-    expect(initialBox?.width).toBeCloseTo(960, 0);
+    expect(initialBox?.width).toBeCloseTo(1100, 0);
     const body = dialog.locator('textarea[name="body"]');
     await body.fill('Draft text must stay open');
 
@@ -145,12 +199,258 @@ test('editors keep text open through Escape, backdrop and browser Back', async (
     const ideaDialog = page.getByRole('dialog', { name: 'New idea' });
     await expect(ideaDialog).toHaveJSProperty('open', true);
     const ideaBox = await ideaDialog.boundingBox();
-    expect(ideaBox?.width).toBeCloseTo(960, 0);
+    expect(ideaBox?.width).toBeCloseTo(1100, 0);
     await ideaDialog.locator('input[name="title"]').fill('Protected idea');
     for (let index = 0; index < 3; index += 1) await ideaDialog.locator('input[name="title"]').press('Escape');
     await expect(ideaDialog).toBeVisible();
     await ideaDialog.getByRole('button', { name: 'Cancel' }).click();
     await expect(ideaDialog).toBeHidden();
+});
+
+test('idea, note and task editors share the same desktop height', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    const editors = [
+        { path: '/', open: 'New idea', save: 'Save idea', markdown: false },
+        { path: '/notes', open: 'New note', save: 'Save entry', markdown: true },
+        { path: '/notes', open: 'Global note', save: 'Save note', markdown: true },
+        { path: '/tasks', open: 'New task', save: 'Save task', markdown: false },
+    ];
+
+    for (const viewport of [
+        { width: 1280, height: 480 },
+        { width: 1280, height: 720 },
+        { width: 1280, height: 900 },
+        { width: 1920, height: 1080 },
+    ]) {
+        await page.setViewportSize(viewport);
+        for (const editor of editors) {
+            await page.goto(editor.path);
+            await page.getByRole('button', { name: editor.open, exact: true }).first().click();
+            const dialog = page.getByRole('dialog');
+            const body = dialog.locator('textarea[name="body"]');
+            const save = dialog.getByRole('button', { name: editor.save, exact: true });
+            const dialogBox = await dialog.boundingBox();
+            const bodyBox = await body.boundingBox();
+            const saveBox = await save.boundingBox();
+            if (!dialogBox || !bodyBox || !saveBox) throw new Error(`${editor.open} controls are missing.`);
+            expect(dialogBox.height).toBeCloseTo(Math.min(960, viewport.height * 0.92), 0);
+            expect(bodyBox.height).toBeGreaterThanOrEqual(150);
+            expect(bodyBox.y + bodyBox.height).toBeLessThanOrEqual(saveBox.y);
+            const overflow = await dialog.evaluate((element) => element.scrollHeight - element.clientHeight);
+            if (viewport.height === 480) {
+                expect(overflow).toBeGreaterThan(0);
+                await save.scrollIntoViewIfNeeded();
+                const visibleSaveBox = await save.boundingBox();
+                if (!visibleSaveBox) throw new Error(`${editor.open} save button is missing.`);
+                expect(visibleSaveBox.y + visibleSaveBox.height).toBeLessThanOrEqual(dialogBox.y + dialogBox.height);
+            } else {
+                expect(overflow).toBeLessThanOrEqual(1);
+                expect(saveBox.y + saveBox.height).toBeLessThanOrEqual(dialogBox.y + dialogBox.height);
+            }
+
+            if (editor.markdown) {
+                const text = Array(40).fill('A paragraph.').join('\n\n');
+                await body.fill(text);
+                await dialog.getByRole('button', { name: 'Preview', exact: true }).click();
+                expect((await dialog.boundingBox())?.height).toBeCloseTo(dialogBox.height, 0);
+                const preview = dialog.locator('.markdown-editor-preview');
+                await expect(preview).toHaveCSS('overflow-y', 'auto');
+                expect(await preview.evaluate((element) => element.scrollHeight)).toBeGreaterThan(
+                    await preview.evaluate((element) => element.clientHeight)
+                );
+                const previewBox = await preview.boundingBox();
+                const previewSaveBox = await save.boundingBox();
+                if (!previewBox || !previewSaveBox) throw new Error(`${editor.open} preview controls are missing.`);
+                expect(previewBox.y + previewBox.height).toBeLessThanOrEqual(previewSaveBox.y);
+                await save.scrollIntoViewIfNeeded();
+                const visibleSaveBox = await save.boundingBox();
+                if (!visibleSaveBox) throw new Error(`${editor.open} save button is missing.`);
+                expect(visibleSaveBox.y + visibleSaveBox.height).toBeLessThanOrEqual(dialogBox.y + dialogBox.height);
+                await dialog.getByRole('button', { name: 'Edit', exact: true }).click();
+                await expect(body).toHaveValue(text);
+            }
+            await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+        }
+    }
+});
+
+test('journal notes preview Markdown safely and preserve edits when saved', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.goto('/notes');
+    await page.getByRole('button', { name: 'New note', exact: true }).click();
+    const dialog = page.getByRole('dialog');
+    const body = dialog.locator('textarea[name="body"]');
+    const markdown = [
+        'A **bold** note.',
+        '',
+        '- first item',
+        '- second item',
+        '',
+        '[Safe](https://example.com)',
+        '[bad](javascript:alert(1))',
+        '[data](data:text/html,hi)',
+        '',
+        '<script>alert(1)</script>',
+        '',
+        '## First section',
+        '[Cross-section][reference]',
+        '',
+        '## Second section',
+        '',
+        '## Code sample',
+        '```md',
+        '## not a section',
+        '```',
+        '',
+        '[reference]: https://example.com/reference',
+    ].join('\n');
+
+    await body.fill(markdown);
+    await dialog.getByRole('button', { name: 'Preview' }).click();
+    const preview = dialog.locator('.markdown-editor-preview');
+    await expect(preview.getByText('bold', { exact: true })).toBeVisible();
+    await expect(preview.locator('ul li')).toHaveCount(2);
+    await expect(preview.getByRole('link', { name: 'Safe' })).toHaveAttribute('rel', 'noopener noreferrer');
+    await expect(preview.getByRole('link', { name: 'Cross-section' })).toHaveAttribute(
+        'href',
+        'https://example.com/reference'
+    );
+    await expect(preview.getByRole('link', { name: 'bad' })).toHaveCount(0);
+    await expect(preview.getByRole('link', { name: 'data' })).toHaveCount(0);
+    await expect(preview).toContainText('<script>alert(1)</script>');
+    await expect(preview.locator('script')).toHaveCount(0);
+    await expect(preview.getByRole('button', { name: 'First section' })).toHaveCount(1);
+    await expect(preview.getByRole('button', { name: 'Second section' })).toHaveCount(1);
+    await expect(preview.getByRole('button', { name: 'Code sample' })).toHaveCount(1);
+    await expect(preview.getByRole('button', { name: 'not a section' })).toHaveCount(0);
+
+    const firstSection = preview.getByRole('button', { name: 'First section' });
+    await firstSection.press('Enter');
+    await expect(firstSection).toHaveAttribute('aria-expanded', 'false');
+    await expect(preview.getByRole('link', { name: 'Cross-section' })).toBeHidden();
+    await firstSection.press('Space');
+    await expect(preview.getByRole('link', { name: 'Cross-section' })).toBeVisible();
+
+    await dialog.getByRole('button', { name: 'Edit' }).click();
+    await expect(body).toHaveValue(markdown);
+    await dialog.getByRole('button', { name: 'Save entry' }).click();
+    await expect(dialog).toBeHidden();
+    await expect(page.getByRole('link', { name: 'Cross-section' })).toHaveAttribute(
+        'href',
+        'https://example.com/reference'
+    );
+});
+
+test('note editor keeps its existing phone width', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto('/notes');
+    await page.getByRole('button', { name: 'New note', exact: true }).click();
+    const box = await page.getByRole('dialog').boundingBox();
+    expect(box?.width).toBeCloseTo(358, 0);
+});
+
+test('Add section inserts a heading at the editor cursor', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.goto('/notes');
+    await page.getByRole('button', { name: 'New note', exact: true }).click();
+    const dialog = page.getByRole('dialog');
+    const body = dialog.locator('textarea[name="body"]');
+    await body.fill('Before after');
+    await body.evaluate((textarea: HTMLTextAreaElement) => textarea.setSelectionRange(7, 7));
+    await dialog.getByRole('button', { name: 'Add section' }).click();
+    await expect(body).toHaveValue('Before \n## Section title\nafter');
+    await dialog.getByRole('button', { name: 'Preview' }).click();
+    await expect(dialog.getByRole('button', { name: 'Section title' })).toHaveAttribute('aria-expanded', 'true');
+});
+
+test('Markdown syntax help supports hover, keyboard and outside dismissal', async ({ page }) => {
+    await page.addInitScript(() => localStorage.setItem('the-workbench.theme-preference', 'midnight'));
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.goto('/notes');
+    await expect(page.locator('html')).toHaveClass(/theme-midnight/);
+    await page.getByRole('button', { name: 'New note', exact: true }).click();
+    const dialog = page.getByRole('dialog');
+    const help = dialog.getByRole('button', { name: 'Markdown syntax help' });
+    const tooltip = dialog.locator('.markdown-help');
+    const body = dialog.locator('textarea[name="body"]');
+    const initialHelpPosition = await help.boundingBox();
+    const initialBodyPosition = await body.boundingBox();
+
+    await expect(help).toHaveAttribute('aria-expanded', 'false');
+    await expect(help).toHaveAccessibleDescription(/Divider/);
+    await dialog.locator('.markdown-editor-label .field-label').hover();
+    await expect(help).toHaveAttribute('aria-expanded', 'false');
+    await help.hover();
+    await expect(tooltip).toBeVisible();
+    expect(await help.boundingBox()).toEqual(initialHelpPosition);
+    expect(await body.boundingBox()).toEqual(initialBodyPosition);
+    await expect(tooltip.getByText('---', { exact: true })).toBeVisible();
+    await expect(tooltip.getByText('## Section', { exact: true })).toBeVisible();
+    await tooltip.hover();
+    await expect(tooltip).toBeVisible();
+    await page.mouse.move(1, 1);
+    await expect(tooltip).toBeHidden();
+
+    await help.focus();
+    await expect(tooltip).toBeVisible();
+    await help.press('Escape');
+    await expect(tooltip).toBeHidden();
+    await expect(dialog).toBeVisible();
+    await body.focus();
+    await help.focus();
+    await page.keyboard.press('Tab');
+    await expect(tooltip).toBeHidden();
+
+    await body.fill('Draft remains');
+    await help.click();
+    await expect(help).toHaveAttribute('aria-expanded', 'true');
+    await expect(dialog.getByRole('button', { name: 'Edit', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    await body.click();
+    await expect(tooltip).toBeHidden();
+    await expect(body).toHaveValue('Draft remains');
+    await expect(dialog.locator('[title]')).toHaveCount(0);
+});
+
+test.describe('Markdown syntax help on touch', () => {
+    test.use({ hasTouch: true, isMobile: true, viewport: { width: 390, height: 844 } });
+
+    test('opens in global notes and fits the phone viewport in light mode', async ({ page }) => {
+        await page.addInitScript(() => localStorage.setItem('the-workbench.theme-preference', 'light'));
+        await page.goto('/notes');
+        await expect(page.locator('html')).toHaveClass(/light/);
+        await page.getByRole('button', { name: 'Global note', exact: true }).tap();
+        const dialog = page.getByRole('dialog', { name: 'New global note' });
+        const help = dialog.getByRole('button', { name: 'Markdown syntax help' });
+        const initialHelpPosition = await help.boundingBox();
+        await help.tap();
+        const tooltip = dialog.getByRole('tooltip');
+        await expect(tooltip).toBeVisible();
+        expect(await help.boundingBox()).toEqual(initialHelpPosition);
+        await expect(tooltip.getByText('---', { exact: true })).toBeVisible();
+        const box = await tooltip.boundingBox();
+        if (!box) throw new Error('Markdown syntax help is not visible.');
+        expect(box.x).toBeGreaterThanOrEqual(0);
+        expect(box.x + box.width).toBeLessThanOrEqual(390);
+        expect(box.y).toBeGreaterThanOrEqual(0);
+        expect(box.y + box.height).toBeLessThanOrEqual(844);
+        expect(
+            await tooltip.evaluate((element) => {
+                const bounds = element.getBoundingClientRect();
+                const hit = document.elementFromPoint(bounds.left + 5, bounds.bottom - 5);
+                return hit !== null && element.contains(hit);
+            })
+        ).toBe(true);
+        expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(
+            0
+        );
+        await help.tap();
+        await expect(help).toHaveAttribute('aria-expanded', 'false');
+        await help.tap();
+        await expect(help).toHaveAttribute('aria-expanded', 'true');
+        await dialog.locator('input[name="title"]').tap();
+        await expect(tooltip).toBeHidden();
+        await expect(dialog).toBeVisible();
+    });
 });
 
 test('global notes can be searched and reopened without pin controls', async ({ page }) => {
@@ -178,6 +478,31 @@ test('global notes can be searched and reopened without pin controls', async ({ 
     await expect(page.getByRole('dialog').locator('textarea[name="body"]')).toHaveValue('Reference for later');
     await page.getByRole('dialog').getByRole('button', { name: 'Cancel' }).click();
     await expect(page.getByRole('button', { name: `Pin ${title}` })).toHaveCount(0);
+});
+
+test('global note editor previews Markdown and submits its hidden textarea value', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto('/notes');
+    await page.getByRole('button', { name: 'Global note', exact: true }).click();
+    const dialog = page.getByRole('dialog', { name: 'New global note' });
+    const body = dialog.locator('textarea[name="body"]');
+    await dialog.locator('input[name="title"]').fill('Markdown global note');
+    await body.fill('A **global** note.');
+    await dialog.getByRole('button', { name: 'Preview' }).click();
+    await expect(dialog.locator('.markdown-editor-preview').getByText('global', { exact: true })).toBeVisible();
+    await dialog.getByRole('button', { name: 'Edit' }).click();
+    await expect(body).toHaveValue('A **global** note.');
+    await dialog.getByRole('button', { name: 'Save note' }).click();
+    await expect(dialog).toBeHidden();
+
+    await page.getByRole('button', { name: 'Global notes', exact: true }).click();
+    const card = page.locator('.global-note-card').filter({ hasText: 'Markdown global note' });
+    await expect(card.locator('strong')).toHaveText('global');
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await card.getByRole('button', { name: 'Edit Markdown global note' }).click();
+    const editDialog = page.getByRole('dialog');
+    expect((await editDialog.boundingBox())?.height).toBeCloseTo(828, 0);
+    await expect(editDialog.locator('textarea[name="body"]')).toHaveValue('A **global** note.');
 });
 
 test('modal opening fades without moving the page and calendar swaps keep the backdrop', async ({ page }) => {

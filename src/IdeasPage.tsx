@@ -278,7 +278,7 @@ function IdeaDialog({
                         required
                     />
                 </label>
-                <label className="field-group">
+                <label className="field-group editor-body">
                     <span className="field-label">Details</span>
                     <textarea
                         className="field-textarea"

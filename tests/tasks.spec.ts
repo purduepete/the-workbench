@@ -241,6 +241,7 @@ test('sync status matches Notes placement on phone and desktop', async ({ page }
 for (const theme of ['midnight', 'light']) {
     test(`tasks save, complete, move sections and fit phone/desktop in ${theme}`, async ({ page }) => {
         await page.addInitScript((value) => localStorage.setItem('the-workbench.theme-preference', value), theme);
+        await page.setViewportSize({ width: 1280, height: 900 });
         await page.goto('/');
         await page.getByRole('navigation', { name: 'Pages' }).getByRole('link', { name: 'Tasks' }).click();
         await expect(page).toHaveURL(/\/tasks$/);
@@ -253,6 +254,7 @@ for (const theme of ['midnight', 'light']) {
         await expect(checkbox).not.toBeChecked();
         await page.getByRole('button', { name: `Edit Home ${theme}` }).click();
         const dialog = page.getByRole('dialog', { name: 'Edit task', exact: true });
+        expect((await dialog.boundingBox())?.height).toBeCloseTo(828, 0);
         await dialog.getByRole('textbox', { name: 'Details' }).fill('Moved to my work list');
         await dialog.getByRole('group', { name: 'Task category' }).getByRole('button', { name: 'Work' }).click();
         await dialog.getByRole('button', { name: 'Save task' }).click();
@@ -394,7 +396,7 @@ test('task drafts require Cancel or Save and offline capture survives reload', a
     await page.getByRole('button', { name: 'New task', exact: true }).first().click();
     const dialog = page.getByRole('dialog', { name: 'New task', exact: true });
     await expect(dialog.locator('.dialog-close')).toHaveCount(0);
-    expect((await dialog.boundingBox())?.width).toBeCloseTo(960, 0);
+    expect((await dialog.boundingBox())?.width).toBeCloseTo(1100, 0);
     const body = dialog.getByRole('textbox', { name: 'Details' });
     await body.fill('Body-only protected draft');
     await body.press('Escape');

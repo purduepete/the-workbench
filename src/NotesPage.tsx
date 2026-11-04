@@ -9,6 +9,7 @@ import { CalendarDialog } from './CalendarDialog';
 import { NoteGroup } from './NoteGroup';
 import type { GlobalNote } from './globalNotesSync';
 import { PageLoading } from './Loading';
+import { MarkdownNoteBody, MarkdownNoteEditor } from './MarkdownNote';
 import { useTheme } from './ThemeContext';
 import type { useJournalSync } from './useJournalSync';
 import type { useGlobalNotesSync } from './useGlobalNotesSync';
@@ -48,7 +49,6 @@ function JournalDialog({
     useLayoutEffect(() => {
         const dialog = dialogRef.current;
         const returnFocus = returnFocusRef.current;
-        // React ignores autoFocus on forms; set it before showModal so iPad does not raise the keyboard.
         formRef.current?.toggleAttribute('autofocus', isAppleTouchDevice);
         if (dialog && !dialog.open) dialog.showModal();
         if (isAppleTouchDevice) dialog?.focus({ preventScroll: true });
@@ -132,18 +132,15 @@ function JournalDialog({
                         <h2 id="journal-dialog-title">Entry for {formatEntryDate(entryDate)}</h2>
                     </div>
                 </div>
-                <label className="field-group">
-                    <span className="field-label">Entry</span>
-                    <textarea
-                        ref={bodyRef}
-                        className="field-textarea journal-textarea"
-                        name="body"
-                        maxLength={journalLimits.body}
-                        placeholder="What happened today, what you noticed, what is on your mind..."
-                        defaultValue={entry?.body ?? ''}
-                        onChange={() => setConfirmingEmpty(false)}
-                    />
-                </label>
+                <MarkdownNoteEditor
+                    label="Entry"
+                    bodyRef={bodyRef}
+                    name="body"
+                    maxLength={journalLimits.body}
+                    placeholder="What happened today, what you noticed, what is on your mind..."
+                    defaultValue={entry?.body ?? ''}
+                    onChange={() => setConfirmingEmpty(false)}
+                />
                 <label className="field-group">
                     <span className="field-label">Tags</span>
                     <input
@@ -209,6 +206,7 @@ function GlobalNoteDialog({
     const dialogRef = useRef<HTMLDialogElement>(null);
     const formRef = useRef<HTMLFormElement>(null);
     const titleRef = useRef<HTMLInputElement>(null);
+    const bodyRef = useRef<HTMLTextAreaElement>(null);
     const returnFocusRef = useRef(document.activeElement instanceof HTMLElement ? document.activeElement : null);
     const isAppleTouchDevice =
         /iPhone|iPad|iPod/i.test(navigator.userAgent) ||
@@ -269,6 +267,7 @@ function GlobalNoteDialog({
             ref={dialogRef}
             className="dialog-backdrop editor-dialog"
             aria-labelledby="global-note-title-label"
+            tabIndex={-1}
             onKeyDown={(event) => {
                 if (event.key !== 'Escape') return;
                 event.preventDefault();
@@ -286,6 +285,7 @@ function GlobalNoteDialog({
             <form
                 ref={formRef}
                 className="idea-form"
+                tabIndex={isAppleTouchDevice ? -1 : undefined}
                 onSubmit={submit}
                 onChange={() => {
                     const form = formRef.current;
@@ -315,16 +315,14 @@ function GlobalNoteDialog({
                         required
                     />
                 </label>
-                <label className="field-group">
-                    <span className="field-label">Note</span>
-                    <textarea
-                        className="field-textarea journal-textarea"
-                        name="body"
-                        maxLength={globalNoteLimits.body}
-                        defaultValue={note?.body ?? ''}
-                        placeholder="Add details..."
-                    />
-                </label>
+                <MarkdownNoteEditor
+                    label="Note"
+                    bodyRef={bodyRef}
+                    name="body"
+                    maxLength={globalNoteLimits.body}
+                    defaultValue={note?.body ?? ''}
+                    placeholder="Add details..."
+                />
                 <label className="field-group">
                     <span className="field-label">Tags</span>
                     <input
@@ -428,7 +426,10 @@ export function NotesPage({
                         <div className="idea-card-top">
                             <h4 className="global-note-title">{note.title}</h4>
                         </div>
-                        <p className="idea-body journal-body">{note.body || 'No body text.'}</p>
+                        <MarkdownNoteBody
+                            body={note.body || 'No body text.'}
+                            className="idea-body journal-body markdown-body"
+                        />
                         {note.tags.length > 0 && (
                             <div className="idea-tags">
                                 {note.tags.map((tag) => (
@@ -574,7 +575,10 @@ export function NotesPage({
                                                 </h4>
                                                 {entry.entryDate === today && <span className="card-label">Today</span>}
                                             </div>
-                                            <p className="idea-body journal-body">{entry.body}</p>
+                                            <MarkdownNoteBody
+                                                body={entry.body}
+                                                className="idea-body journal-body markdown-body"
+                                            />
                                             {entry.tags.length > 0 && (
                                                 <div className="idea-tags">
                                                     {entry.tags.map((tag) => (

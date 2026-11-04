@@ -182,7 +182,7 @@ function TaskDialog({
                         placeholder="What needs doing?"
                     />
                 </label>
-                <label className="field-group">
+                <label className="field-group editor-body">
                     <span className="field-label">Details</span>
                     <textarea
                         className="field-textarea journal-textarea"

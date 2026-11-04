@@ -27,7 +27,8 @@ Network requests time out after 10 seconds rather than holding refresh and sync 
 New and edit dialogs focus the dialog on iPhone and iPad, including iPads using a desktop user agent.
 The keyboard stays closed until you tap a field. Desktop dialogs focus the title; closing a dialog restores focus
 to its opener. Empty idea dialogs close from Cancel, Escape or the backdrop. Editors containing title or body text require Cancel or Save.
-On desktop, idea and Manage solutions dialogs open near the top of the page; touch layouts stay centered.
+On desktop, idea, note and task editors have the same height and use the extra space for writing. Dialogs open near
+the top of the page; touch layouts stay centered.
 
 Manage solutions saves checkbox changes immediately and closes with OK.
 The borderless header Refresh and Theme buttons change fill and text color only while active.
@@ -61,11 +62,15 @@ the browser tests against the server on port 4180.
 
 ## Notes
 
-The header's `Ideas | Notes | Tasks` control switches between pages. `/notes` is a personal journal with one plain-text
-entry per day. The entry's date is the local calendar day it was written on and never changes. Entries are grouped by
-week (Monday to Sunday), newest week first, with search over the text and tags and a tag filter. The **New note** button
-opens today's entry; older entries open from their card. The Calendar button opens a month view with marked entry days;
-select any day to open its entry or start a blank one. Saving an empty entry asks to confirm, then deletes it.
+The header's `Ideas | Notes | Tasks` control switches between pages. `/notes` is a personal journal with one entry per
+local day. Journal and global note bodies support Markdown, including headings, lists, tables and links. The info button
+beside the entry label shows syntax examples. Use the Edit / Preview control while writing. **Add section** inserts a
+collapsible `##` heading; new sections start expanded. Raw HTML is shown as text, and links are limited to `http`,
+`https` and `mailto`. The entry's date is the local calendar day it was written on and never changes. Entries are
+grouped by week (Monday to Sunday), newest week first, with search over the text and tags and a tag filter. The **New
+note** button opens today's entry; older entries open from their card. The Calendar button opens a month view with
+marked entry days; select any day to open its entry or start a blank one. Saving an empty entry asks to confirm, then
+deletes it.
 
 Global notes have titles and tags, are not tied to a date, and appear above the journal entries. The global group and
 each weekly group can be collapsed independently. The search box and tag filter cover both types of notes. Global note

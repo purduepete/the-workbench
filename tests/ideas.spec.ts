@@ -171,6 +171,50 @@ test('positions desktop dialogs near the top and keeps their controls usable', a
     }
 });
 
+test('expands new and existing idea editors on desktop without hiding controls', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.goto('/');
+    await page.getByRole('button', { name: 'New idea', exact: true }).click();
+    const newDialog = page.getByRole('dialog', { name: 'New idea' });
+    await newDialog.getByLabel('Idea title').fill('Desktop editor size');
+    await newDialog.getByLabel('Details').fill('Existing details');
+    await newDialog.getByRole('button', { name: 'Save idea' }).click();
+    const card = page.locator('.idea-card').filter({
+        has: page.getByRole('heading', { name: 'Desktop editor size', exact: true }),
+    });
+    await expect(card).toBeVisible();
+
+    for (const viewport of [
+        { width: 1280, height: 720 },
+        { width: 1280, height: 900 },
+        { width: 1920, height: 1080 },
+    ]) {
+        await page.setViewportSize(viewport);
+        for (const name of ['New idea', 'Edit idea']) {
+            const opener =
+                name === 'Edit idea'
+                    ? card.getByRole('button', { name: 'Edit', exact: true })
+                    : page.getByRole('button', { name, exact: true });
+            await opener.click();
+            const dialog = page.getByRole('dialog', { name });
+            const details = dialog.getByLabel('Details');
+            const save = dialog.getByRole('button', { name: 'Save idea' });
+            const dialogBox = await dialog.boundingBox();
+            const detailsBox = await details.boundingBox();
+            const saveBox = await save.boundingBox();
+            if (!dialogBox || !detailsBox || !saveBox) throw new Error('Idea editor controls are missing.');
+            expect(dialogBox.height).toBeCloseTo(Math.min(960, viewport.height * 0.92), 0);
+            expect(detailsBox.height).toBeGreaterThan(200);
+            expect(saveBox.y).toBeGreaterThanOrEqual(dialogBox.y);
+            expect(saveBox.y + saveBox.height).toBeLessThanOrEqual(dialogBox.y + dialogBox.height);
+            const overflow = await dialog.evaluate((element) => element.scrollHeight - element.clientHeight);
+            expect(overflow).toBeLessThanOrEqual(1);
+            if (name === 'Edit idea') await expect(details).toHaveValue('Existing details');
+            await dialog.getByRole('button', { name: 'Cancel' }).click();
+        }
+    }
+});
+
 test('keeps a tall desktop dialog scrollable inside the viewport', async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 480 });
     await page.goto('/');
@@ -198,6 +242,22 @@ test('keeps a tall desktop dialog scrollable inside the viewport', async ({ page
 
 test.describe('touch dialog placement', () => {
     test.use({ hasTouch: true, isMobile: true });
+
+    test('keeps the existing idea details height on phone and tablet', async ({ page }) => {
+        for (const viewport of [
+            { width: 390, height: 844 },
+            { width: 1280, height: 900 },
+        ]) {
+            await page.setViewportSize(viewport);
+            await page.goto('/');
+            await page.getByRole('button', { name: 'New idea', exact: true }).tap();
+            const dialog = page.getByRole('dialog', { name: 'New idea' });
+            const details = await dialog.getByLabel('Details').boundingBox();
+            if (!details) throw new Error('Idea details field is missing.');
+            expect(details.height).toBeCloseTo(150, 0);
+            await dialog.getByRole('button', { name: 'Cancel' }).tap();
+        }
+    });
 
     test('keeps phone and tablet dialogs centered', async ({ page }) => {
         for (const viewport of [
