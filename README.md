@@ -104,8 +104,7 @@ Add these **Single-page application** redirect URIs (not Web redirects):
 - `https://the-workbench.jimlertech.com/onedrive-auth.html`.
 - `https://jimbrownhome1.tail8ad282.ts.net:8802/onedrive-auth.html`.
 
-The deployment manifest configures the personal OneDrive application's public client ID.
-For other installations, configure the API process with
+Configure the API process, or the host's existing `shared\secrets\app.env`, with
 `ONEDRIVE_CLIENT_ID=<application-client-id>`. This public identifier is not a secret.
 Personal OneDrive is the default. For work/school OneDrive also set
 `ONEDRIVE_TENANT_ID=<tenant-guid>` and

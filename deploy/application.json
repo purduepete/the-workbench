@@ -26,7 +26,6 @@
     "environment": {
       "PORT": "8802",
       "STORAGE_BACKEND": "postgresql",
-      "ONEDRIVE_CLIENT_ID": "5a1373cf-e208-4487-bfcf-0caefe315d2d",
       "SOLUTIONS_SOURCE": "http://127.0.0.1:18798/sites.json",
       "ALLOWED_ORIGINS": "https://the-workbench.jimlertech.com,https://jimbrownhome1.tail8ad282.ts.net:8802,http://127.0.0.1:8802"
     },
