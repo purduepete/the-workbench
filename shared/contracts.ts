@@ -105,6 +105,8 @@ export const entryDateSchema = z
     .refine(isCalendarDate, 'Not a calendar date.');
 
 const journalTagsSchema = z.array(z.string().trim().min(1).max(journalLimits.tag)).max(journalLimits.tags);
+export const noteCategorySchema = z.enum(['home', 'work']).nullable();
+export type NoteCategory = z.infer<typeof noteCategorySchema>;
 
 export const journalMutationSchema = z.discriminatedUnion('kind', [
     z
@@ -116,6 +118,7 @@ export const journalMutationSchema = z.discriminatedUnion('kind', [
             baseVersion: z.number().int().min(0),
             body: z.string().trim().min(1).max(journalLimits.body),
             tags: journalTagsSchema,
+            category: noteCategorySchema.optional(),
             updatedAt: isoTimestamp,
             /** The device's local `mm/dd/yyyy HH:mm`, used in the separator when an edit is merged. */
             editedLabel: z.string().regex(/^\d{2}\/\d{2}\/\d{4} \d{2}:\d{2}$/),
@@ -138,6 +141,7 @@ export interface ServerJournalEntry {
     entryDate: string;
     body: string;
     tags: string[];
+    category?: NoteCategory;
     /** A deleted entry stays as a tombstone so its version keeps counting up. */
     deleted: boolean;
     createdAt: string;

@@ -628,25 +628,26 @@ describe('PostgresIdeasStore', () => {
     const fakePool = (handler: (sql: string, values?: unknown[]) => { rows: unknown[] }) =>
         ({ query: async (sql: string, values?: unknown[]) => handler(sql, values) }) as unknown as Pool;
 
-    it('is ready only at schema version 3 with journal, global-note and task tables', async () => {
+    it('is ready only at schema version 4 with journal, global-note and task tables', async () => {
         const at = (version: number) =>
             new PostgresIdeasStore(
                 fakePool((sql) => ({ rows: sql.includes('solutiondeploy_schema') ? [{ version }] : [] }))
             );
-        await expect(at(3).ready()).resolves.toBeUndefined();
+        await expect(at(4).ready()).resolves.toBeUndefined();
+        await expect(at(3).ready()).rejects.toThrow(/schema version/);
         await expect(at(2).ready()).rejects.toThrow(/schema version/);
         await expect(at(1).ready()).rejects.toThrow(/schema version/);
         const missingJournal = new PostgresIdeasStore(
             fakePool((sql) => {
                 if (sql.includes('journal_entries')) throw new Error('relation does not exist');
-                return { rows: sql.includes('solutiondeploy_schema') ? [{ version: 3 }] : [] };
+                return { rows: sql.includes('solutiondeploy_schema') ? [{ version: 4 }] : [] };
             })
         );
         await expect(missingJournal.ready()).rejects.toThrow(/does not exist/);
         const missingGlobalNotes = new PostgresIdeasStore(
             fakePool((sql) => {
                 if (sql.includes('global_notes')) throw new Error('relation does not exist');
-                return { rows: sql.includes('solutiondeploy_schema') ? [{ version: 3 }] : [] };
+                return { rows: sql.includes('solutiondeploy_schema') ? [{ version: 4 }] : [] };
             })
         );
         await expect(missingGlobalNotes.ready()).rejects.toThrow(/does not exist/);
@@ -654,7 +655,7 @@ describe('PostgresIdeasStore', () => {
             const missingTasks = new PostgresIdeasStore(
                 fakePool((sql) => {
                     if (sql.includes(table)) throw new Error('relation does not exist');
-                    return { rows: sql.includes('solutiondeploy_schema') ? [{ version: 3 }] : [] };
+                    return { rows: sql.includes('solutiondeploy_schema') ? [{ version: 4 }] : [] };
                 })
             );
             await expect(missingTasks.ready()).rejects.toThrow(/does not exist/);

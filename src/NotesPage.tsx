@@ -2,6 +2,9 @@ import { useLayoutEffect, useRef, useState } from 'react';
 import type { FormEvent, ReactNode } from 'react';
 import { CalendarDays, Check, Clock3, NotebookPen, Plus, Search, Tag, Trash2, X } from 'lucide-react';
 import { globalNoteLimits, journalLimits } from '../shared/contracts';
+import type { NoteCategory } from '../shared/contracts';
+import { categoryLabel, NoteCategories } from './NoteCategories';
+import type { NoteFilter } from './NoteCategories';
 import { formatIdeaTimestamp, parseTags } from './ideas';
 import { filterEntries, formatEntryDate, groupByWeek, weekStart } from './journal';
 import type { JournalEntry } from './journal';
@@ -18,8 +21,9 @@ import { useEditorDismissal } from './useEditorDismissal';
 interface JournalDialogProps {
     entryDate: string;
     entry: JournalEntry | undefined;
+    initialCategory: NoteCategory;
     onClose: () => void;
-    onSave: (body: string, tags: string[]) => string | null;
+    onSave: (body: string, tags: string[], category: NoteCategory) => string | null;
     onDelete: () => string | null;
     onDraftProtectionChange: (protectedDraft: boolean) => void;
     fromCalendar?: boolean;
@@ -28,6 +32,7 @@ interface JournalDialogProps {
 function JournalDialog({
     entryDate,
     entry,
+    initialCategory,
     onClose,
     onSave,
     onDelete,
@@ -44,6 +49,7 @@ function JournalDialog({
     const [formError, setFormError] = useState<string | null>(null);
     const [confirmingDelete, setConfirmingDelete] = useState(false);
     const [confirmingEmpty, setConfirmingEmpty] = useState(false);
+    const [category, setCategory] = useState<NoteCategory>(entry ? (entry.category ?? null) : initialCategory);
     const dismissal = useEditorDismissal(dialogRef, Boolean(entry?.body.trim()), onDraftProtectionChange);
 
     useLayoutEffect(() => {
@@ -83,7 +89,7 @@ function JournalDialog({
             finish(onDelete());
             return;
         }
-        finish(onSave(body, parseTags(String(formData.get('tags') ?? ''), journalLimits.tags)));
+        finish(onSave(body, parseTags(String(formData.get('tags') ?? ''), journalLimits.tags), category));
     };
 
     const handleDelete = () => {
@@ -128,16 +134,26 @@ function JournalDialog({
             >
                 <div className="dialog-heading">
                     <div>
-                        <p className="eyebrow">Personal note</p>
+                        <p className="eyebrow">Daily note</p>
                         <h2 id="journal-dialog-title">Entry for {formatEntryDate(entryDate)}</h2>
                     </div>
                 </div>
+                <div className="field-group">
+                    <span className="field-label">Section</span>
+                    <NoteCategories
+                        value={category ?? 'unclassified'}
+                        onChange={(value) => {
+                            if (value === 'all') return;
+                            setCategory(value === 'unclassified' ? null : value);
+                            dismissal.setProtectedDraft(true);
+                        }}
+                    />
+                </div>
                 <MarkdownNoteEditor
-                    label="Entry"
+                    label="Details"
                     bodyRef={bodyRef}
                     name="body"
                     maxLength={journalLimits.body}
-                    placeholder="What happened today, what you noticed, what is on your mind..."
                     defaultValue={entry?.body ?? ''}
                     onChange={() => setConfirmingEmpty(false)}
                 />
@@ -148,7 +164,6 @@ function JournalDialog({
                         name="tags"
                         type="text"
                         maxLength={2000}
-                        placeholder="health, family, work"
                         defaultValue={entry?.tags.join(', ') ?? ''}
                         aria-describedby="journal-tag-hint"
                     />
@@ -311,17 +326,15 @@ function GlobalNoteDialog({
                         type="text"
                         maxLength={globalNoteLimits.title}
                         defaultValue={note?.title ?? ''}
-                        placeholder="A note to keep"
                         required
                     />
                 </label>
                 <MarkdownNoteEditor
-                    label="Note"
+                    label="Details"
                     bodyRef={bodyRef}
                     name="body"
                     maxLength={globalNoteLimits.body}
                     defaultValue={note?.body ?? ''}
-                    placeholder="Add details..."
                 />
                 <label className="field-group">
                     <span className="field-label">Tags</span>
@@ -331,7 +344,6 @@ function GlobalNoteDialog({
                         type="text"
                         maxLength={2000}
                         defaultValue={note?.tags.join(', ') ?? ''}
-                        placeholder="personal, reference"
                     />
                     <span className="field-hint">Separate tags with commas.</span>
                 </label>
@@ -394,16 +406,23 @@ export function NotesPage({
         globalNotes.clearNotice();
     };
     const [query, setQuery] = useState('');
+    const [categoryFilter, setCategoryFilter] = useState<NoteFilter>('all');
+    const newCategory: NoteCategory =
+        categoryFilter === 'unclassified' ? null : categoryFilter === 'work' ? 'work' : 'home';
     const [selectedTag, setSelectedTag] = useState<string | null>(null);
     const [calendarOpen, setCalendarOpen] = useState(false);
     const [calendarSelection, setCalendarSelection] = useState(false);
     const [editingGlobalId, setEditingGlobalId] = useState<string | undefined>();
     const { entries } = journal;
-    const visible = filterEntries(entries, query, selectedTag);
+    const matchesCategory = (category: NoteCategory | undefined) =>
+        categoryFilter === 'all' ||
+        (categoryFilter === 'unclassified' ? category == null : category === categoryFilter);
+    const categoryEntries = entries.filter((entry) => matchesCategory(entry.category));
+    const visible = filterEntries(categoryEntries, query, selectedTag);
     const weeks = groupByWeek(visible);
-    const filtering = Boolean(query || selectedTag);
+    const filtering = Boolean(query || selectedTag || categoryFilter !== 'all');
     const allTags = Array.from(
-        new Set([...entries.flatMap((entry) => entry.tags), ...globalNotes.notes.flatMap((note) => note.tags)])
+        new Set([...categoryEntries.flatMap((entry) => entry.tags), ...globalNotes.notes.flatMap((note) => note.tags)])
     ).sort((a, b) => a.localeCompare(b));
     const editingEntry = editingDate ? entries.find((entry) => entry.entryDate === editingDate) : undefined;
     const globalNote = globalNotes.notes.find((note) => note.id === editingGlobalId);
@@ -511,23 +530,33 @@ export function NotesPage({
                                     onChange={(event) => setQuery(event.target.value)}
                                 />
                             </label>
-                            <div className="notes-actions">
-                                <button
-                                    type="button"
-                                    className="secondary-button"
-                                    onClick={() => setEditingGlobalId(window.crypto.randomUUID())}
-                                >
-                                    <Plus size={15} aria-hidden="true" />
-                                    Global note
-                                </button>
-                                <button
-                                    type="button"
-                                    className="secondary-button"
-                                    onClick={() => setCalendarOpen(true)}
-                                >
-                                    <CalendarDays size={15} aria-hidden="true" />
-                                    Calendar
-                                </button>
+                            <div className="notes-toolbar-actions">
+                                <NoteCategories
+                                    value={categoryFilter}
+                                    filter
+                                    onChange={(value) => {
+                                        setCategoryFilter(value);
+                                        setSelectedTag(null);
+                                    }}
+                                />
+                                <div className="notes-actions">
+                                    <button
+                                        type="button"
+                                        className="secondary-button"
+                                        onClick={() => setEditingGlobalId(window.crypto.randomUUID())}
+                                    >
+                                        <Plus size={15} aria-hidden="true" />
+                                        Global note
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className="secondary-button"
+                                        onClick={() => setCalendarOpen(true)}
+                                    >
+                                        <CalendarDays size={15} aria-hidden="true" />
+                                        Calendar
+                                    </button>
+                                </div>
                             </div>
                         </div>
 
@@ -573,6 +602,7 @@ export function NotesPage({
                                                         {formatEntryDate(entry.entryDate)}
                                                     </time>
                                                 </h4>
+                                                <span className="card-label">{categoryLabel(entry.category)}</span>
                                                 {entry.entryDate === today && <span className="card-label">Today</span>}
                                             </div>
                                             <MarkdownNoteBody
@@ -632,12 +662,13 @@ export function NotesPage({
                     key={editingDate}
                     entryDate={editingDate}
                     entry={editingEntry}
+                    initialCategory={newCategory}
                     onClose={() => {
                         setCalendarSelection(false);
                         setEditingDate(undefined);
                     }}
                     fromCalendar={calendarSelection}
-                    onSave={(body, tags) => journal.save(editingDate, body, tags)}
+                    onSave={(body, tags, category) => journal.save(editingDate, body, tags, category)}
                     onDelete={() => journal.remove(editingDate)}
                     onDraftProtectionChange={onDraftProtectionChange}
                 />
@@ -662,7 +693,7 @@ export function NotesPage({
             )}
             {calendarOpen && (
                 <CalendarDialog
-                    entries={entries.map((entry) => entry.entryDate)}
+                    entries={categoryEntries.map((entry) => entry.entryDate)}
                     today={today}
                     onClose={() => setCalendarOpen(false)}
                     onSelect={(date) => {

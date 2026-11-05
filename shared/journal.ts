@@ -1,13 +1,21 @@
 import { journalLimits } from './contracts.js';
-import type { GlobalNoteSave, JournalOutcome, JournalSave, ServerGlobalNote, ServerJournalEntry } from './contracts.js';
+import type {
+    GlobalNoteSave,
+    JournalOutcome,
+    JournalSave,
+    NoteCategory,
+    ServerGlobalNote,
+    ServerJournalEntry,
+} from './contracts.js';
 
-export type CurrentEntry = Pick<ServerJournalEntry, 'body' | 'tags' | 'deleted' | 'version'>;
+export type CurrentEntry = Pick<ServerJournalEntry, 'body' | 'tags' | 'category' | 'deleted' | 'version'>;
 
 export type SaveDecision =
     | {
           outcome: Extract<JournalOutcome, 'created' | 'updated' | 'merged'>;
           body: string;
           tags: string[];
+          category?: NoteCategory;
           bump: boolean;
       }
     | { outcome: 'overflow' };
@@ -30,16 +38,23 @@ export function unionTags(current: string[], incoming: string[]): string[] {
  * dated separator unless its text is already there, so a retried or re-queued edit never duplicates text.
  */
 export function resolveSave(current: CurrentEntry | null, save: JournalSave): SaveDecision {
-    if (!current || current.deleted) return { outcome: 'created', body: save.body, tags: save.tags, bump: true };
+    if (!current || current.deleted)
+        return { outcome: 'created', body: save.body, tags: save.tags, category: save.category, bump: true };
     if (save.baseVersion === current.version)
-        return { outcome: 'updated', body: save.body, tags: save.tags, bump: true };
+        return {
+            outcome: 'updated',
+            body: save.body,
+            tags: save.tags,
+            category: save.category === undefined ? current.category : save.category,
+            bump: true,
+        };
     const body = current.body.includes(save.body)
         ? current.body
         : `${current.body}\n\n--- Edit from ${save.editedLabel} ---\n${save.body}`;
     const tags = unionTags(current.tags, save.tags);
     if (body.length > journalLimits.body || tags.length > journalLimits.tags) return { outcome: 'overflow' };
     const changed = body !== current.body || tags.length !== current.tags.length;
-    return { outcome: 'merged', body, tags, bump: changed };
+    return { outcome: 'merged', body, tags, category: current.category, bump: changed };
 }
 
 export class JournalOverflowError extends Error {

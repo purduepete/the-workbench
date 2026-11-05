@@ -156,7 +156,6 @@ export function ImageLinkEditor({ bodyRef }: { bodyRef: RefObject<HTMLTextAreaEl
                             className="field-input"
                             value={label}
                             maxLength={120}
-                            placeholder="Image"
                             onChange={(event) => setLabel(event.currentTarget.value)}
                         />
                     </label>

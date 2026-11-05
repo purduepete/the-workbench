@@ -69,6 +69,7 @@ async function expectMarkdownListMarkers(container: Locator) {
 }
 
 test('global note comes before calendar on phone and desktop', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
     await page.goto('/notes');
     const buttons = page.locator('.notes-actions > button');
     await expect(buttons).toHaveText(['Global note', 'Calendar']);
@@ -132,7 +133,7 @@ for (const device of [
         });
 
         for (const editor of [
-            { button: 'New note', focus: 'Entry' },
+            { button: 'New note', focus: 'Details' },
             { button: 'Global note', focus: 'Title' },
         ]) {
             await page.evaluate(() => {
@@ -278,10 +279,10 @@ test('editors keep text open through Escape, backdrop and browser Back', async (
 test('idea, note and task editors share the same desktop height', async ({ page }) => {
     await page.emulateMedia({ reducedMotion: 'reduce' });
     const editors = [
-        { path: '/', open: 'New idea', save: 'Save idea', markdown: false },
+        { path: '/', open: 'New idea', save: 'Save idea', markdown: true },
         { path: '/notes', open: 'New note', save: 'Save entry', markdown: true },
         { path: '/notes', open: 'Global note', save: 'Save note', markdown: true },
-        { path: '/tasks', open: 'New task', save: 'Save task', markdown: false },
+        { path: '/tasks', open: 'New task', save: 'Save task', markdown: true },
     ];
 
     for (const viewport of [
@@ -620,6 +621,16 @@ test('modal opening fades without moving the page and calendar swaps keep the ba
     await page.setViewportSize({ width: 1280, height: 900 });
     await page.goto('/notes');
     await expect(page.getByRole('button', { name: 'New note', exact: true })).toBeVisible();
+    await expect(page.getByRole('group', { name: 'Filter notes', exact: true })).toBeVisible();
+    await expect(page.getByRole('status')).toHaveText('Synced');
+    await page.evaluate(async () => {
+        await Promise.all(
+            document
+                .getAnimations()
+                .filter((animation) => animation.effect?.getTiming().iterations !== Infinity)
+                .map((animation) => animation.finished)
+        );
+    });
     const frames = await page.evaluate(async () => {
         document.body.style.minHeight = '2000px';
         window.scrollTo(0, 600);

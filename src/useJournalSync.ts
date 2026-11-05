@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { JournalMutationResponse, ServerJournalEntry } from '../shared/contracts';
+import type { JournalMutationResponse, NoteCategory, ServerJournalEntry } from '../shared/contracts';
 import {
     acknowledge,
     dropEntry,
@@ -193,8 +193,8 @@ export function useJournalSync() {
         refreshing: phase === 'syncing',
         refresh: sync,
         clearNotice: () => setNotice(null),
-        save: (entryDate: string, body: string, tags: string[]) =>
-            change(queueSave(stateRef.current, entryDate, body, tags)),
+        save: (entryDate: string, body: string, tags: string[], category?: NoteCategory) =>
+            change(queueSave(stateRef.current, entryDate, body, tags, new Date(), category)),
         remove: (entryDate: string) => change(queueDelete(stateRef.current, entryDate)),
     };
 }

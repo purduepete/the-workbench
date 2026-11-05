@@ -1,10 +1,11 @@
-import type { ServerJournalEntry } from '../shared/contracts';
+import type { NoteCategory, ServerJournalEntry } from '../shared/contracts';
 
 /** A journal entry as the page shows it: the confirmed row with any queued change on top. */
 export interface JournalEntry {
     entryDate: string;
     body: string;
     tags: string[];
+    category?: NoteCategory;
     updatedAt: string;
 }
 
@@ -64,5 +65,6 @@ export const toJournalEntry = (row: ServerJournalEntry): JournalEntry => ({
     entryDate: row.entryDate,
     body: row.body,
     tags: [...row.tags],
+    category: row.category,
     updatedAt: row.updatedAt,
 });

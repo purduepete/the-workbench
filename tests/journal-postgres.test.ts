@@ -41,7 +41,13 @@ describe.skipIf(!enabled)('PostgresIdeasStore journal against a real database', 
     beforeAll(async () => {
         pool = new pg.Pool({ connectionString: url, max: 6 });
         await pool.query('DROP SCHEMA public CASCADE; CREATE SCHEMA public;');
-        for (const file of ['001_initial.sql', '002_journal.sql', '003_tasks.sql', '004_application_id.sql']) {
+        for (const file of [
+            '001_initial.sql',
+            '002_journal.sql',
+            '003_tasks.sql',
+            '004_application_id.sql',
+            '005_note_categories.sql',
+        ]) {
             await pool.query(await readFile(new URL(`../deploy/postgresql/${file}`, import.meta.url), 'utf8'));
         }
         store = new PostgresIdeasStore(pool);
@@ -51,8 +57,20 @@ describe.skipIf(!enabled)('PostgresIdeasStore journal against a real database', 
         await pool?.end();
     });
 
-    it('is ready after all three migrations', async () => {
+    it('is ready after all migrations', async () => {
         await expect(store.ready()).resolves.toBeUndefined();
+    });
+
+    it('persists Home/Work for daily notes and preserves categories on old-client saves', async () => {
+        const daily = { ...save(0, 'Category daily'), entryDate: '2026-01-05', category: 'work' as const };
+        expect((await store.applyJournal(daily)).entry?.category).toBe('work');
+        expect((await store.listJournal()).find((entry) => entry.entryDate === daily.entryDate)?.category).toBe('work');
+        const oldDaily = { ...save(1, 'Old client daily'), entryDate: daily.entryDate };
+        expect((await store.applyJournal(oldDaily)).entry?.category).toBe('work');
+        expect(
+            (await store.applyJournal({ ...oldDaily, mutationId: randomUUID(), baseVersion: 2, category: null })).entry
+                ?.category
+        ).toBeNull();
     });
 
     it('serializes concurrent first saves for one day into one entry', async () => {

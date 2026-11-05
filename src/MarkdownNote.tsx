@@ -133,6 +133,55 @@ export function MarkdownNoteBody({ body, className = 'markdown-body' }: { body: 
     );
 }
 
+export function ExpandableMarkdownBody({ body, id, className }: { body: string; id: string; className: string }) {
+    const containerRef = useRef<HTMLDivElement>(null);
+    const contentRef = useRef<HTMLDivElement>(null);
+
+    useLayoutEffect(() => {
+        const container = containerRef.current;
+        const content = contentRef.current;
+        if (!container || !content) return;
+        const measure = () => {
+            const bounds = content.getBoundingClientRect();
+            const style = getComputedStyle(container);
+            const limit = parseFloat(style.lineHeight) * Number(style.getPropertyValue('--details-lines'));
+            const range = document.createRange();
+            const walker = document.createTreeWalker(content, NodeFilter.SHOW_TEXT);
+            const rects: DOMRect[] = [];
+            while (walker.nextNode()) {
+                if (!walker.currentNode.textContent?.trim()) continue;
+                range.selectNodeContents(walker.currentNode);
+                rects.push(...range.getClientRects());
+            }
+            for (const image of content.querySelectorAll('img, svg')) rects.push(image.getBoundingClientRect());
+            let cutoff = Math.min(limit, bounds.height);
+            // Stop before any line or image crossing the compact preview's bottom edge.
+            for (const rect of rects.sort((a, b) => b.bottom - a.bottom)) {
+                const top = rect.top - bounds.top;
+                const bottom = rect.bottom - bounds.top;
+                if (top < cutoff && bottom > cutoff) cutoff = Math.max(0, top);
+            }
+            container.style.setProperty('--details-height', `${bounds.height}px`);
+            container.style.setProperty('--details-collapsed-height', `${Math.floor(cutoff)}px`);
+        };
+        measure();
+        // Establish the measured preview height before enabling expansion transitions.
+        container.getBoundingClientRect();
+        container.dataset.measured = 'true';
+        const observer = new ResizeObserver(measure);
+        observer.observe(content);
+        return () => observer.disconnect();
+    }, [body]);
+
+    return (
+        <div ref={containerRef} id={id} className={className}>
+            <div ref={contentRef} className="expandable-markdown-content">
+                <MarkdownNoteBody body={body} />
+            </div>
+        </div>
+    );
+}
+
 const markdownExamples = [
     ['Heading', '# Heading'],
     ['Section', '## Section'],
@@ -301,7 +350,6 @@ export function MarkdownNoteEditor({
     bodyRef,
     name,
     maxLength,
-    placeholder,
     defaultValue,
     onChange,
 }: {
@@ -309,7 +357,6 @@ export function MarkdownNoteEditor({
     bodyRef: RefObject<HTMLTextAreaElement | null>;
     name: string;
     maxLength: number;
-    placeholder: string;
     defaultValue: string;
     onChange?: (event: ChangeEvent<HTMLTextAreaElement>) => void;
 }) {
@@ -381,7 +428,6 @@ export function MarkdownNoteEditor({
                 className="field-textarea journal-textarea markdown-editor-textarea"
                 name={name}
                 maxLength={maxLength}
-                placeholder={placeholder}
                 defaultValue={defaultValue}
                 hidden={mode === 'preview'}
                 onChange={(event) => {

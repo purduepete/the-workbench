@@ -1,4 +1,5 @@
-import type { JournalMutation, JournalMutationResponse, ServerJournalEntry } from '../shared/contracts';
+import type { JournalMutation, JournalMutationResponse, NoteCategory, ServerJournalEntry } from '../shared/contracts';
+import { noteCategorySchema } from '../shared/contracts';
 import { formatIdeaTimestamp } from './ideas';
 import { toJournalEntry } from './journal';
 import type { JournalEntry } from './journal';
@@ -33,13 +34,21 @@ export function localEntries(state: JournalState): JournalEntry[] {
                 entryDate: change.entryDate,
                 body: change.body,
                 tags: [...change.tags],
+                category: change.category === undefined ? entries.get(change.entryDate)?.category : change.category,
                 updatedAt: change.updatedAt,
             });
     }
     return [...entries.values()];
 }
 
-export function queueSave(state: JournalState, entryDate: string, body: string, tags: string[], now = new Date()) {
+export function queueSave(
+    state: JournalState,
+    entryDate: string,
+    body: string,
+    tags: string[],
+    now = new Date(),
+    category?: NoteCategory
+) {
     const updatedAt = now.toISOString();
     const editedLabel = formatIdeaTimestamp(updatedAt);
     const pendingIndex = state.outbox.findLastIndex((change) => change.entryDate === entryDate);
@@ -47,7 +56,14 @@ export function queueSave(state: JournalState, entryDate: string, body: string, 
     // Unsent saves for the same day collapse into one request.
     if (pending && !pending.attempted && pending.kind === 'save') {
         const outbox = [...state.outbox];
-        outbox[pendingIndex] = { ...pending, body, tags: [...tags], updatedAt, editedLabel };
+        outbox[pendingIndex] = {
+            ...pending,
+            body,
+            tags: [...tags],
+            updatedAt,
+            editedLabel,
+            ...(category !== undefined ? { category } : {}),
+        };
         return { ...state, outbox };
     }
     const change: JournalOutboxEntry = {
@@ -57,6 +73,7 @@ export function queueSave(state: JournalState, entryDate: string, body: string, 
         baseVersion: serverVersion(state, entryDate),
         body,
         tags: [...tags],
+        ...(category !== undefined ? { category } : {}),
         updatedAt,
         editedLabel,
         attempted: false,
@@ -139,6 +156,7 @@ const isJournalState = (value: unknown): value is JournalState =>
             typeof row.entryDate === 'string' &&
             typeof row.body === 'string' &&
             isStringArray(row.tags) &&
+            (row.category === undefined || noteCategorySchema.safeParse(row.category).success) &&
             typeof row.deleted === 'boolean' &&
             typeof row.version === 'number'
     ) &&
@@ -148,6 +166,7 @@ const isJournalState = (value: unknown): value is JournalState =>
             isObject(change) &&
             typeof change.mutationId === 'string' &&
             typeof change.entryDate === 'string' &&
+            (change.category === undefined || noteCategorySchema.safeParse(change.category).success) &&
             typeof change.attempted === 'boolean'
     );
 

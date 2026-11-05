@@ -13,13 +13,14 @@ import type {
     ServerIdea,
     ServerGlobalNote,
     ServerJournalEntry,
+    NoteCategory,
 } from '../shared/contracts.js';
 import { limits } from '../shared/contracts.js';
 import { JournalOverflowError, resolveGlobalSave, resolveSave } from '../shared/journal.js';
 import type { CurrentEntry } from '../shared/journal.js';
 import type { ServerTask, TaskMutation, TaskMutationResponse, TaskOutcome } from '../shared/tasks.js';
 
-export const SCHEMA_VERSION = 3;
+export const SCHEMA_VERSION = 4;
 
 export interface IdeasStore {
     list(): Promise<ServerIdea[]>;
@@ -218,6 +219,7 @@ export class MemoryIdeasStore implements IdeasStore {
                 entryDate,
                 body: decision.body,
                 tags: [...decision.tags],
+                category: decision.category,
                 deleted: false,
                 createdAt: mutation.updatedAt,
                 updatedAt: mutation.updatedAt,
@@ -231,6 +233,7 @@ export class MemoryIdeasStore implements IdeasStore {
             ...current,
             body: decision.body,
             tags: [...decision.tags],
+            category: decision.category,
             deleted: false,
             updatedAt: mutation.updatedAt,
             version,
@@ -373,6 +376,7 @@ interface JournalRow {
     entry_date: string;
     body: string;
     tags: string[];
+    category: NoteCategory;
     deleted: boolean;
     created_at: Date;
     updated_at: Date;
@@ -404,10 +408,11 @@ const toGlobalNote = (row: GlobalNoteRow): ServerGlobalNote => ({
 });
 
 // entry_date::text keeps the calendar day as-is; pg would otherwise build a Date at local midnight.
-const journalColumns = 'entry_date::text AS entry_date, body, tags, deleted, created_at, updated_at, version';
+const journalColumns = 'entry_date::text AS entry_date, body, tags, category, deleted, created_at, updated_at, version';
 
 const toJournalEntry = (row: JournalRow): ServerJournalEntry => ({
     entryDate: row.entry_date,
+    category: row.category,
     body: row.body,
     tags: row.tags,
     deleted: row.deleted,
@@ -560,7 +565,7 @@ export class PostgresIdeasStore implements IdeasStore {
         await this.pool.query('SELECT id FROM public.ideas LIMIT 1');
         await this.pool.query('SELECT mutation_id FROM public.applied_mutations LIMIT 1');
         await this.pool.query('SELECT solution_id FROM public.disabled_solutions LIMIT 1');
-        await this.pool.query('SELECT entry_date FROM public.journal_entries LIMIT 1');
+        await this.pool.query('SELECT entry_date, category FROM public.journal_entries LIMIT 1');
         await this.pool.query('SELECT mutation_id FROM public.journal_mutations LIMIT 1');
         await this.pool.query('SELECT id FROM public.global_notes LIMIT 1');
         await this.pool.query('SELECT mutation_id FROM public.global_note_mutations LIMIT 1');
@@ -724,7 +729,7 @@ export class PostgresIdeasStore implements IdeasStore {
 
     private async lockEntry(client: PoolClient, entryDate: string): Promise<CurrentEntry | null> {
         const result = await client.query<CurrentEntry>(
-            'SELECT body, tags, deleted, version FROM public.journal_entries WHERE entry_date = $1 FOR UPDATE',
+            'SELECT body, tags, category, deleted, version FROM public.journal_entries WHERE entry_date = $1 FOR UPDATE',
             [entryDate]
         );
         return result.rows[0] ?? null;
@@ -749,10 +754,10 @@ export class PostgresIdeasStore implements IdeasStore {
             if (decision.outcome === 'overflow') throw new JournalOverflowError();
             const inserted = await client.query<{ version: number }>(
                 `INSERT INTO public.journal_entries
-                     (entry_date, body, tags, deleted, created_at, updated_at, version)
-                 VALUES ($1, $2, $3, FALSE, $4, $4, 1)
+                     (entry_date, body, tags, deleted, created_at, updated_at, version, category)
+                 VALUES ($1, $2, $3, FALSE, $4, $4, 1, $5)
                  ON CONFLICT (entry_date) DO NOTHING RETURNING version`,
-                [entryDate, decision.body, decision.tags, mutation.updatedAt]
+                [entryDate, decision.body, decision.tags, mutation.updatedAt, decision.category ?? null]
             );
             if (inserted.rows[0]) return { outcome: 'created', entryDate, resultVersion: 1 };
             // Another device's first save for this day committed while this one waited; merge onto it.
@@ -764,9 +769,9 @@ export class PostgresIdeasStore implements IdeasStore {
             return { outcome: decision.outcome, entryDate, resultVersion: current?.version ?? 0 };
         const updated = await client.query<{ version: number }>(
             `UPDATE public.journal_entries
-             SET body = $2, tags = $3, deleted = FALSE, updated_at = $4, version = version + 1
+             SET body = $2, tags = $3, deleted = FALSE, updated_at = $4, version = version + 1, category = $5
              WHERE entry_date = $1 RETURNING version`,
-            [entryDate, decision.body, decision.tags, mutation.updatedAt]
+            [entryDate, decision.body, decision.tags, mutation.updatedAt, decision.category ?? null]
         );
         return { outcome: decision.outcome, entryDate, resultVersion: updated.rows[0].version };
     }

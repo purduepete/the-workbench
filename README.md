@@ -143,6 +143,16 @@ a close icon and open with an opacity-only fade.
 
 Notes sync offline the same way ideas do, keyed by date instead of an id:
 
+Daily entries have a Home or Work category. The Notes page filters daily entries
+by All, Home, Work or Unclassified, including calendar markers and daily-entry tags.
+Global notes have no category and remain visible under every category filter.
+New notes use the selected category filter, or Home when viewing All.
+Existing notes remain Unclassified until you choose a category in their editor.
+There is still one daily entry per date across both categories. The calendar and
+New note button reopen that entry even when it belongs to another category.
+Categories are saved offline with the body. Stale edits keep the latest confirmed
+category; older clients that omit the category leave it unchanged.
+
 - An edit based on the current version replaces the entry.
 - An edit based on an old version is appended below the current text under `--- Edit from mm/dd/yyyy HH:mm ---`, and
   the tags are combined. Text the entry already contains is not appended again.
@@ -156,10 +166,37 @@ merges text and tags, preserving title-only edits in the edit separator. Deletin
 deletion leaves a tombstone so a later save restores it without resetting its version.
 An editor containing title or body text stays open on Escape, backdrop click and navigation; use Cancel or Save to close.
 
+Idea details support the same Markdown editor, Preview and syntax help as notes.
+Saved idea cards render headings, lists, emphasis, links and OneDrive thumbnails.
+Hover or focus a card to read its full details and title; Show details keeps it
+expanded for touch use. The underlying text stays Markdown when editing or creating a task.
+The idea's Show details button is hidden on mouse-based desktops, where hover and
+keyboard focus reveal the content.
+Idea hover expansion is limited to the upper content area; the timestamp and footer
+actions do not expand the card.
+Idea and task details expand and collapse over 350 ms, following their measured content
+height as text, sections and thumbnails change. Reduced-motion mode skips the animation.
+Collapsed previews stop between complete text lines instead of cutting through letters.
+
 ## Tasks
 
-`/tasks` keeps Home and Work tasks separate. The selected section is remembered on this browser.
+`/tasks` has an All / Home / Work filter, with All showing tasks from both categories.
+The selected filter is remembered on this browser. The editor keeps Home and Work
+as the task categories. New tasks use the selected category, or Home from All.
+Select Home or Work to reorder tasks within that category.
+Switching All/Home/Work fades the task list out and back in over 250 ms each.
+Reduced-motion preferences skip the fade.
+Markdown previews use their measured compact height before appearing, so filter changes don't briefly expand them.
 Each task has a title, optional details, a fixed local date and a completion checkbox.
+Task details use the Markdown editor with Edit / Preview, syntax help and OneDrive
+thumbnails. Hover or focus a task row to read all formatted details, or tap Show details
+to keep them expanded. Show less restores the compact row.
+Task Edit stays at the bottom-right of the card. Show details is available on touch
+devices and hidden on mouse-based desktops, where hover or keyboard focus expands details.
+Task hover expansion is limited to the title-and-details area, excluding the drag
+handle, completion checkbox and Edit button.
+Ideas and tasks require 250 ms of continuous hover before expanding. Leaving the
+content area cancels the pending expansion; keyboard focus and touch toggles respond immediately.
 Multiple tasks can share a day. Days are grouped into Monday-to-Sunday weeks, newest first;
 only the current week starts expanded.
 
@@ -202,10 +239,13 @@ the stop file in `SOLUTIONDEPLOY_STOP_FILE`. The schema is in `deploy/postgresql
 solution" in `solution-deploy\docs\Deployment.md`.
 
 `002_journal.sql` adds journal and global-note tables and moves the schema to version 2.
-`003_tasks.sql` adds tasks and task receipts, then moves it to version 3. Apply pending migrations through
+`003_tasks.sql` adds tasks and task receipts, then moves it to version 3.
+`005_note_categories.sql` adds nullable Home/Work categories to daily entries only
+and moves the schema to version 4 without assigning categories to existing notes.
+Apply pending migrations through
 the reviewed database-change procedure in `Deployment.md` (stop the app, apply them in order as the migrator,
 re-run the `Manage-Postgres.ps1` grant plan, then release). The server reports not ready until all tables
-exist at schema version 3.
+exist at schema version 4, including the daily-entry category column.
 
 `TEST_DATABASE_URL` runs `tests/journal-postgres.test.ts` against a real database. It drops and recreates `public`, so
 it only runs when the database name ends in `_test`; a disposable container is enough:

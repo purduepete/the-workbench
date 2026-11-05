@@ -1,6 +1,6 @@
-import { useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import type { CSSProperties, FormEvent, ReactNode } from 'react';
-import { CalendarDays, Check, GripVertical, ListTodo, Plus, Search, Trash2, X } from 'lucide-react';
+import { CalendarDays, Check, GripVertical, ListTodo, Search, Trash2, X } from 'lucide-react';
 import { closestCenter, DndContext, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import {
     arrayMove,
@@ -10,17 +10,19 @@ import {
     verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { taskLimits } from '../shared/tasks';
+import { taskCategories, taskLimits } from '../shared/tasks';
 import type { ServerTask, TaskCategory } from '../shared/tasks';
 import { CalendarDialog } from './CalendarDialog';
 import { formatEntryDate, weekStart } from './journal';
 import { PageLoading } from './Loading';
 import { NoteGroup } from './NoteGroup';
 import { readTaskCategory, writeTaskCategory } from './tasksSync';
+import type { TaskSection } from './tasksSync';
 import { useEditorDismissal } from './useEditorDismissal';
 import { useTheme } from './ThemeContext';
 import type { useTasksSync } from './useTasksSync';
-import { ImageLinkEditor, ImageLinkedBody } from './ImageLinks';
+import { ExpandableMarkdownBody, MarkdownNoteEditor } from './MarkdownNote';
+import { useDetailsHover } from './useDetailsHover';
 
 export interface TaskEditorTarget {
     id: string;
@@ -31,20 +33,25 @@ export interface TaskEditorTarget {
 }
 type TaskInput = { id: string; taskDate: string; category: TaskCategory; title: string; body: string };
 
-function TaskCategories({
+function TaskCategories<T extends TaskSection>({
     value,
     onChange,
     label,
+    options,
 }: {
-    value: TaskCategory;
-    onChange: (value: TaskCategory) => void;
+    value: T;
+    onChange: (value: T) => void;
     label: string;
+    options: readonly T[];
 }) {
-    const style: CSSProperties & { '--segment-index': number } = { '--segment-index': value === 'home' ? 0 : 1 };
+    const style = {
+        '--segment-index': options.indexOf(value),
+        '--segment-count': options.length,
+    } as CSSProperties;
     return (
-        <div className="segmented task-categories" role="group" aria-label={label}>
+        <div className="segmented task-categories" role="group" aria-label={label} style={style}>
             <span className="segment-fill" style={style} aria-hidden="true" />
-            {(['home', 'work'] as const).map((category) => (
+            {options.map((category) => (
                 <button
                     key={category}
                     type="button"
@@ -52,7 +59,7 @@ function TaskCategories({
                     aria-pressed={value === category}
                     onClick={() => onChange(category)}
                 >
-                    {category === 'home' ? 'Home' : 'Work'}
+                    {category === 'home' ? 'Home' : category === 'work' ? 'Work' : 'All'}
                 </button>
             ))}
         </div>
@@ -171,6 +178,15 @@ function TaskDialog({
                         <h2 id="task-dialog-title">{task ? 'Edit task' : 'New task'}</h2>
                     </div>
                 </div>
+                <div className="field-group">
+                    <span className="field-label">Section</span>
+                    <TaskCategories
+                        label="Task category"
+                        value={section}
+                        onChange={setSection}
+                        options={taskCategories}
+                    />
+                </div>
                 <label className="field-group">
                     <span className="field-label">Task title</span>
                     <input
@@ -181,28 +197,15 @@ function TaskDialog({
                         required
                         maxLength={taskLimits.title}
                         defaultValue={initialTitle}
-                        placeholder="What needs doing?"
                     />
                 </label>
-                <div className="field-group editor-body image-link-body">
-                    <label className="field-label" htmlFor="task-body">
-                        Details
-                    </label>
-                    <textarea
-                        id="task-body"
-                        ref={bodyRef}
-                        className="field-textarea journal-textarea"
-                        name="body"
-                        maxLength={taskLimits.body}
-                        defaultValue={initialBody}
-                        placeholder="Optional details..."
-                    />
-                    <ImageLinkEditor bodyRef={bodyRef} />
-                </div>
-                <div className="field-group">
-                    <span className="field-label">Section</span>
-                    <TaskCategories label="Task category" value={section} onChange={setSection} />
-                </div>
+                <MarkdownNoteEditor
+                    label="Details"
+                    bodyRef={bodyRef}
+                    name="body"
+                    maxLength={taskLimits.body}
+                    defaultValue={initialBody}
+                />
                 {error && (
                     <p className="dialog-error" role="alert">
                         {error}
@@ -253,6 +256,9 @@ function TaskRow({
     onComplete: (task: ServerTask, completed: boolean) => void;
     onEdit: (task: ServerTask) => void;
 }) {
+    const [expanded, setExpanded] = useState(false);
+    const detailsId = useId();
+    const hover = useDetailsHover();
     const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({
         id: task.id,
         disabled: filtering,
@@ -263,6 +269,9 @@ function TaskRow({
             ref={setNodeRef}
             style={style}
             className="task-row"
+            tabIndex={0}
+            aria-labelledby={`${detailsId}-title`}
+            data-expanded={expanded}
             data-completed={task.completed}
             data-dragging={isDragging}
         >
@@ -284,9 +293,24 @@ function TaskRow({
                 aria-label={`${task.completed ? 'Reopen' : 'Complete'} ${task.title}`}
                 onChange={(event) => onComplete(task, event.target.checked)}
             />
-            <div className="task-text">
-                <h5 className="task-title">{task.title}</h5>
-                {task.body && <ImageLinkedBody body={task.body} className="task-body" />}
+            <div className="task-text" {...hover}>
+                <h5 id={`${detailsId}-title`} className="task-title">
+                    {task.title}
+                </h5>
+                {task.body && (
+                    <>
+                        <ExpandableMarkdownBody id={detailsId} className="task-details" body={task.body} />
+                        <button
+                            type="button"
+                            className="text-button task-details-toggle"
+                            aria-expanded={expanded}
+                            aria-controls={detailsId}
+                            onClick={() => setExpanded((value) => !value)}
+                        >
+                            {expanded ? 'Show less' : 'Show details'}
+                        </button>
+                    </>
+                )}
             </div>
             <button
                 type="button"
@@ -363,6 +387,24 @@ export function TasksPage({
 }) {
     const [initialCategory] = useState(readTaskCategory);
     const [category, setCategory] = useState(initialCategory.category);
+    const [displayedCategory, setDisplayedCategory] = useState(initialCategory.category);
+    const listLeaving = category !== displayedCategory;
+    useEffect(() => {
+        const motion = matchMedia('(prefers-reduced-motion: reduce)');
+        const settle = () => setDisplayedCategory(category);
+        const timer = setTimeout(settle, motion.matches ? 0 : 250);
+        const onMotionChange = () => {
+            if (motion.matches) {
+                clearTimeout(timer);
+                settle();
+            }
+        };
+        motion.addEventListener('change', onMotionChange);
+        return () => {
+            clearTimeout(timer);
+            motion.removeEventListener('change', onMotionChange);
+        };
+    }, [category]);
     const [categoryNotice, setCategoryNotice] = useState(initialCategory.error);
     const [query, setQuery] = useState('');
     const [calendarOpen, setCalendarOpen] = useState(false);
@@ -370,15 +412,18 @@ export function TasksPage({
     const dayRefs = useRef(new Map<string, HTMLElement>());
     const { storageWarning } = useTheme();
     const notice = tasks.notice ?? categoryNotice ?? storageWarning;
-    const selectCategory = (value: TaskCategory) => {
+    const selectCategory = (value: TaskSection) => {
         setCategory(value);
         setCategoryNotice(writeTaskCategory(value));
     };
-    const inCategory = tasks.tasks.filter((task) => task.category === category);
+    const inCategory = tasks.tasks.filter((task) => category === 'all' || task.category === category);
     const needle = query.trim().toLocaleLowerCase();
-    const visible = inCategory.filter(
+    const visible = tasks.tasks.filter(
         (task) =>
-            !needle || task.title.toLocaleLowerCase().includes(needle) || task.body.toLocaleLowerCase().includes(needle)
+            (displayedCategory === 'all' || task.category === displayedCategory) &&
+            (!needle ||
+                task.title.toLocaleLowerCase().includes(needle) ||
+                task.body.toLocaleLowerCase().includes(needle))
     );
     const weeks = new Map<string, Map<string, ServerTask[]>>();
     for (const task of visible) {
@@ -443,7 +488,12 @@ export function TasksPage({
                                 />
                             </label>
                             <div className="task-toolbar-actions">
-                                <TaskCategories label="Task section" value={category} onChange={selectCategory} />
+                                <TaskCategories
+                                    label="Task section"
+                                    value={category}
+                                    onChange={selectCategory}
+                                    options={['all', ...taskCategories]}
+                                />
                                 <button
                                     type="button"
                                     className="secondary-button"
@@ -455,72 +505,68 @@ export function TasksPage({
                             </div>
                         </div>
                         {needle && <p className="task-search-hint field-hint">Clear search to reorder tasks.</p>}
-                        {[...weeks].map(([week, days]) => {
-                            const key = `${category}-${week}`;
-                            return (
-                                <NoteGroup
-                                    key={key}
-                                    id={`tasks-${key}`}
-                                    title={`Week of ${formatEntryDate(week)}`}
-                                    count={[...days.values()].reduce((count, list) => count + list.length, 0)}
-                                    item="task"
-                                    expanded={expandedWeeks[key] ?? week === weekStart(today)}
-                                    onExpandedChange={(expanded) =>
-                                        setExpandedWeeks((current) => ({ ...current, [key]: expanded }))
-                                    }
-                                >
-                                    {[...days].map(([date, daily]) => (
-                                        <section
-                                            key={date}
-                                            className="task-day"
-                                            aria-label={`Tasks for ${formatEntryDate(date)}`}
-                                            ref={(element) => {
-                                                if (element) dayRefs.current.set(date, element);
-                                                else dayRefs.current.delete(date);
-                                            }}
-                                        >
-                                            <div className="task-day-heading">
-                                                <h4>
-                                                    <time dateTime={date}>{formatEntryDate(date)}</time>
-                                                </h4>
-                                                <button
-                                                    type="button"
-                                                    className="text-button"
-                                                    aria-label={`Add task for ${formatEntryDate(date)}`}
-                                                    onClick={() => addTask(date)}
-                                                >
-                                                    <Plus size={14} aria-hidden="true" />
-                                                    Add task
-                                                </button>
-                                            </div>
-                                            <TaskDay
-                                                tasks={daily}
-                                                filtering={Boolean(needle)}
-                                                onEdit={editTask}
-                                                onComplete={(task, completed) => {
-                                                    tasks.complete(task, completed);
+                        <div className="task-list-transition" data-leaving={listLeaving} inert={listLeaving}>
+                            {[...weeks].map(([week, days]) => {
+                                const key = `${displayedCategory}-${week}`;
+                                return (
+                                    <NoteGroup
+                                        key={key}
+                                        id={`tasks-${key}`}
+                                        title={`Week of ${formatEntryDate(week)}`}
+                                        count={[...days.values()].reduce((count, list) => count + list.length, 0)}
+                                        item="task"
+                                        expanded={expandedWeeks[key] ?? week === weekStart(today)}
+                                        onExpandedChange={(expanded) =>
+                                            setExpandedWeeks((current) => ({ ...current, [key]: expanded }))
+                                        }
+                                    >
+                                        {[...days].map(([date, daily]) => (
+                                            <section
+                                                key={date}
+                                                className="task-day"
+                                                aria-label={`Tasks for ${formatEntryDate(date)}`}
+                                                ref={(element) => {
+                                                    if (element) dayRefs.current.set(date, element);
+                                                    else dayRefs.current.delete(date);
                                                 }}
-                                                onReorder={(ids) => {
-                                                    tasks.reorder(date, category, ids);
-                                                }}
-                                            />
-                                        </section>
-                                    ))}
-                                </NoteGroup>
-                            );
-                        })}
-                        {weeks.size === 0 && (
-                            <div className="empty-state">
-                                <span className="empty-icon">
-                                    <ListTodo size={22} aria-hidden="true" />
-                                </span>
-                                <h4>
-                                    {needle
-                                        ? 'No tasks match this search'
-                                        : `No ${category === 'home' ? 'home' : 'work'} tasks yet`}
-                                </h4>
-                            </div>
-                        )}
+                                            >
+                                                <div className="task-day-heading">
+                                                    <h4>
+                                                        <time dateTime={date}>{formatEntryDate(date)}</time>
+                                                    </h4>
+                                                </div>
+                                                <TaskDay
+                                                    tasks={daily}
+                                                    filtering={Boolean(needle) || displayedCategory === 'all'}
+                                                    onEdit={editTask}
+                                                    onComplete={(task, completed) => {
+                                                        tasks.complete(task, completed);
+                                                    }}
+                                                    onReorder={(ids) => {
+                                                        if (displayedCategory !== 'all')
+                                                            tasks.reorder(date, displayedCategory, ids);
+                                                    }}
+                                                />
+                                            </section>
+                                        ))}
+                                    </NoteGroup>
+                                );
+                            })}
+                            {weeks.size === 0 && (
+                                <div className="empty-state">
+                                    <span className="empty-icon">
+                                        <ListTodo size={22} aria-hidden="true" />
+                                    </span>
+                                    <h4>
+                                        {needle
+                                            ? 'No tasks match this search'
+                                            : displayedCategory === 'all'
+                                              ? 'No tasks yet'
+                                              : `No ${displayedCategory} tasks yet`}
+                                    </h4>
+                                </div>
+                            )}
+                        </div>
                     </section>
                 </div>
             )}
@@ -529,7 +575,7 @@ export function TasksPage({
                     key={editingTask.id}
                     target={editingTask}
                     task={currentTask}
-                    category={category}
+                    category={category === 'all' ? 'home' : category}
                     onDraftProtectionChange={onDraftProtectionChange}
                     onClose={() => setEditingTask(undefined)}
                     onSave={(value) => {

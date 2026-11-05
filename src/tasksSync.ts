@@ -174,16 +174,18 @@ export function writeTasksState(state: TasksState): string | null {
 }
 
 const CATEGORY_KEY = 'the-workbench.task-category';
-export function readTaskCategory(): { category: TaskCategory; error: string | null } {
+export type TaskSection = TaskCategory | 'all';
+export function readTaskCategory(): { category: TaskSection; error: string | null } {
     try {
         const value = window.localStorage.getItem(CATEGORY_KEY);
-        if (value === null || value === 'home' || value === 'work') return { category: value ?? 'home', error: null };
+        if (value === null || value === 'home' || value === 'work' || value === 'all')
+            return { category: value ?? 'home', error: null };
         return { category: 'home', error: 'The saved task section is invalid. Home is selected.' };
     } catch {
         return { category: 'home', error: 'The task section could not be read from browser storage.' };
     }
 }
-export function writeTaskCategory(category: TaskCategory): string | null {
+export function writeTaskCategory(category: TaskSection): string | null {
     try {
         window.localStorage.setItem(CATEGORY_KEY, category);
         return null;

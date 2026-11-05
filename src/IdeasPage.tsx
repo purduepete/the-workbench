@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState } from 'react';
+import { useId, useLayoutEffect, useRef, useState } from 'react';
 import type { CSSProperties, FormEvent, ReactNode } from 'react';
 import {
     Archive,
@@ -25,7 +25,8 @@ import type { Solution } from '../shared/contracts';
 import type { useIdeasSync } from './useIdeasSync';
 import type { useSolutions } from './useSolutions';
 import { statusForSolution } from '../shared/status';
-import { ImageLinkEditor, ImageLinkedBody } from './ImageLinks';
+import { ExpandableMarkdownBody, MarkdownNoteEditor } from './MarkdownNote';
+import { useDetailsHover } from './useDetailsHover';
 
 interface IdeaInput {
     title: string;
@@ -275,26 +276,17 @@ function IdeaDialog({
                         name="title"
                         type="text"
                         maxLength={100}
-                        placeholder="A thought worth keeping"
                         defaultValue={idea?.title ?? ''}
                         required
                     />
                 </label>
-                <div className="field-group editor-body image-link-body">
-                    <label className="field-label" htmlFor="idea-body">
-                        Details
-                    </label>
-                    <textarea
-                        id="idea-body"
-                        ref={bodyRef}
-                        className="field-textarea"
-                        name="body"
-                        maxLength={5000}
-                        placeholder="Add context, questions, links, or the next step..."
-                        defaultValue={idea?.body ?? ''}
-                    />
-                    <ImageLinkEditor bodyRef={bodyRef} />
-                </div>
+                <MarkdownNoteEditor
+                    label="Details"
+                    bodyRef={bodyRef}
+                    name="body"
+                    maxLength={5000}
+                    defaultValue={idea?.body ?? ''}
+                />
                 <label className="field-group">
                     <span className="field-label">Tags</span>
                     <input
@@ -302,7 +294,6 @@ function IdeaDialog({
                         name="tags"
                         type="text"
                         maxLength={300}
-                        placeholder="work, writing, someday"
                         defaultValue={idea?.tags.join(', ') ?? ''}
                         aria-describedby="tag-hint"
                     />
@@ -407,72 +398,101 @@ function IdeaCard({
     onSelectTag,
     onSelectSolution,
 }: IdeaCardProps) {
+    const [expanded, setExpanded] = useState(false);
+    const detailsId = useId();
+    const hover = useDetailsHover();
     return (
-        <article className="idea-card">
-            <div className="idea-card-top">
-                <span className="card-label">
-                    {idea.pinned ? <Pin size={12} aria-hidden="true" /> : <Lightbulb size={12} aria-hidden="true" />}
-                    {idea.pinned ? 'Pinned thought' : 'Saved thought'}
-                </span>
-                <div className="card-actions">
-                    <button
-                        type="button"
-                        className="card-action"
-                        aria-label={idea.pinned ? `Unpin ${idea.title}` : `Pin ${idea.title}`}
-                        aria-pressed={idea.pinned}
-                        onClick={() => onTogglePin(idea)}
-                    >
-                        <Pin size={15} aria-hidden="true" />
-                    </button>
-                    <button
-                        type="button"
-                        className="card-action"
-                        aria-label={idea.archived ? `Restore ${idea.title}` : `Archive ${idea.title}`}
-                        onClick={() => onToggleArchive(idea)}
-                    >
-                        {idea.archived ? (
-                            <ArrowDownLeft size={15} aria-hidden="true" />
+        <article
+            className="idea-card idea-markdown-card"
+            data-expanded={expanded}
+            tabIndex={0}
+            aria-labelledby={`${detailsId}-title`}
+        >
+            <div className="idea-card-content" {...hover}>
+                <div className="idea-card-top">
+                    <span className="card-label">
+                        {idea.pinned ? (
+                            <Pin size={12} aria-hidden="true" />
                         ) : (
-                            <Archive size={15} aria-hidden="true" />
+                            <Lightbulb size={12} aria-hidden="true" />
                         )}
-                    </button>
-                </div>
-            </div>
-            <h4 className="idea-title">{idea.title}</h4>
-            {(idea.solution || idea.status !== 'open') && (
-                <div className="idea-meta">
-                    {idea.solution && (
+                        {idea.pinned ? 'Pinned thought' : 'Saved thought'}
+                    </span>
+                    <div className="card-actions">
                         <button
                             type="button"
-                            className="solution-chip"
-                            aria-label={`Filter by solution ${solutionName(solutions, idea.solution)}`}
-                            onClick={() => onSelectSolution(idea.solution ?? '')}
+                            className="card-action"
+                            aria-label={idea.pinned ? `Unpin ${idea.title}` : `Pin ${idea.title}`}
+                            aria-pressed={idea.pinned}
+                            onClick={() => onTogglePin(idea)}
                         >
-                            <Boxes size={11} aria-hidden="true" />
-                            {solutionName(solutions, idea.solution)}
+                            <Pin size={15} aria-hidden="true" />
                         </button>
-                    )}
-                    <span className="status-chip" data-status={idea.status}>
-                        {idea.status === 'n/a'
-                            ? 'N/A'
-                            : statusOptions.find((option) => option.value === idea.status)?.label}
-                    </span>
+                        <button
+                            type="button"
+                            className="card-action"
+                            aria-label={idea.archived ? `Restore ${idea.title}` : `Archive ${idea.title}`}
+                            onClick={() => onToggleArchive(idea)}
+                        >
+                            {idea.archived ? (
+                                <ArrowDownLeft size={15} aria-hidden="true" />
+                            ) : (
+                                <Archive size={15} aria-hidden="true" />
+                            )}
+                        </button>
+                    </div>
                 </div>
-            )}
-            {idea.body && <ImageLinkedBody body={idea.body} className="idea-body" />}
-            <div className="idea-tags">
-                {idea.tags.map((tag) => (
-                    <button
-                        key={tag.toLocaleLowerCase()}
-                        className="tag-chip tag-filter"
-                        type="button"
-                        aria-label={`Filter by ${tag}`}
-                        onClick={() => onSelectTag(tag)}
-                    >
-                        <Tag size={10} aria-hidden="true" />
-                        {tag}
-                    </button>
-                ))}
+                <h4 id={`${detailsId}-title`} className="idea-title">
+                    {idea.title}
+                </h4>
+                {(idea.solution || idea.status !== 'open') && (
+                    <div className="idea-meta">
+                        {idea.solution && (
+                            <button
+                                type="button"
+                                className="solution-chip"
+                                aria-label={`Filter by solution ${solutionName(solutions, idea.solution)}`}
+                                onClick={() => onSelectSolution(idea.solution ?? '')}
+                            >
+                                <Boxes size={11} aria-hidden="true" />
+                                {solutionName(solutions, idea.solution)}
+                            </button>
+                        )}
+                        <span className="status-chip" data-status={idea.status}>
+                            {idea.status === 'n/a'
+                                ? 'N/A'
+                                : statusOptions.find((option) => option.value === idea.status)?.label}
+                        </span>
+                    </div>
+                )}
+                {idea.body && (
+                    <>
+                        <ExpandableMarkdownBody id={detailsId} className="idea-details" body={idea.body} />
+                        <button
+                            type="button"
+                            className="text-button idea-details-toggle"
+                            aria-expanded={expanded}
+                            aria-controls={detailsId}
+                            onClick={() => setExpanded((value) => !value)}
+                        >
+                            {expanded ? 'Show less' : 'Show details'}
+                        </button>
+                    </>
+                )}
+                <div className="idea-tags">
+                    {idea.tags.map((tag) => (
+                        <button
+                            key={tag.toLocaleLowerCase()}
+                            className="tag-chip tag-filter"
+                            type="button"
+                            aria-label={`Filter by ${tag}`}
+                            onClick={() => onSelectTag(tag)}
+                        >
+                            <Tag size={10} aria-hidden="true" />
+                            {tag}
+                        </button>
+                    ))}
+                </div>
             </div>
             <div className="idea-card-bottom">
                 <span className="idea-date">
