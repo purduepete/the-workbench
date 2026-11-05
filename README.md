@@ -8,6 +8,9 @@ Sync errors reveal the header and prompt immediately. Refreshes keep the shell v
 Reduced motion removes the entrance animation.
 
 The Workbench keeps ideas with tags, pins, search and archive alongside date-grouped notes and Home/Work tasks.
+Duplicate on an idea card opens a new-idea editor with its title, Markdown details, tags, solution and status copied.
+The card footer uses task-plus, pencil and copy icons for Create task, Edit and Duplicate, with accessible button names.
+Save creates a separate idea with new timestamps, without pinning or archiving it. Cancel creates nothing.
 Data syncs to a PostgreSQL database through a small Express server. The browser keeps an outbox, so capture works
 offline and changes upload when the connection returns.
 
@@ -140,6 +143,8 @@ titles are required, but the body can be empty.
 
 Only the current week starts expanded; older weeks and global notes start collapsed. Modals use Cancel instead of
 a close icon and open with an opacity-only fade.
+Each daily note also collapses independently from its date header. Today starts expanded; every other day starts
+collapsed. Collapsing a day hides its details, tags and Edit control while keeping its date and section visible.
 
 Notes sync offline the same way ideas do, keyed by date instead of an id:
 

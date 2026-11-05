@@ -1,6 +1,18 @@
 import { useLayoutEffect, useRef, useState } from 'react';
 import type { FormEvent, ReactNode } from 'react';
-import { CalendarDays, Check, Clock3, NotebookPen, Plus, Search, Tag, Trash2, X } from 'lucide-react';
+import {
+    CalendarDays,
+    Check,
+    ChevronDown,
+    ChevronRight,
+    Clock3,
+    NotebookPen,
+    Plus,
+    Search,
+    Tag,
+    Trash2,
+    X,
+} from 'lucide-react';
 import { globalNoteLimits, journalLimits } from '../shared/contracts';
 import type { NoteCategory } from '../shared/contracts';
 import { categoryLabel, NoteCategories } from './NoteCategories';
@@ -413,6 +425,7 @@ export function NotesPage({
     const [calendarOpen, setCalendarOpen] = useState(false);
     const [calendarSelection, setCalendarSelection] = useState(false);
     const [editingGlobalId, setEditingGlobalId] = useState<string | undefined>();
+    const [expandedDays, setExpandedDays] = useState<Record<string, boolean>>({});
     const { entries } = journal;
     const matchesCategory = (category: NoteCategory | undefined) =>
         categoryFilter === 'all' ||
@@ -594,55 +607,83 @@ export function NotesPage({
                                     item="entry"
                                     defaultExpanded={week.weekStart === weekStart(today)}
                                 >
-                                    {week.entries.map((entry) => (
-                                        <article key={entry.entryDate} className="idea-card journal-card">
-                                            <div className="idea-card-top">
+                                    {week.entries.map((entry) => {
+                                        const expanded = expandedDays[entry.entryDate] ?? entry.entryDate === today;
+                                        return (
+                                            <article key={entry.entryDate} className="idea-card journal-card">
                                                 <h4 className="journal-date">
-                                                    <time dateTime={entry.entryDate}>
-                                                        {formatEntryDate(entry.entryDate)}
-                                                    </time>
+                                                    <button
+                                                        type="button"
+                                                        className="journal-day-toggle idea-card-top"
+                                                        aria-label={`Daily note for ${formatEntryDate(entry.entryDate)}`}
+                                                        aria-expanded={expanded}
+                                                        aria-controls={`day-${entry.entryDate}-details`}
+                                                        onClick={() =>
+                                                            setExpandedDays((days) => ({
+                                                                ...days,
+                                                                [entry.entryDate]: !expanded,
+                                                            }))
+                                                        }
+                                                    >
+                                                        <span className="note-group-label">
+                                                            {expanded ? (
+                                                                <ChevronDown size={16} aria-hidden="true" />
+                                                            ) : (
+                                                                <ChevronRight size={16} aria-hidden="true" />
+                                                            )}
+                                                            <time dateTime={entry.entryDate}>
+                                                                {formatEntryDate(entry.entryDate)}
+                                                            </time>
+                                                        </span>
+                                                        <span className="card-label">
+                                                            {categoryLabel(entry.category)}
+                                                        </span>
+                                                        {entry.entryDate === today && (
+                                                            <span className="card-label">Today</span>
+                                                        )}
+                                                    </button>
                                                 </h4>
-                                                <span className="card-label">{categoryLabel(entry.category)}</span>
-                                                {entry.entryDate === today && <span className="card-label">Today</span>}
-                                            </div>
-                                            <MarkdownNoteBody
-                                                body={entry.body}
-                                                className="idea-body journal-body markdown-body"
-                                            />
-                                            {entry.tags.length > 0 && (
-                                                <div className="idea-tags">
-                                                    {entry.tags.map((tag) => (
+                                                <div id={`day-${entry.entryDate}-details`} hidden={!expanded}>
+                                                    <MarkdownNoteBody
+                                                        body={entry.body}
+                                                        className="idea-body journal-body markdown-body"
+                                                    />
+                                                    {entry.tags.length > 0 && (
+                                                        <div className="idea-tags">
+                                                            {entry.tags.map((tag) => (
+                                                                <button
+                                                                    key={tag.toLocaleLowerCase()}
+                                                                    className="tag-chip tag-filter"
+                                                                    type="button"
+                                                                    aria-label={`Filter by ${tag}`}
+                                                                    onClick={() => setSelectedTag(tag)}
+                                                                >
+                                                                    <Tag size={10} aria-hidden="true" />
+                                                                    {tag}
+                                                                </button>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                    <div className="idea-card-bottom">
+                                                        <span className="idea-date">
+                                                            <Clock3 size={12} aria-hidden="true" />
+                                                            <time dateTime={entry.updatedAt}>
+                                                                {formatIdeaTimestamp(entry.updatedAt)}
+                                                            </time>
+                                                        </span>
                                                         <button
-                                                            key={tag.toLocaleLowerCase()}
-                                                            className="tag-chip tag-filter"
                                                             type="button"
-                                                            aria-label={`Filter by ${tag}`}
-                                                            onClick={() => setSelectedTag(tag)}
+                                                            className="edit-button"
+                                                            aria-label={`Edit entry for ${formatEntryDate(entry.entryDate)}`}
+                                                            onClick={() => setEditingDate(entry.entryDate)}
                                                         >
-                                                            <Tag size={10} aria-hidden="true" />
-                                                            {tag}
+                                                            Edit
                                                         </button>
-                                                    ))}
+                                                    </div>
                                                 </div>
-                                            )}
-                                            <div className="idea-card-bottom">
-                                                <span className="idea-date">
-                                                    <Clock3 size={12} aria-hidden="true" />
-                                                    <time dateTime={entry.updatedAt}>
-                                                        {formatIdeaTimestamp(entry.updatedAt)}
-                                                    </time>
-                                                </span>
-                                                <button
-                                                    type="button"
-                                                    className="edit-button"
-                                                    aria-label={`Edit entry for ${formatEntryDate(entry.entryDate)}`}
-                                                    onClick={() => setEditingDate(entry.entryDate)}
-                                                >
-                                                    Edit
-                                                </button>
-                                            </div>
-                                        </article>
-                                    ))}
+                                            </article>
+                                        );
+                                    })}
                                 </NoteGroup>
                             ))
                         ) : !visibleHasContent ? (

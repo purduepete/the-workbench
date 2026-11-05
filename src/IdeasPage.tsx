@@ -6,11 +6,14 @@ import {
     Boxes,
     Check,
     Clock3,
+    Copy,
     Lightbulb,
     Pin,
+    Pencil,
     Search,
     Settings2,
     Tag,
+    ListPlus,
     Trash2,
     X,
 } from 'lucide-react';
@@ -38,6 +41,7 @@ interface IdeaInput {
 
 interface IdeaDialogProps {
     idea: Idea | null;
+    duplicateSource?: Idea | null;
     solutions: Solution[];
     defaultSolution: string | null;
     onClose: () => void;
@@ -156,6 +160,7 @@ const views: { id: IdeaView; label: string; icon: typeof Lightbulb }[] = [
 
 function IdeaDialog({
     idea,
+    duplicateSource,
     solutions,
     defaultSolution,
     onClose,
@@ -163,6 +168,7 @@ function IdeaDialog({
     onDelete,
     onDraftProtectionChange,
 }: IdeaDialogProps & { onDraftProtectionChange: (protectedDraft: boolean) => void }) {
+    const initialIdea = idea ?? duplicateSource;
     const dialogRef = useRef<HTMLDialogElement>(null);
     const formRef = useRef<HTMLFormElement>(null);
     const titleRef = useRef<HTMLInputElement>(null);
@@ -175,11 +181,11 @@ function IdeaDialog({
     const [confirmingDelete, setConfirmingDelete] = useState(false);
     const dismissal = useEditorDismissal(
         dialogRef,
-        Boolean(idea?.title.trim() || idea?.body.trim()),
+        Boolean(initialIdea?.title.trim() || initialIdea?.body.trim()),
         onDraftProtectionChange
     );
-    const [solution, setSolution] = useState<string | null>(idea ? idea.solution : defaultSolution);
-    const [status, setStatus] = useState<IdeaStatus>(() => statusForSolution(solution, idea?.status));
+    const [solution, setSolution] = useState<string | null>(initialIdea ? initialIdea.solution : defaultSolution);
+    const [status, setStatus] = useState<IdeaStatus>(() => statusForSolution(solution, initialIdea?.status));
     const statusIndex = statusOptions.findIndex((option) => option.value === status);
     const statusStyle: CSSProperties & { '--segment-index': number } = { '--segment-index': statusIndex };
 
@@ -276,7 +282,7 @@ function IdeaDialog({
                         name="title"
                         type="text"
                         maxLength={100}
-                        defaultValue={idea?.title ?? ''}
+                        defaultValue={initialIdea?.title ?? ''}
                         required
                     />
                 </label>
@@ -285,7 +291,7 @@ function IdeaDialog({
                     bodyRef={bodyRef}
                     name="body"
                     maxLength={5000}
-                    defaultValue={idea?.body ?? ''}
+                    defaultValue={initialIdea?.body ?? ''}
                 />
                 <label className="field-group">
                     <span className="field-label">Tags</span>
@@ -294,7 +300,7 @@ function IdeaDialog({
                         name="tags"
                         type="text"
                         maxLength={300}
-                        defaultValue={idea?.tags.join(', ') ?? ''}
+                        defaultValue={initialIdea?.tags.join(', ') ?? ''}
                         aria-describedby="tag-hint"
                     />
                     <span className="field-hint" id="tag-hint">
@@ -381,6 +387,7 @@ interface IdeaCardProps {
     idea: Idea;
     solutions: Solution[];
     onEdit: (idea: Idea) => void;
+    onDuplicate: (idea: Idea) => void;
     onCreateTask: (title: string, body: string) => void;
     onTogglePin: (idea: Idea) => void;
     onToggleArchive: (idea: Idea) => void;
@@ -392,6 +399,7 @@ function IdeaCard({
     idea,
     solutions,
     onEdit,
+    onDuplicate,
     onCreateTask,
     onTogglePin,
     onToggleArchive,
@@ -502,14 +510,22 @@ function IdeaCard({
                 <div className="card-actions">
                     <button
                         type="button"
-                        className="edit-button"
+                        className="card-action"
                         aria-label={`Create task from ${idea.title}`}
                         onClick={() => onCreateTask(idea.title, idea.body)}
                     >
-                        Create task
+                        <ListPlus size={15} aria-hidden="true" />
                     </button>
-                    <button type="button" className="edit-button" onClick={() => onEdit(idea)}>
-                        Edit
+                    <button
+                        type="button"
+                        className="card-action"
+                        aria-label={`Duplicate ${idea.title}`}
+                        onClick={() => onDuplicate(idea)}
+                    >
+                        <Copy size={15} aria-hidden="true" />
+                    </button>
+                    <button type="button" className="card-action" aria-label="Edit" onClick={() => onEdit(idea)}>
+                        <Pencil size={15} aria-hidden="true" />
                     </button>
                 </div>
             </div>
@@ -552,6 +568,7 @@ export function IdeasPage({
     const [selectedTag, setSelectedTag] = useState<string | null>(null);
     const [solutionFilter, setSolutionFilter] = useState<SolutionFilter>('all');
     const [managingSolutions, setManagingSolutions] = useState(false);
+    const [duplicateSource, setDuplicateSource] = useState<Idea | null>(null);
     const { solutions, setDisabled: setSolutionDisabled } = solutionsState;
     const linkedIds = Array.from(new Set(ideas.flatMap((idea) => (idea.solution ? [idea.solution] : []))));
     const filterOptions = [
@@ -732,6 +749,10 @@ export function IdeasPage({
                                         idea={idea}
                                         solutions={solutions}
                                         onEdit={setEditingIdea}
+                                        onDuplicate={(source) => {
+                                            setDuplicateSource(source);
+                                            setEditingIdea(null);
+                                        }}
                                         onCreateTask={onCreateTask}
                                         onTogglePin={(target) => updateIdea(target, { pinned: !target.pinned })}
                                         onToggleArchive={(target) => updateIdea(target, { archived: !target.archived })}
@@ -767,9 +788,13 @@ export function IdeasPage({
                 <IdeaDialog
                     key={editingIdea?.id ?? 'new'}
                     idea={editingIdea}
+                    duplicateSource={duplicateSource}
                     solutions={solutions}
                     defaultSolution={solutionFilter === 'all' || solutionFilter === 'none' ? null : solutionFilter}
-                    onClose={() => setEditingIdea(undefined)}
+                    onClose={() => {
+                        setDuplicateSource(null);
+                        setEditingIdea(undefined);
+                    }}
                     onSave={saveIdea}
                     onDelete={sync.remove}
                     onDraftProtectionChange={onDraftProtectionChange}

@@ -1356,6 +1356,21 @@ form.idea-form > .field-group:first-child {
     font-weight: 650;
 }
 
+.journal-day-toggle {
+    width: 100%;
+    padding: 0;
+    border: 0;
+    color: inherit;
+    background: transparent;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.journal-day-toggle:hover {
+    color: var(--accent);
+}
+
 .journal-body {
     margin-top: 8px;
     color: var(--text);
