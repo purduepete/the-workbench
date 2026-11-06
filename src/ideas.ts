@@ -24,6 +24,25 @@ export function writeIdeaView(view: IdeaView): string | null {
 /** 'all' shows every idea, 'none' only unlinked ideas, otherwise one solution id. */
 export type SolutionFilter = 'all' | 'none' | (string & {});
 
+export const SOLUTION_FILTER_STORAGE_KEY = 'the-workbench.solution-filter';
+
+export function readSolutionFilter(): SolutionFilter {
+    try {
+        return window.localStorage.getItem(SOLUTION_FILTER_STORAGE_KEY)?.trim() || 'all';
+    } catch {
+        return 'all';
+    }
+}
+
+export function writeSolutionFilter(filter: SolutionFilter): string | null {
+    try {
+        window.localStorage.setItem(SOLUTION_FILTER_STORAGE_KEY, filter);
+        return null;
+    } catch {
+        return 'Your solution filter could not be saved. It will reset when you reopen this page.';
+    }
+}
+
 export function filterIdeas(
     ideas: Idea[],
     view: IdeaView,

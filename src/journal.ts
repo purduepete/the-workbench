@@ -1,4 +1,25 @@
 import type { NoteCategory, ServerJournalEntry } from '../shared/contracts';
+import type { NoteFilter } from './NoteCategories';
+
+export const NOTE_FILTER_STORAGE_KEY = 'the-workbench.note-filter';
+
+export function readNoteFilter(): NoteFilter {
+    try {
+        const saved = window.localStorage.getItem(NOTE_FILTER_STORAGE_KEY);
+        return saved === 'home' || saved === 'work' || saved === 'unclassified' ? saved : 'all';
+    } catch {
+        return 'all';
+    }
+}
+
+export function writeNoteFilter(filter: NoteFilter): string | null {
+    try {
+        window.localStorage.setItem(NOTE_FILTER_STORAGE_KEY, filter);
+        return null;
+    } catch {
+        return 'Your note filter could not be saved. It will reset when you reopen this page.';
+    }
+}
 
 /** A journal entry as the page shows it: the confirmed row with any queued change on top. */
 export interface JournalEntry {

@@ -18,11 +18,12 @@ import type { TaskEditorTarget } from './TasksPage';
 import type { Route } from './useRoute';
 import { useRoute } from './useRoute';
 import { useSolutions } from './useSolutions';
+import { shortcutRoute } from './pageShortcuts';
 
-const pages: { route: Route; label: string; icon: typeof Lightbulb }[] = [
-    { route: '/', label: 'Ideas', icon: Lightbulb },
-    { route: '/notes', label: 'Notes', icon: NotebookPen },
-    { route: '/tasks', label: 'Tasks', icon: ListTodo },
+const pages: { route: Route; label: string; icon: typeof Lightbulb; shortcut: string }[] = [
+    { route: '/', label: 'Ideas', icon: Lightbulb, shortcut: 'I' },
+    { route: '/notes', label: 'Notes', icon: NotebookPen, shortcut: 'N' },
+    { route: '/tasks', label: 'Tasks', icon: ListTodo, shortcut: 'T' },
 ];
 
 const LEAVE_MS = 250;
@@ -37,6 +38,16 @@ export function App() {
     const [cachedAtEntry] = useState(sync.ready);
     const [protectedDraft, setProtectedDraft] = useState(false);
     const [route, navigate] = useRoute(() => !protectedDraft);
+    useEffect(() => {
+        const onKeyDown = (event: KeyboardEvent) => {
+            const target = shortcutRoute(event);
+            if (!target) return;
+            event.preventDefault();
+            navigate(target);
+        };
+        window.addEventListener('keydown', onKeyDown);
+        return () => window.removeEventListener('keydown', onKeyDown);
+    }, [navigate]);
     // The page on screen lags the route while the old page fades out.
     const [shown, setShown] = useState(route);
     const [editingIdea, setEditingIdea] = useState<Idea | null | undefined>(undefined);
@@ -113,12 +124,13 @@ export function App() {
                     </div>
                     <nav className="segmented page-nav" aria-label="Pages">
                         <span className="segment-fill" style={navStyle} aria-hidden="true" />
-                        {pages.map(({ route: target, label, icon: Icon }) => (
+                        {pages.map(({ route: target, label, icon: Icon, shortcut }) => (
                             <a
                                 key={target}
                                 href={target}
                                 className="segment-button"
                                 aria-current={route === target ? 'page' : undefined}
+                                aria-keyshortcuts={shortcut}
                                 onClick={(event) => {
                                     if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
                                     event.preventDefault();

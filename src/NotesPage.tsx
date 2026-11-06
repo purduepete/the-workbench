@@ -18,7 +18,7 @@ import type { NoteCategory } from '../shared/contracts';
 import { categoryLabel, NoteCategories } from './NoteCategories';
 import type { NoteFilter } from './NoteCategories';
 import { formatIdeaTimestamp, parseTags } from './ideas';
-import { filterEntries, formatEntryDate, groupByWeek, weekStart } from './journal';
+import { filterEntries, formatEntryDate, groupByWeek, readNoteFilter, weekStart, writeNoteFilter } from './journal';
 import type { JournalEntry } from './journal';
 import { CalendarDialog } from './CalendarDialog';
 import { NoteGroup } from './NoteGroup';
@@ -412,13 +412,15 @@ export function NotesPage({
     onDraftProtectionChange,
 }: NotesPageProps) {
     const { storageWarning: themeStorageWarning } = useTheme();
-    const notice = journal.notice ?? globalNotes.notice;
+    const [filterNotice, setFilterNotice] = useState<string | null>(null);
+    const notice = journal.notice ?? globalNotes.notice ?? filterNotice;
     const clearNotice = () => {
         journal.clearNotice();
         globalNotes.clearNotice();
+        setFilterNotice(null);
     };
     const [query, setQuery] = useState('');
-    const [categoryFilter, setCategoryFilter] = useState<NoteFilter>('all');
+    const [categoryFilter, setCategoryFilter] = useState<NoteFilter>(readNoteFilter);
     const newCategory: NoteCategory =
         categoryFilter === 'unclassified' ? null : categoryFilter === 'work' ? 'work' : 'home';
     const [selectedTag, setSelectedTag] = useState<string | null>(null);
@@ -549,6 +551,7 @@ export function NotesPage({
                                     filter
                                     onChange={(value) => {
                                         setCategoryFilter(value);
+                                        setFilterNotice(writeNoteFilter(value));
                                         setSelectedTag(null);
                                     }}
                                 />

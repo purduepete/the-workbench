@@ -17,7 +17,15 @@ import {
     Trash2,
     X,
 } from 'lucide-react';
-import { filterIdeas, formatIdeaTimestamp, parseTags, readIdeaView, writeIdeaView } from './ideas';
+import {
+    filterIdeas,
+    formatIdeaTimestamp,
+    parseTags,
+    readIdeaView,
+    readSolutionFilter,
+    writeIdeaView,
+    writeSolutionFilter,
+} from './ideas';
 import type { SolutionFilter } from './ideas';
 import { SelectField } from './SelectField';
 import { PageLoading } from './Loading';
@@ -568,7 +576,7 @@ export function IdeasPage({
     };
     const [query, setQuery] = useState('');
     const [selectedTag, setSelectedTag] = useState<string | null>(null);
-    const [solutionFilter, setSolutionFilter] = useState<SolutionFilter>('all');
+    const [solutionFilter, setSolutionFilterState] = useState<SolutionFilter>(readSolutionFilter);
     const [managingSolutions, setManagingSolutions] = useState(false);
     const [duplicateSource, setDuplicateSource] = useState<Idea | null>(null);
     const { solutions, setDisabled: setSolutionDisabled } = solutionsState;
@@ -624,6 +632,11 @@ export function IdeasPage({
     const chooseView = (nextView: IdeaView) => {
         setView(nextView);
         showStorageError(writeIdeaView(nextView));
+    };
+
+    const setSolutionFilter = (filter: SolutionFilter) => {
+        setSolutionFilterState(filter);
+        showStorageError(writeSolutionFilter(filter));
     };
 
     const viewCounts: Record<IdeaView, number> = {
