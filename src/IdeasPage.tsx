@@ -416,7 +416,7 @@ function IdeaCard({
             tabIndex={0}
             aria-labelledby={`${detailsId}-title`}
         >
-            <div className="idea-card-content" {...hover}>
+            <div className="idea-card-content">
                 <div className="idea-card-top">
                     <span className="card-label">
                         {idea.pinned ? (
@@ -450,56 +450,58 @@ function IdeaCard({
                         </button>
                     </div>
                 </div>
-                <h4 id={`${detailsId}-title`} className="idea-title">
-                    {idea.title}
-                </h4>
-                {(idea.solution || idea.status !== 'open') && (
-                    <div className="idea-meta">
-                        {idea.solution && (
+                <div className="idea-card-body" {...hover}>
+                    <h4 id={`${detailsId}-title`} className="idea-title">
+                        {idea.title}
+                    </h4>
+                    {(idea.solution || idea.status !== 'open') && (
+                        <div className="idea-meta">
+                            {idea.solution && (
+                                <button
+                                    type="button"
+                                    className="solution-chip"
+                                    aria-label={`Filter by solution ${solutionName(solutions, idea.solution)}`}
+                                    onClick={() => onSelectSolution(idea.solution ?? '')}
+                                >
+                                    <Boxes size={11} aria-hidden="true" />
+                                    {solutionName(solutions, idea.solution)}
+                                </button>
+                            )}
+                            <span className="status-chip" data-status={idea.status}>
+                                {idea.status === 'n/a'
+                                    ? 'N/A'
+                                    : statusOptions.find((option) => option.value === idea.status)?.label}
+                            </span>
+                        </div>
+                    )}
+                    {idea.body && (
+                        <>
+                            <ExpandableMarkdownBody id={detailsId} className="idea-details" body={idea.body} />
                             <button
                                 type="button"
-                                className="solution-chip"
-                                aria-label={`Filter by solution ${solutionName(solutions, idea.solution)}`}
-                                onClick={() => onSelectSolution(idea.solution ?? '')}
+                                className="text-button idea-details-toggle"
+                                aria-expanded={expanded}
+                                aria-controls={detailsId}
+                                onClick={() => setExpanded((value) => !value)}
                             >
-                                <Boxes size={11} aria-hidden="true" />
-                                {solutionName(solutions, idea.solution)}
+                                {expanded ? 'Show less' : 'Show details'}
                             </button>
-                        )}
-                        <span className="status-chip" data-status={idea.status}>
-                            {idea.status === 'n/a'
-                                ? 'N/A'
-                                : statusOptions.find((option) => option.value === idea.status)?.label}
-                        </span>
+                        </>
+                    )}
+                    <div className="idea-tags">
+                        {idea.tags.map((tag) => (
+                            <button
+                                key={tag.toLocaleLowerCase()}
+                                className="tag-chip tag-filter"
+                                type="button"
+                                aria-label={`Filter by ${tag}`}
+                                onClick={() => onSelectTag(tag)}
+                            >
+                                <Tag size={10} aria-hidden="true" />
+                                {tag}
+                            </button>
+                        ))}
                     </div>
-                )}
-                {idea.body && (
-                    <>
-                        <ExpandableMarkdownBody id={detailsId} className="idea-details" body={idea.body} />
-                        <button
-                            type="button"
-                            className="text-button idea-details-toggle"
-                            aria-expanded={expanded}
-                            aria-controls={detailsId}
-                            onClick={() => setExpanded((value) => !value)}
-                        >
-                            {expanded ? 'Show less' : 'Show details'}
-                        </button>
-                    </>
-                )}
-                <div className="idea-tags">
-                    {idea.tags.map((tag) => (
-                        <button
-                            key={tag.toLocaleLowerCase()}
-                            className="tag-chip tag-filter"
-                            type="button"
-                            aria-label={`Filter by ${tag}`}
-                            onClick={() => onSelectTag(tag)}
-                        >
-                            <Tag size={10} aria-hidden="true" />
-                            {tag}
-                        </button>
-                    ))}
                 </div>
             </div>
             <div className="idea-card-bottom">

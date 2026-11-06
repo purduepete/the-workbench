@@ -597,6 +597,13 @@ main.page-width {
     min-width: 0;
 }
 
+.idea-card-body {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-width: 0;
+}
+
 .idea-card-top,
 .idea-card-bottom {
     display: flex;
@@ -704,12 +711,12 @@ main.page-width {
 }
 
 @media (hover: hover) {
-    .idea-card-content[data-hovered='true'] .idea-details,
+    .idea-card-body[data-hovered='true'] .idea-details,
     .task-text[data-hovered='true'] .task-details {
         max-height: var(--details-height);
     }
 
-    .idea-card-content[data-hovered='true'] .idea-title {
+    .idea-card-body[data-hovered='true'] .idea-title {
         display: block;
         overflow: visible;
     }

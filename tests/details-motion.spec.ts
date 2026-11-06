@@ -57,7 +57,7 @@ for (const kind of ['idea', 'task'] as const) {
         const now = new Date();
         await page.clock.install({ time: now });
         await page.clock.pauseAt(now);
-        const content = container.locator(kind === 'idea' ? '.idea-card-content' : '.task-text');
+        const content = container.locator(kind === 'idea' ? '.idea-card-body' : '.task-text');
         await content.hover();
         await page.clock.runFor(249);
         await expect(content).toHaveAttribute('data-hovered', 'false');

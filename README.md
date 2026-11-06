@@ -177,8 +177,8 @@ Hover or focus a card to read its full details and title; Show details keeps it
 expanded for touch use. The underlying text stays Markdown when editing or creating a task.
 The idea's Show details button is hidden on mouse-based desktops, where hover and
 keyboard focus reveal the content.
-Idea hover expansion is limited to the upper content area; the timestamp and footer
-actions do not expand the card.
+Idea hover expansion is limited to the title, meta, details and tags area; the pin, archive,
+timestamp and footer actions do not expand the card.
 Idea and task details expand and collapse over 350 ms, following their measured content
 height as text, sections and thumbnails change. Reduced-motion mode skips the animation.
 Collapsed previews stop between complete text lines instead of cutting through letters.

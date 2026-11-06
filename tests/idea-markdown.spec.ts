@@ -44,7 +44,7 @@ for (const theme of ['midnight', 'light']) {
         await card.locator('.idea-card-bottom').hover();
         await page.waitForTimeout(400);
         expect(await isExpanded()).toBe(false);
-        await card.locator('.idea-card-content').hover();
+        await card.locator('.idea-card-body').hover();
         await expect.poll(isExpanded).toBe(true);
         expect(await details.evaluate((node) => node.scrollHeight <= node.clientHeight)).toBe(true);
         await expect(card.getByRole('link', { name: 'Read the final reference' })).toHaveAttribute(
@@ -52,6 +52,14 @@ for (const theme of ['midnight', 'light']) {
             'https://example.com/reference'
         );
         expect(await card.locator('script').count()).toBe(0);
+        await page.mouse.move(0, 0);
+        await expect.poll(isExpanded).toBe(false);
+        await card.getByRole('button', { name: /^Pin / }).hover();
+        await page.waitForTimeout(400);
+        expect(await isExpanded()).toBe(false);
+        await card.getByRole('button', { name: /^Archive / }).hover();
+        await page.waitForTimeout(400);
+        expect(await isExpanded()).toBe(false);
         await card.getByRole('button', { name: 'Edit', exact: true }).hover();
         await expect.poll(isExpanded).toBe(false);
         await card.getByRole('button', { name: /^Create task from/ }).hover();
