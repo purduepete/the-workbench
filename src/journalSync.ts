@@ -1,5 +1,6 @@
 import type { JournalMutation, JournalMutationResponse, NoteCategory, ServerJournalEntry } from '../shared/contracts';
 import { noteCategorySchema } from '../shared/contracts';
+import { journalEntryKey, resolveJournalCategory } from '../shared/journal';
 import { formatIdeaTimestamp } from './ideas';
 import { toJournalEntry } from './journal';
 import type { JournalEntry } from './journal';
@@ -19,22 +20,32 @@ export const emptyJournalState = (): JournalState => ({ server: [], outbox: [] }
 
 const uuid = () => globalThis.crypto.randomUUID();
 
-const serverVersion = (state: JournalState, entryDate: string) =>
-    state.server.find((row) => row.entryDate === entryDate)?.version ?? 0;
+const categoryFor = (state: JournalState, entryDate: string, category?: NoteCategory) =>
+    resolveJournalCategory(
+        category,
+        state.server.filter((row) => row.entryDate === entryDate)
+    );
+const serverVersion = (state: JournalState, entryDate: string, category: NoteCategory) =>
+    state.server.find((row) => journalEntryKey(row.entryDate, row.category) === journalEntryKey(entryDate, category))
+        ?.version ?? 0;
 
 /** The entries to show: the confirmed rows with every queued change applied on top. */
 export function localEntries(state: JournalState): JournalEntry[] {
     const entries = new Map(
-        state.server.filter((row) => !row.deleted).map((row) => [row.entryDate, toJournalEntry(row)])
+        state.server
+            .filter((row) => !row.deleted)
+            .map((row) => [journalEntryKey(row.entryDate, row.category), toJournalEntry(row)])
     );
     for (const change of state.outbox) {
-        if (change.kind === 'delete') entries.delete(change.entryDate);
+        const category = categoryFor(state, change.entryDate, change.category);
+        const key = journalEntryKey(change.entryDate, category);
+        if (change.kind === 'delete') entries.delete(key);
         else
-            entries.set(change.entryDate, {
+            entries.set(key, {
                 entryDate: change.entryDate,
                 body: change.body,
                 tags: [...change.tags],
-                category: change.category === undefined ? entries.get(change.entryDate)?.category : change.category,
+                category,
                 updatedAt: change.updatedAt,
             });
     }
@@ -49,11 +60,15 @@ export function queueSave(
     now = new Date(),
     category?: NoteCategory
 ) {
+    category = categoryFor(state, entryDate, category);
+    const key = journalEntryKey(entryDate, category);
     const updatedAt = now.toISOString();
     const editedLabel = formatIdeaTimestamp(updatedAt);
-    const pendingIndex = state.outbox.findLastIndex((change) => change.entryDate === entryDate);
+    const pendingIndex = state.outbox.findLastIndex(
+        (change) => journalEntryKey(change.entryDate, categoryFor(state, change.entryDate, change.category)) === key
+    );
     const pending = state.outbox[pendingIndex];
-    // Unsent saves for the same day collapse into one request.
+    // Unsent saves for the same day and section collapse into one request.
     if (pending && !pending.attempted && pending.kind === 'save') {
         const outbox = [...state.outbox];
         outbox[pendingIndex] = {
@@ -62,7 +77,7 @@ export function queueSave(
             tags: [...tags],
             updatedAt,
             editedLabel,
-            ...(category !== undefined ? { category } : {}),
+            category,
         };
         return { ...state, outbox };
     }
@@ -70,10 +85,10 @@ export function queueSave(
         kind: 'save',
         mutationId: uuid(),
         entryDate,
-        baseVersion: serverVersion(state, entryDate),
+        baseVersion: serverVersion(state, entryDate, category),
         body,
         tags: [...tags],
-        ...(category !== undefined ? { category } : {}),
+        category,
         updatedAt,
         editedLabel,
         attempted: false,
@@ -81,16 +96,21 @@ export function queueSave(
     return { ...state, outbox: [...state.outbox, change] };
 }
 
-export function queueDelete(state: JournalState, entryDate: string): JournalState {
-    const kept = state.outbox.filter((change) => change.entryDate !== entryDate || change.attempted);
-    const row = state.server.find((value) => value.entryDate === entryDate);
-    const inFlight = kept.some((change) => change.entryDate === entryDate);
+export function queueDelete(state: JournalState, entryDate: string, category?: NoteCategory): JournalState {
+    category = categoryFor(state, entryDate, category);
+    const key = journalEntryKey(entryDate, category);
+    const matches = (change: JournalOutboxEntry) =>
+        journalEntryKey(change.entryDate, categoryFor(state, change.entryDate, change.category)) === key;
+    const kept = state.outbox.filter((change) => !matches(change) || change.attempted);
+    const row = state.server.find((value) => journalEntryKey(value.entryDate, value.category) === key);
+    const inFlight = kept.some(matches);
     // A day that never reached the server only needs its queued saves removed.
     if ((!row || row.deleted) && !inFlight) return { ...state, outbox: kept };
     const change: JournalOutboxEntry = {
         kind: 'delete',
         mutationId: uuid(),
         entryDate,
+        category,
         baseVersion: Math.max(1, row?.version ?? 1),
         attempted: false,
     };
@@ -124,14 +144,23 @@ export function releaseAttempt(state: JournalState, mutationId: string): Journal
 export function acknowledge(state: JournalState, mutationId: string, response: JournalMutationResponse): JournalState {
     const acked = state.outbox.find((change) => change.mutationId === mutationId);
     if (!acked) return state;
-    const server = state.server.filter((row) => row.entryDate !== response.entryDate);
+    const category =
+        response.category !== undefined
+            ? response.category
+            : response.entry?.category !== undefined
+              ? response.entry.category
+              : categoryFor(state, acked.entryDate, acked.category);
+    const key = journalEntryKey(response.entryDate, category);
+    const server = state.server.filter((row) => journalEntryKey(row.entryDate, row.category) !== key);
     if (response.entry) server.push(response.entry);
     // After a merge or a kept entry, later changes stay stale on purpose and merge again on the server.
     const rebase = response.outcome === 'created' || response.outcome === 'updated' || response.outcome === 'deleted';
     const outbox = state.outbox
         .filter((change) => change.mutationId !== mutationId)
         .map((change) =>
-            rebase && !change.attempted && change.entryDate === acked.entryDate
+            rebase &&
+            !change.attempted &&
+            journalEntryKey(change.entryDate, categoryFor(state, change.entryDate, change.category)) === key
                 ? { ...change, baseVersion: Math.max(change.kind === 'delete' ? 1 : 0, response.resultVersion) }
                 : change
         );

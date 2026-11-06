@@ -63,12 +63,13 @@ header above and a JSON body; anything else gets 403.
 
 ## Read personal notes
 
-The Notes page is @jimb's journal: one entry per local day. Read it for context when asked; don't write to it.
+The Notes page is @jimb's journal: separate Home, Work and Unclassified entries per local day.
+Read it for context when asked; don't write to it.
 
 ```powershell
 $base = 'https://jimbrownhome1.tail8ad282.ts.net:8802'
 (Invoke-RestMethod "$base/api/journal?from=2026-10-01&to=2026-10-31&tag=health").entries |
-    Select-Object entryDate, body, tags, updatedAt
+    Select-Object entryDate, category, body, tags, updatedAt
 ```
 
 | Query            | Values                                                  |
@@ -78,13 +79,13 @@ $base = 'https://jimbrownhome1.tail8ad282.ts.net:8802'
 | `includeDeleted` | `true` to include deleted days (`deleted: true`, empty) |
 | none             | every entry that isn't deleted, newest day first        |
 
-| Field                    | Meaning                                                                      |
-| ------------------------ | ---------------------------------------------------------------------------- |
-| `entryDate`              | the local calendar day the entry belongs to; it is the entry's identity      |
-| `body`                   | plain text; `--- Edit from mm/dd/yyyy HH:mm ---` marks a merged offline edit |
-| `tags`                   | labels as typed                                                              |
-| `createdAt`, `updatedAt` | UTC timestamps; show them in local time                                      |
-| `version`                | increases on every change, including deletes                                 |
+| Field                    | Meaning                                                                          |
+| ------------------------ | -------------------------------------------------------------------------------- |
+| `entryDate`, `category`  | together identify an entry; category is `home`, `work`, or `null` (Unclassified) |
+| `body`                   | plain text; `--- Edit from mm/dd/yyyy HH:mm ---` marks a merged offline edit     |
+| `tags`                   | labels as typed                                                                  |
+| `createdAt`, `updatedAt` | UTC timestamps; show them in local time                                          |
+| `version`                | increases on every change, including deletes                                     |
 
 A bad date or an unknown query key returns 400.
 

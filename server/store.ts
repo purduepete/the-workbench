@@ -16,11 +16,17 @@ import type {
     NoteCategory,
 } from '../shared/contracts.js';
 import { limits } from '../shared/contracts.js';
-import { JournalOverflowError, resolveGlobalSave, resolveSave } from '../shared/journal.js';
+import {
+    journalEntryKey,
+    JournalOverflowError,
+    resolveGlobalSave,
+    resolveJournalCategory,
+    resolveSave,
+} from '../shared/journal.js';
 import type { CurrentEntry } from '../shared/journal.js';
 import type { ServerTask, TaskMutation, TaskMutationResponse, TaskOutcome } from '../shared/tasks.js';
 
-export const SCHEMA_VERSION = 4;
+export const SCHEMA_VERSION = 5;
 
 export interface IdeasStore {
     list(): Promise<ServerIdea[]>;
@@ -190,18 +196,23 @@ export class MemoryIdeasStore implements IdeasStore {
         this.check();
         const receipt = this.journalReceipts.get(mutation.mutationId) ?? this.writeJournal(mutation);
         this.journalReceipts.set(mutation.mutationId, receipt);
-        const entry = this.journal.get(receipt.entryDate);
+        const entry = this.journal.get(journalEntryKey(receipt.entryDate, receipt.category));
         return { ...receipt, entry: entry ? copyEntry(entry) : null };
     }
 
     private writeJournal(mutation: JournalMutation): JournalReceipt {
         const { entryDate } = mutation;
-        const current = this.journal.get(entryDate);
+        const category = resolveJournalCategory(
+            mutation.category,
+            [...this.journal.values()].filter((entry) => entry.entryDate === entryDate)
+        );
+        const key = journalEntryKey(entryDate, category);
+        const current = this.journal.get(key);
         if (mutation.kind === 'delete') {
             if (!current || current.deleted || current.version !== mutation.baseVersion)
-                return { outcome: 'kept', entryDate, resultVersion: current?.version ?? 0 };
+                return { outcome: 'kept', entryDate, category, resultVersion: current?.version ?? 0 };
             const version = current.version + 1;
-            this.journal.set(entryDate, {
+            this.journal.set(key, {
                 ...current,
                 body: '',
                 tags: [],
@@ -209,13 +220,13 @@ export class MemoryIdeasStore implements IdeasStore {
                 updatedAt: new Date().toISOString(),
                 version,
             });
-            return { outcome: 'deleted', entryDate, resultVersion: version };
+            return { outcome: 'deleted', entryDate, category, resultVersion: version };
         }
 
-        const decision = resolveSave(current ?? null, mutation);
+        const decision = resolveSave(current ?? null, { ...mutation, category });
         if (decision.outcome === 'overflow') throw new JournalOverflowError();
         if (!current) {
-            this.journal.set(entryDate, {
+            this.journal.set(key, {
                 entryDate,
                 body: decision.body,
                 tags: [...decision.tags],
@@ -225,11 +236,11 @@ export class MemoryIdeasStore implements IdeasStore {
                 updatedAt: mutation.updatedAt,
                 version: 1,
             });
-            return { outcome: 'created', entryDate, resultVersion: 1 };
+            return { outcome: 'created', entryDate, category, resultVersion: 1 };
         }
-        if (!decision.bump) return { outcome: decision.outcome, entryDate, resultVersion: current.version };
+        if (!decision.bump) return { outcome: decision.outcome, entryDate, category, resultVersion: current.version };
         const version = current.version + 1;
-        this.journal.set(entryDate, {
+        this.journal.set(key, {
             ...current,
             body: decision.body,
             tags: [...decision.tags],
@@ -238,7 +249,7 @@ export class MemoryIdeasStore implements IdeasStore {
             updatedAt: mutation.updatedAt,
             version,
         });
-        return { outcome: decision.outcome, entryDate, resultVersion: version };
+        return { outcome: decision.outcome, entryDate, category, resultVersion: version };
     }
 
     async listGlobalNotes(): Promise<ServerGlobalNote[]> {
@@ -408,7 +419,8 @@ const toGlobalNote = (row: GlobalNoteRow): ServerGlobalNote => ({
 });
 
 // entry_date::text keeps the calendar day as-is; pg would otherwise build a Date at local midnight.
-const journalColumns = 'entry_date::text AS entry_date, body, tags, category, deleted, created_at, updated_at, version';
+const journalColumns =
+    "entry_date::text AS entry_date, body, tags, NULLIF(category, 'unclassified') AS category, deleted, created_at, updated_at, version";
 
 const toJournalEntry = (row: JournalRow): ServerJournalEntry => ({
     entryDate: row.entry_date,
@@ -566,7 +578,7 @@ export class PostgresIdeasStore implements IdeasStore {
         await this.pool.query('SELECT mutation_id FROM public.applied_mutations LIMIT 1');
         await this.pool.query('SELECT solution_id FROM public.disabled_solutions LIMIT 1');
         await this.pool.query('SELECT entry_date, category FROM public.journal_entries LIMIT 1');
-        await this.pool.query('SELECT mutation_id FROM public.journal_mutations LIMIT 1');
+        await this.pool.query('SELECT mutation_id, category FROM public.journal_mutations LIMIT 1');
         await this.pool.query('SELECT id FROM public.global_notes LIMIT 1');
         await this.pool.query('SELECT mutation_id FROM public.global_note_mutations LIMIT 1');
         await this.pool.query('SELECT id FROM public.tasks LIMIT 1');
@@ -575,7 +587,7 @@ export class PostgresIdeasStore implements IdeasStore {
 
     async listJournal(): Promise<ServerJournalEntry[]> {
         const result = await this.pool.query<JournalRow>(
-            `SELECT ${journalColumns} FROM public.journal_entries ORDER BY entry_date DESC`
+            `SELECT ${journalColumns} FROM public.journal_entries ORDER BY entry_date DESC, category`
         );
         return result.rows.map(toJournalEntry);
     }
@@ -591,8 +603,8 @@ export class PostgresIdeasStore implements IdeasStore {
             receipt = prior;
         }
         const row = await this.pool.query<JournalRow>(
-            `SELECT ${journalColumns} FROM public.journal_entries WHERE entry_date = $1`,
-            [receipt.entryDate]
+            `SELECT ${journalColumns} FROM public.journal_entries WHERE entry_date = $1 AND category = $2`,
+            [receipt.entryDate, receipt.category ?? 'unclassified']
         );
         return { ...receipt, entry: row.rows[0] ? toJournalEntry(row.rows[0]) : null };
     }
@@ -717,63 +729,85 @@ export class PostgresIdeasStore implements IdeasStore {
         const result = await db.query<{
             outcome: JournalReceipt['outcome'];
             entry_date: string;
+            category: NoteCategory;
             result_version: number;
         }>(
-            `SELECT outcome, entry_date::text AS entry_date, result_version
+            `SELECT outcome, entry_date::text AS entry_date, NULLIF(category, 'unclassified') AS category, result_version
              FROM public.journal_mutations WHERE mutation_id = $1`,
             [mutationId]
         );
         const row = result.rows[0];
-        return row ? { outcome: row.outcome, entryDate: row.entry_date, resultVersion: row.result_version } : null;
+        return row
+            ? {
+                  outcome: row.outcome,
+                  entryDate: row.entry_date,
+                  category: row.category,
+                  resultVersion: row.result_version,
+              }
+            : null;
     }
 
-    private async lockEntry(client: PoolClient, entryDate: string): Promise<CurrentEntry | null> {
+    private async lockEntry(
+        client: PoolClient,
+        entryDate: string,
+        category: NoteCategory
+    ): Promise<CurrentEntry | null> {
         const result = await client.query<CurrentEntry>(
-            'SELECT body, tags, category, deleted, version FROM public.journal_entries WHERE entry_date = $1 FOR UPDATE',
-            [entryDate]
+            "SELECT body, tags, NULLIF(category, 'unclassified') AS category, deleted, version FROM public.journal_entries WHERE entry_date = $1 AND category = $2 FOR UPDATE",
+            [entryDate, category ?? 'unclassified']
         );
         return result.rows[0] ?? null;
     }
 
     private async writeJournal(client: PoolClient, mutation: JournalMutation): Promise<JournalReceipt> {
         const { entryDate } = mutation;
-        let current = await this.lockEntry(client, entryDate);
+        const existing =
+            mutation.category === undefined
+                ? (
+                      await client.query<{ category: NoteCategory }>(
+                          "SELECT NULLIF(category, 'unclassified') AS category FROM public.journal_entries WHERE entry_date = $1",
+                          [entryDate]
+                      )
+                  ).rows
+                : [];
+        const category = resolveJournalCategory(mutation.category, existing);
+        let current = await this.lockEntry(client, entryDate, category);
         if (mutation.kind === 'delete') {
             if (!current || current.deleted || current.version !== mutation.baseVersion)
-                return { outcome: 'kept', entryDate, resultVersion: current?.version ?? 0 };
+                return { outcome: 'kept', entryDate, category, resultVersion: current?.version ?? 0 };
             const deleted = await client.query<{ version: number }>(
                 `UPDATE public.journal_entries
                  SET body = '', tags = '{}', deleted = TRUE, updated_at = CURRENT_TIMESTAMP, version = version + 1
-                 WHERE entry_date = $1 RETURNING version`,
-                [entryDate]
+                 WHERE entry_date = $1 AND category = $2 RETURNING version`,
+                [entryDate, category ?? 'unclassified']
             );
-            return { outcome: 'deleted', entryDate, resultVersion: deleted.rows[0].version };
+            return { outcome: 'deleted', entryDate, category, resultVersion: deleted.rows[0].version };
         }
         if (!current) {
-            const decision = resolveSave(null, mutation);
+            const decision = resolveSave(null, { ...mutation, category });
             if (decision.outcome === 'overflow') throw new JournalOverflowError();
             const inserted = await client.query<{ version: number }>(
                 `INSERT INTO public.journal_entries
                      (entry_date, body, tags, deleted, created_at, updated_at, version, category)
                  VALUES ($1, $2, $3, FALSE, $4, $4, 1, $5)
-                 ON CONFLICT (entry_date) DO NOTHING RETURNING version`,
-                [entryDate, decision.body, decision.tags, mutation.updatedAt, decision.category ?? null]
+                 ON CONFLICT (entry_date, category) DO NOTHING RETURNING version`,
+                [entryDate, decision.body, decision.tags, mutation.updatedAt, category ?? 'unclassified']
             );
-            if (inserted.rows[0]) return { outcome: 'created', entryDate, resultVersion: 1 };
+            if (inserted.rows[0]) return { outcome: 'created', entryDate, category, resultVersion: 1 };
             // Another device's first save for this day committed while this one waited; merge onto it.
-            current = await this.lockEntry(client, entryDate);
+            current = await this.lockEntry(client, entryDate, category);
         }
-        const decision = resolveSave(current, mutation);
+        const decision = resolveSave(current, { ...mutation, category });
         if (decision.outcome === 'overflow') throw new JournalOverflowError();
         if (!decision.bump || !current)
-            return { outcome: decision.outcome, entryDate, resultVersion: current?.version ?? 0 };
+            return { outcome: decision.outcome, entryDate, category, resultVersion: current?.version ?? 0 };
         const updated = await client.query<{ version: number }>(
             `UPDATE public.journal_entries
-             SET body = $2, tags = $3, deleted = FALSE, updated_at = $4, version = version + 1, category = $5
-             WHERE entry_date = $1 RETURNING version`,
-            [entryDate, decision.body, decision.tags, mutation.updatedAt, decision.category ?? null]
+             SET body = $2, tags = $3, deleted = FALSE, updated_at = $4, version = version + 1
+             WHERE entry_date = $1 AND category = $5 RETURNING version`,
+            [entryDate, decision.body, decision.tags, mutation.updatedAt, category ?? 'unclassified']
         );
-        return { outcome: decision.outcome, entryDate, resultVersion: updated.rows[0].version };
+        return { outcome: decision.outcome, entryDate, category, resultVersion: updated.rows[0].version };
     }
 
     private async journalTransaction(mutation: JournalMutation): Promise<JournalReceipt> {
@@ -784,9 +818,15 @@ export class PostgresIdeasStore implements IdeasStore {
             const receipt = prior ?? (await this.writeJournal(client, mutation));
             if (!prior) {
                 await client.query(
-                    `INSERT INTO public.journal_mutations (mutation_id, entry_date, outcome, result_version)
-                     VALUES ($1, $2, $3, $4)`,
-                    [mutation.mutationId, receipt.entryDate, receipt.outcome, receipt.resultVersion]
+                    `INSERT INTO public.journal_mutations (mutation_id, entry_date, outcome, result_version, category)
+                     VALUES ($1, $2, $3, $4, $5)`,
+                    [
+                        mutation.mutationId,
+                        receipt.entryDate,
+                        receipt.outcome,
+                        receipt.resultVersion,
+                        receipt.category ?? 'unclassified',
+                    ]
                 );
             }
             await client.query('COMMIT');

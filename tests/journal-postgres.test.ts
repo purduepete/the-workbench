@@ -9,6 +9,7 @@ import type { TaskMutation } from '../shared/tasks.js';
 // Opt-in: runs only against a disposable database whose name ends in _test, for example a local container.
 const url = process.env.TEST_DATABASE_URL;
 const enabled = Boolean(url && new URL(url).pathname.endsWith('_test'));
+const legacyReceiptId = randomUUID();
 
 const save = (baseVersion: number, body: string): JournalSave => ({
     kind: 'save',
@@ -50,6 +51,19 @@ describe.skipIf(!enabled)('PostgresIdeasStore journal against a real database', 
         ]) {
             await pool.query(await readFile(new URL(`../deploy/postgresql/${file}`, import.meta.url), 'utf8'));
         }
+        await pool.query(
+            `INSERT INTO public.journal_entries
+                 (entry_date, body, tags, category, deleted, created_at, updated_at, version)
+             VALUES ('2026-01-01', 'Retained work', '{}', 'work', FALSE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 2)`
+        );
+        await pool.query(
+            `INSERT INTO public.journal_mutations (mutation_id, entry_date, outcome, result_version)
+             VALUES ($1, '2026-01-01', 'created', 1)`,
+            [legacyReceiptId]
+        );
+        await pool.query(
+            await readFile(new URL('../deploy/postgresql/006_daily_note_sections.sql', import.meta.url), 'utf8')
+        );
         store = new PostgresIdeasStore(pool);
     });
 
@@ -61,16 +75,54 @@ describe.skipIf(!enabled)('PostgresIdeasStore journal against a real database', 
         await expect(store.ready()).resolves.toBeUndefined();
     });
 
+    it('keeps legacy retry receipts attached to the retained row after adding a new section', async () => {
+        const oldSave = {
+            ...save(0, 'Original home'),
+            entryDate: '2026-01-01',
+            category: 'home' as const,
+            mutationId: legacyReceiptId,
+        };
+        expect(await store.applyJournal(oldSave)).toMatchObject({
+            outcome: 'created',
+            resultVersion: 1,
+            category: 'work',
+            entry: { category: 'work', body: 'Retained work', version: 2 },
+        });
+        await store.applyJournal({ ...oldSave, mutationId: randomUUID(), body: 'Separate home' });
+        expect((await store.applyJournal(oldSave)).entry).toMatchObject({
+            category: 'work',
+            body: 'Retained work',
+            version: 2,
+        });
+    });
+
     it('persists Home/Work for daily notes and preserves categories on old-client saves', async () => {
         const daily = { ...save(0, 'Category daily'), entryDate: '2026-01-05', category: 'work' as const };
         expect((await store.applyJournal(daily)).entry?.category).toBe('work');
         expect((await store.listJournal()).find((entry) => entry.entryDate === daily.entryDate)?.category).toBe('work');
         const oldDaily = { ...save(1, 'Old client daily'), entryDate: daily.entryDate };
         expect((await store.applyJournal(oldDaily)).entry?.category).toBe('work');
+        const other = await store.applyJournal({
+            ...oldDaily,
+            mutationId: randomUUID(),
+            baseVersion: 0,
+            category: null,
+        });
+        expect(other.entry).toMatchObject({ category: null, version: 1 });
+        expect((await store.listJournal()).filter((entry) => entry.entryDate === daily.entryDate)).toHaveLength(2);
+        const deleted = await store.applyJournal({
+            kind: 'delete',
+            mutationId: randomUUID(),
+            entryDate: daily.entryDate,
+            category: null,
+            baseVersion: 1,
+        });
+        expect(deleted.entry).toMatchObject({ deleted: true });
         expect(
-            (await store.applyJournal({ ...oldDaily, mutationId: randomUUID(), baseVersion: 2, category: null })).entry
-                ?.category
-        ).toBeNull();
+            (await store.listJournal()).find(
+                (entry) => entry.entryDate === daily.entryDate && entry.category === 'work'
+            )
+        ).toMatchObject({ body: 'Old client daily', deleted: false, version: 2 });
     });
 
     it('serializes concurrent first saves for one day into one entry', async () => {

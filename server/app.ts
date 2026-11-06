@@ -12,7 +12,7 @@ import {
     THEME_COOKIE,
     themePreferenceSchema,
 } from '../shared/contracts.js';
-import { JournalOverflowError } from '../shared/journal.js';
+import { JournalOverflowError, JournalSectionRequiredError } from '../shared/journal.js';
 import { taskMutationSchema, taskQuerySchema } from '../shared/tasks.js';
 import type { SolutionSource } from './solutions.js';
 import type { IdeasStore } from './store.js';
@@ -209,6 +209,10 @@ export function createApp(options: {
         app.get('/tasks', (_req, res) => res.sendFile(path.join(staticDirectory, 'index.html')));
     }
     const handleError: ErrorRequestHandler = (error: unknown, _req, res, _next) => {
+        if (error instanceof JournalSectionRequiredError) {
+            res.status(409).json({ error: error.message, code: 'journal-section-required' });
+            return;
+        }
         if (error instanceof JournalOverflowError) {
             res.status(409).json({ error: error.message });
             return;

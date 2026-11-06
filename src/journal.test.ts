@@ -221,4 +221,44 @@ describe('journal outbox', () => {
         expect(state.outbox).toHaveLength(1);
         expect(state.outbox[0]).toMatchObject({ mutationId: change.mutationId, body: 'Shorter' });
     });
+
+    it('rebases and deletes only the matching section for a day', () => {
+        const date = '2026-10-29';
+        const home = { ...row(date, 7, 'Home'), category: 'home' as const };
+        const work = { ...row(date, 2, 'Work'), category: 'work' as const };
+        let state: JournalState = { server: [home, work], outbox: [] };
+        state = queueSave(state, date, 'First work', [], new Date(), 'work');
+        const first = state.outbox[0];
+        state = markAttempted(state, first.mutationId);
+        state = queueSave(state, date, 'Later work', [], new Date(), 'work');
+        state = queueSave(state, date, 'Later home', [], new Date(), 'home');
+        state = queueSave(state, date, 'Other', [], new Date(), null);
+        state = acknowledge(state, first.mutationId, {
+            outcome: 'updated',
+            entryDate: date,
+            category: 'work',
+            resultVersion: 3,
+            entry: { ...work, body: 'First work', version: 3 },
+        });
+        expect(state.outbox.map((change) => [change.category, change.baseVersion])).toEqual([
+            ['work', 3],
+            ['home', 7],
+            [null, 0],
+        ]);
+        const other = state.outbox[2];
+        state = acknowledge(state, other.mutationId, {
+            outcome: 'created',
+            entryDate: date,
+            category: null,
+            resultVersion: 1,
+            entry: { ...row(date, 1, 'Other'), category: null },
+        });
+        expect(state.server).toHaveLength(3);
+        state = queueDelete(state, date, 'home');
+        expect(localEntries(state).map((entry) => entry.category)).toEqual(['work', null]);
+        expect(state.outbox.find((change) => change.kind === 'delete')).toMatchObject({
+            category: 'home',
+            baseVersion: 7,
+        });
+    });
 });

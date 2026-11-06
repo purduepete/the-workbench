@@ -98,7 +98,7 @@ const isCalendarDate = (value: string) => {
     return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
 };
 
-/** A local calendar day, `YYYY-MM-DD`. It identifies a journal entry. */
+/** A local calendar day, `YYYY-MM-DD`. Together with category it identifies a journal entry. */
 export const entryDateSchema = z
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/)
@@ -130,6 +130,7 @@ export const journalMutationSchema = z.discriminatedUnion('kind', [
             mutationId: z.uuid(),
             entryDate: entryDateSchema,
             baseVersion: z.number().int().min(1),
+            category: noteCategorySchema.optional(),
         })
         .strict(),
 ]);
@@ -154,6 +155,7 @@ export type JournalOutcome = 'created' | 'updated' | 'merged' | 'deleted' | 'kep
 export interface JournalReceipt {
     outcome: JournalOutcome;
     entryDate: string;
+    category?: NoteCategory;
     resultVersion: number;
 }
 

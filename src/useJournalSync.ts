@@ -91,6 +91,11 @@ export function useJournalSync() {
                         continue;
                     }
                     if (response.status === 409) {
+                        const conflict = await readJson<{ error: string; code?: string }>(response);
+                        if (conflict.code === 'journal-section-required') {
+                            setNotice(conflict.error);
+                            throw new SyncPaused();
+                        }
                         // Nothing was written, so the change is unfrozen and stays queued. A shorter save replaces it.
                         commit(releaseAttempt(stateRef.current, change.mutationId));
                         setNotice(
@@ -195,6 +200,17 @@ export function useJournalSync() {
         clearNotice: () => setNotice(null),
         save: (entryDate: string, body: string, tags: string[], category?: NoteCategory) =>
             change(queueSave(stateRef.current, entryDate, body, tags, new Date(), category)),
-        remove: (entryDate: string) => change(queueDelete(stateRef.current, entryDate)),
+        saveSections: (entryDate: string, sections: { body: string; tags: string[]; category: NoteCategory }[]) =>
+            change(
+                sections.reduce(
+                    (next, section) =>
+                        section.body
+                            ? queueSave(next, entryDate, section.body, section.tags, new Date(), section.category)
+                            : queueDelete(next, entryDate, section.category),
+                    stateRef.current
+                )
+            ),
+        remove: (entryDate: string, category?: NoteCategory) =>
+            change(queueDelete(stateRef.current, entryDate, category)),
     };
 }

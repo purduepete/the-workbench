@@ -386,6 +386,23 @@ describe('journal', () => {
         ]);
     });
 
+    it('separates sections on the same day and rejects ambiguous legacy writes', async () => {
+        const date = '2026-11-06';
+        await send({ ...journalSave(date, 0, 'Work details', ['work-tag']), category: 'work' });
+        await send({ ...journalSave(date, 0, 'Home details', ['home-tag']), category: 'home' });
+        await send({ ...journalSave(date, 0, 'Other details'), category: null });
+        expect(await list()).toHaveLength(3);
+        const legacy = await send(journalSave(date, 1, 'Ambiguous'));
+        expect(legacy.status).toBe(409);
+        expect(legacy.body).toMatchObject({ code: 'journal-section-required' });
+        const deleted = await send({ ...journalDelete(date, 1), category: 'home' });
+        expect(deleted.body).toMatchObject({ category: 'home', entry: { category: 'home', deleted: true } });
+        expect((await list()).map((entry) => entry.body)).toEqual(
+            expect.arrayContaining(['Work details', 'Other details'])
+        );
+        expect(await list()).toHaveLength(2);
+    });
+
     it('merges a stale save from another device without losing text', async () => {
         await send(journalSave('2026-10-29', 0, 'From phone', ['Home']));
         const merged = await send(journalSave('2026-10-29', 0, 'From laptop', ['home', 'work']));
@@ -628,26 +645,27 @@ describe('PostgresIdeasStore', () => {
     const fakePool = (handler: (sql: string, values?: unknown[]) => { rows: unknown[] }) =>
         ({ query: async (sql: string, values?: unknown[]) => handler(sql, values) }) as unknown as Pool;
 
-    it('is ready only at schema version 4 with journal, global-note and task tables', async () => {
+    it('is ready only at schema version 5 with journal sections, global-note and task tables', async () => {
         const at = (version: number) =>
             new PostgresIdeasStore(
                 fakePool((sql) => ({ rows: sql.includes('solutiondeploy_schema') ? [{ version }] : [] }))
             );
-        await expect(at(4).ready()).resolves.toBeUndefined();
+        await expect(at(5).ready()).resolves.toBeUndefined();
+        await expect(at(4).ready()).rejects.toThrow(/schema version/);
         await expect(at(3).ready()).rejects.toThrow(/schema version/);
         await expect(at(2).ready()).rejects.toThrow(/schema version/);
         await expect(at(1).ready()).rejects.toThrow(/schema version/);
         const missingJournal = new PostgresIdeasStore(
             fakePool((sql) => {
                 if (sql.includes('journal_entries')) throw new Error('relation does not exist');
-                return { rows: sql.includes('solutiondeploy_schema') ? [{ version: 4 }] : [] };
+                return { rows: sql.includes('solutiondeploy_schema') ? [{ version: 5 }] : [] };
             })
         );
         await expect(missingJournal.ready()).rejects.toThrow(/does not exist/);
         const missingGlobalNotes = new PostgresIdeasStore(
             fakePool((sql) => {
                 if (sql.includes('global_notes')) throw new Error('relation does not exist');
-                return { rows: sql.includes('solutiondeploy_schema') ? [{ version: 4 }] : [] };
+                return { rows: sql.includes('solutiondeploy_schema') ? [{ version: 5 }] : [] };
             })
         );
         await expect(missingGlobalNotes.ready()).rejects.toThrow(/does not exist/);
@@ -655,7 +673,7 @@ describe('PostgresIdeasStore', () => {
             const missingTasks = new PostgresIdeasStore(
                 fakePool((sql) => {
                     if (sql.includes(table)) throw new Error('relation does not exist');
-                    return { rows: sql.includes('solutiondeploy_schema') ? [{ version: 4 }] : [] };
+                    return { rows: sql.includes('solutiondeploy_schema') ? [{ version: 5 }] : [] };
                 })
             );
             await expect(missingTasks.ready()).rejects.toThrow(/does not exist/);

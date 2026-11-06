@@ -10,6 +10,27 @@ import type {
 
 export type CurrentEntry = Pick<ServerJournalEntry, 'body' | 'tags' | 'category' | 'deleted' | 'version'>;
 
+export const journalEntryKey = (entryDate: string, category?: NoteCategory) =>
+    `${entryDate}:${category ?? 'unclassified'}`;
+
+export class JournalSectionRequiredError extends Error {
+    constructor() {
+        super(
+            'This day has multiple note sections. Reload the app and choose Home, Work or Unclassified before saving.'
+        );
+    }
+}
+
+/** Old clients omitted category when each day had only one entry. Never guess once a day has multiple sections. */
+export function resolveJournalCategory(
+    category: NoteCategory | undefined,
+    entries: Pick<ServerJournalEntry, 'category'>[]
+): NoteCategory {
+    if (category !== undefined) return category;
+    if (entries.length > 1) throw new JournalSectionRequiredError();
+    return entries[0]?.category ?? null;
+}
+
 export type SaveDecision =
     | {
           outcome: Extract<JournalOutcome, 'created' | 'updated' | 'merged'>;

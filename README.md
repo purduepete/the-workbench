@@ -127,8 +127,8 @@ When a sign-in expires, sign in again before browsing. Real-account acceptance r
 selecting and reopening a private image after configuring the registration, including
 on the intended iPhone/iPad and both production access paths.
 
-The header's `Ideas | Notes | Tasks` control switches between pages. `/notes` is a personal journal with one entry per
-local day. Journal and global note bodies support Markdown, including headings, lists, tables and links. The info button
+The header's `Ideas | Notes | Tasks` control switches between pages. `/notes` is a personal journal with separate Home,
+Work and Unclassified entries per local day. Journal and global note bodies support Markdown, including headings, lists, tables and links. The info button
 beside the entry label shows syntax examples. Use the Edit / Preview control while writing. **Add section** inserts a
 collapsible `##` heading; new sections start expanded. Raw HTML is shown as text, and links are limited to `http`,
 `https` and `mailto`. The entry's date is the local calendar day it was written on and never changes. Entries are
@@ -146,17 +146,20 @@ a close icon and open with an opacity-only fade.
 Each daily note also collapses independently from its date header. Today starts expanded; every other day starts
 collapsed. Collapsing a day hides its details, tags and Edit control while keeping its date and section visible.
 
-Notes sync offline the same way ideas do, keyed by date instead of an id:
+Notes sync offline the same way ideas do, keyed by date and section instead of an id:
 
 Daily entries have a Home or Work category. The Notes page filters daily entries
 by All, Home, Work or Unclassified, including calendar markers and daily-entry tags.
-Global notes have no category and remain visible under every category filter.
+Global notes have no category and appear only under All.
 New notes use the selected category filter, or Home when viewing All.
-Existing notes remain Unclassified until you choose a category in their editor.
-There is still one daily entry per date across both categories. The calendar and
-New note button reopen that entry even when it belongs to another category.
-Categories are saved offline with the body. Stale edits keep the latest confirmed
-category; older clients that omit the category leave it unchanged.
+Each daily editor's Home, Work and Unclassified buttons open independent content and tags.
+Switching sections preserves unsaved drafts and shows a blank editor when that section has no entry.
+Save entry saves every edited section; Delete removes only the selected section.
+The calendar and New note button open the selected section for that date.
+Existing entries stay in their saved section; uncategorized entries stay Unclassified.
+Each section has its own version, offline queue and tombstone. Stale edits merge only within that section.
+Older clients that omit category can still edit a day with only one section. An ambiguous legacy write
+is refused with a reload notice, so it cannot modify the wrong section.
 
 - An edit based on the current version replaces the entry.
 - An edit based on an old version is appended below the current text under `--- Edit from mm/dd/yyyy HH:mm ---`, and
@@ -247,10 +250,12 @@ solution" in `solution-deploy\docs\Deployment.md`.
 `003_tasks.sql` adds tasks and task receipts, then moves it to version 3.
 `005_note_categories.sql` adds nullable Home/Work categories to daily entries only
 and moves the schema to version 4 without assigning categories to existing notes.
+`006_daily_note_sections.sql` preserves those entries and receipts, uses date plus section as the journal key,
+and moves the schema to version 5. PostgreSQL stores the Unclassified key as `unclassified`; the API returns `null`.
 Apply pending migrations through
 the reviewed database-change procedure in `Deployment.md` (stop the app, apply them in order as the migrator,
 re-run the `Manage-Postgres.ps1` grant plan, then release). The server reports not ready until all tables
-exist at schema version 4, including the daily-entry category column.
+exist at schema version 5, including the daily-entry and receipt section columns.
 
 `TEST_DATABASE_URL` runs `tests/journal-postgres.test.ts` against a real database. It drops and recreates `public`, so
 it only runs when the database name ends in `_test`; a disposable container is enough:

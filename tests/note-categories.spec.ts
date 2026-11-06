@@ -19,8 +19,58 @@ test.afterAll(async () => {
     await exited;
 });
 
+test('global notes appear only under All', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.setViewportSize({ width: 390, height: 900 });
+    await page.goto('/notes');
+    const filter = page.getByRole('group', { name: 'Filter notes', exact: true });
+
+    await page.getByRole('button', { name: 'Global note', exact: true }).click();
+    const dialog = page.getByRole('dialog');
+    await dialog.locator('input[name="title"]').fill('Uncategorized reference');
+    await dialog.getByRole('button', { name: 'Save note', exact: true }).click();
+    const global = page.locator('.global-note-card').filter({ hasText: 'Uncategorized reference' });
+    await page.getByRole('button', { name: 'Global notes', exact: true }).click();
+    await expect(global).toBeVisible();
+
+    for (const name of ['Home', 'Work', 'Unclassified']) {
+        await filter.getByRole('button', { name, exact: true }).click();
+        await expect(global).toHaveCount(0);
+    }
+    await filter.getByRole('button', { name: 'All', exact: true }).click();
+    await page.getByRole('button', { name: 'Global notes', exact: true }).click();
+    await expect(global).toBeVisible();
+});
+
+test('deleting one section retains unsaved changes in another section', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.clock.setFixedTime(new Date('2026-11-06T12:00:00-08:00'));
+    await page.goto('/notes');
+    await page.getByRole('button', { name: 'New note', exact: true }).click();
+    const dialog = page.getByRole('dialog');
+    const category = dialog.getByRole('group', { name: 'Note category', exact: true });
+    const body = dialog.locator('textarea[name="body"]');
+    await body.fill('Home to delete');
+    await category.getByRole('button', { name: 'Work', exact: true }).click();
+    await body.fill('Work to keep');
+    await dialog.getByRole('button', { name: 'Save entry', exact: true }).click();
+    const work = page.locator('.journal-card').filter({ hasText: 'Work to keep' });
+    await work.getByRole('button', { name: /^Edit entry / }).click();
+    await body.fill('Unsaved work to keep');
+    await category.getByRole('button', { name: 'Home', exact: true }).click();
+    await dialog.getByRole('button', { name: 'Delete entry', exact: true }).click();
+    await dialog.getByRole('button', { name: 'Confirm delete', exact: true }).click();
+    await expect(dialog).toBeVisible();
+    await expect(body).toHaveValue('');
+    await category.getByRole('button', { name: 'Work', exact: true }).click();
+    await expect(body).toHaveValue('Unsaved work to keep');
+    await dialog.getByRole('button', { name: 'Save entry', exact: true }).click();
+    await expect(work).toContainText('Unsaved work to keep');
+    await expect(page.locator('.journal-card').filter({ hasText: 'Home to delete' })).toHaveCount(0);
+});
+
 for (const theme of ['midnight', 'light']) {
-    test(`daily notes retain Home/Work while global notes remain category-free in ${theme}`, async ({
+    test(`daily sections retain separate content and tags online and offline in ${theme}`, async ({
         page,
         context,
     }) => {
@@ -32,6 +82,8 @@ for (const theme of ['midnight', 'light']) {
         await page.setViewportSize({ width: theme === 'light' ? 390 : 1280, height: 900 });
         await page.goto('/notes');
         const filter = page.getByRole('group', { name: 'Filter notes', exact: true });
+        await expect(filter).toBeVisible();
+        await page.evaluate(() => document.fonts.ready);
         const actions = page.locator('.notes-actions');
         expect(await filter.evaluate((node) => node.nextElementSibling?.classList.contains('notes-actions'))).toBe(
             true
@@ -63,64 +115,93 @@ for (const theme of ['midnight', 'light']) {
             'aria-pressed',
             'true'
         );
-        await dialog.locator('textarea[name="body"]').fill(`Daily work ${theme}`);
+        const body = dialog.locator('textarea[name="body"]');
+        const tags = dialog.locator('input[name="tags"]');
+        const select = async (name: string) => category.getByRole('button', { name, exact: true }).click();
+        await body.fill(`Daily work ${theme}`);
+        await tags.fill('work-tag');
+        await select('Home');
+        await expect(body).toHaveValue('');
+        await expect(tags).toHaveValue('');
+        await tags.fill('home-tag');
+        await dialog.getByRole('button', { name: 'Save entry', exact: true }).click();
+        await expect(dialog.getByRole('alert')).toHaveText('Write details for Home before saving its tags.');
+        await body.fill(`Daily home ${theme}`);
+        await select('Unclassified');
+        await expect(body).toHaveValue('');
+        await expect(tags).toHaveValue('');
+        await body.fill(`Daily other ${theme}`);
+        await tags.fill('other-tag');
+        await select('Work');
+        await expect(body).toHaveValue(`Daily work ${theme}`);
+        await expect(tags).toHaveValue('work-tag');
+        await dialog.getByRole('button', { name: 'Preview', exact: true }).click();
+        await expect(dialog.locator('.markdown-editor-preview')).toHaveText(`Daily work ${theme}`);
+        await select('Home');
+        await expect(body).toHaveValue(`Daily home ${theme}`);
+        await expect(tags).toHaveValue('home-tag');
         await dialog.getByRole('button', { name: 'Save entry', exact: true }).click();
         const daily = page.locator('.journal-card').filter({ hasText: `Daily work ${theme}` });
+        const home = page.locator('.journal-card').filter({ hasText: `Daily home ${theme}` });
         await expect(daily).toBeVisible();
         await filter.getByRole('button', { name: 'Home', exact: true }).click();
         await expect(daily).toHaveCount(0);
-
-        await page.getByRole('button', { name: 'Global note', exact: true }).click();
-        await expect(dialog.getByRole('textbox', { name: 'Details', exact: true })).toBeVisible();
-        await expect(category).toHaveCount(0);
-        await dialog.locator('input[name="title"]').fill(`Global reference ${theme}`);
-        await dialog.getByRole('button', { name: 'Save note', exact: true }).click();
-        await page.getByRole('button', { name: 'Global notes', exact: true }).click();
-        const global = page.locator('.global-note-card').filter({ hasText: `Global reference ${theme}` });
-        await expect(global).toBeVisible();
-        await expect(global.locator('.card-label')).toHaveCount(0);
-        for (const name of ['Work', 'Unclassified', 'All', 'Home']) {
-            await filter.getByRole('button', { name, exact: true }).click();
-            await expect(global).toBeVisible();
-        }
+        await expect(home).toBeVisible();
+        await filter.getByRole('button', { name: 'All', exact: true }).click();
+        const cards = page.locator('.journal-card');
+        await expect(cards.filter({ hasText: new RegExp(`Daily (work|home|other) ${theme}`) })).toHaveCount(3);
+        const ids = await cards.locator('[id]').evaluateAll((nodes) => nodes.map((node) => node.id));
+        expect(new Set(ids).size).toBe(ids.length);
         await expect(page.getByRole('status')).toHaveText('Synced');
 
         await context.setOffline(true);
         await filter.getByRole('button', { name: 'Work', exact: true }).click();
-        await expect(global).toBeVisible();
         await expect(daily).toBeVisible();
         await daily.getByRole('button', { name: /^Edit entry / }).click();
-        await category.getByRole('button', { name: 'Home', exact: true }).click();
+        await expect(body).toHaveValue(`Daily work ${theme}`);
+        await body.fill(`Daily work ${theme} offline`);
+        await select('Home');
+        await expect(body).toHaveValue(`Daily home ${theme}`);
+        await body.fill(`Daily home ${theme} offline`);
+        await select('Work');
+        await expect(body).toHaveValue(`Daily work ${theme} offline`);
+        await select('Unclassified');
+        await expect(body).toHaveValue(`Daily other ${theme}`);
         await dialog.getByRole('button', { name: 'Save entry', exact: true }).click();
-        await expect(daily).toHaveCount(0);
+        await expect(daily).toContainText(`Daily work ${theme} offline`);
         await filter.getByRole('button', { name: 'Home', exact: true }).click();
-        await expect(daily).toBeVisible();
-        await expect(global).toBeVisible();
+        await expect(daily).toHaveCount(0);
+        await expect(home).toContainText(`Daily home ${theme} offline`);
         await context.setOffline(false);
         await expect(page.getByRole('status')).toHaveText('Synced');
         await page.reload();
-        await expect(filter.getByRole('button', { name: 'All', exact: true })).toHaveAttribute('aria-pressed', 'true');
-        await page.getByRole('button', { name: 'Global notes', exact: true }).click();
-        await expect(global.locator('.card-label')).toHaveCount(0);
-        await global.getByRole('button', { name: /^Edit / }).click();
-        await expect(category).toHaveCount(0);
+        await expect(filter.getByRole('button', { name: 'Home', exact: true })).toHaveAttribute('aria-pressed', 'true');
+        await home.getByRole('button', { name: /^Edit entry / }).click();
+        await expect(body).toHaveValue(`Daily home ${theme} offline`);
+        await expect(tags).toHaveValue('home-tag');
+        await select('Work');
+        await expect(body).toHaveValue(`Daily work ${theme} offline`);
+        await expect(tags).toHaveValue('work-tag');
+        await select('Home');
+        await dialog.getByRole('button', { name: 'Delete entry', exact: true }).click();
+        await dialog.getByRole('button', { name: 'Confirm delete', exact: true }).click();
+        await expect(home).toHaveCount(0);
+        await page.getByRole('button', { name: 'New note', exact: true }).click();
+        await expect(body).toHaveValue('');
+        await expect(tags).toHaveValue('');
+        await select('Work');
+        await expect(body).toHaveValue(`Daily work ${theme} offline`);
         await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
-        await daily.getByRole('button', { name: /^Edit entry / }).click();
-        await expect(category.getByRole('button', { name: 'Home', exact: true })).toHaveAttribute(
-            'aria-pressed',
-            'true'
-        );
-        await category.getByRole('button', { name: 'Home', exact: true }).click();
-        await dialog.getByRole('button', { name: 'Save entry', exact: true }).click();
-        await expect(daily.locator('.card-label').first()).toHaveText('Home');
+        await expect(page.getByRole('status')).toHaveText('Synced');
         const journal = await (await page.request.get('/api/journal')).json();
-        expect(journal.entries.find((entry: { body: string }) => entry.body === `Daily work ${theme}`).category).toBe(
-            'home'
-        );
-        const notes = await (await page.request.get('/api/global-notes')).json();
         expect(
-            notes.notes.find((note: { title: string }) => note.title === `Global reference ${theme}`)
-        ).not.toHaveProperty('category');
+            journal.entries.find((entry: { body: string }) => entry.body === `Daily work ${theme} offline`)
+        ).toMatchObject({ category: 'work', tags: ['work-tag'], version: 2 });
+        expect(journal.entries.find((entry: { body: string }) => entry.body === `Daily other ${theme}`)).toMatchObject({
+            category: null,
+            tags: ['other-tag'],
+            version: 1,
+        });
         expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(0);
     });
 }
