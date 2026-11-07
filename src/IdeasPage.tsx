@@ -7,6 +7,7 @@ import {
     Check,
     Clock3,
     Copy,
+    Flag,
     Lightbulb,
     Pin,
     Pencil,
@@ -31,11 +32,11 @@ import { SelectField } from './SelectField';
 import { PageLoading } from './Loading';
 import { useTheme } from './ThemeContext';
 import { useEditorDismissal } from './useEditorDismissal';
-import type { Idea, IdeaStatus, IdeaView } from './types';
+import type { Idea, IdeaPriority, IdeaStatus, IdeaView } from './types';
 import type { Solution } from '../shared/contracts';
 import type { useIdeasSync } from './useIdeasSync';
 import type { useSolutions } from './useSolutions';
-import { statusForSolution } from '../shared/status';
+import { defaultPriority, statusForSolution } from '../shared/status';
 import { ExpandableMarkdownBody, MarkdownNoteEditor } from './MarkdownNote';
 import { useDetailsHover } from './useDetailsHover';
 
@@ -45,6 +46,7 @@ interface IdeaInput {
     tags: string[];
     solution: string | null;
     status: IdeaStatus;
+    priority: IdeaPriority;
 }
 
 interface IdeaDialogProps {
@@ -61,6 +63,12 @@ const statusOptions: { value: IdeaStatus; label: string }[] = [
     { value: 'open', label: 'Open' },
     { value: 'in-progress', label: 'In progress' },
     { value: 'done', label: 'Done' },
+];
+
+const priorityOptions: { value: IdeaPriority; label: string }[] = [
+    { value: 'high', label: 'High' },
+    { value: 'medium', label: 'Medium' },
+    { value: 'low', label: 'Low' },
 ];
 
 /** Shows the directory name, or the raw id when a solution was removed from the directory. */
@@ -196,6 +204,10 @@ function IdeaDialog({
     const [status, setStatus] = useState<IdeaStatus>(() => statusForSolution(solution, initialIdea?.status));
     const statusIndex = statusOptions.findIndex((option) => option.value === status);
     const statusStyle: CSSProperties & { '--segment-index': number } = { '--segment-index': statusIndex };
+    const [priority, setPriority] = useState<IdeaPriority>(initialIdea?.priority ?? defaultPriority);
+    const priorityStyle: CSSProperties & { '--segment-index': number } = {
+        '--segment-index': priorityOptions.findIndex((option) => option.value === priority),
+    };
 
     useLayoutEffect(() => {
         const dialog = dialogRef.current;
@@ -226,6 +238,7 @@ function IdeaDialog({
             tags: parseTags(String(formData.get('tags') ?? '')),
             solution,
             status,
+            priority,
         });
         if (error) {
             setFormError(error);
@@ -359,6 +372,25 @@ function IdeaDialog({
                         </div>
                     </div>
                 </div>
+                <div className="field-row">
+                    <div className="field-group">
+                        <span className="field-label">Priority</span>
+                        <div className="segmented status-segmented" role="group" aria-label="Priority">
+                            <span className="segment-fill" style={priorityStyle} aria-hidden="true" />
+                            {priorityOptions.map((option) => (
+                                <button
+                                    key={option.value}
+                                    type="button"
+                                    className="segment-button"
+                                    aria-pressed={priority === option.value}
+                                    onClick={() => setPriority(option.value)}
+                                >
+                                    {option.label}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                </div>
                 {formError && (
                     <p className="dialog-error" role="alert">
                         {formError}
@@ -462,26 +494,31 @@ function IdeaCard({
                     <h4 id={`${detailsId}-title`} className="idea-title">
                         {idea.title}
                     </h4>
-                    {(idea.solution || idea.status !== 'open') && (
-                        <div className="idea-meta">
-                            {idea.solution && (
-                                <button
-                                    type="button"
-                                    className="solution-chip"
-                                    aria-label={`Filter by solution ${solutionName(solutions, idea.solution)}`}
-                                    onClick={() => onSelectSolution(idea.solution ?? '')}
-                                >
-                                    <Boxes size={11} aria-hidden="true" />
-                                    {solutionName(solutions, idea.solution)}
-                                </button>
-                            )}
+                    <div className="idea-meta">
+                        <span className="priority-chip" data-priority={idea.priority}>
+                            <Flag size={11} aria-hidden="true" />
+                            {priorityOptions.find((option) => option.value === idea.priority)?.label ?? 'High'}
+                            <span className="sr-only"> priority</span>
+                        </span>
+                        {idea.solution && (
+                            <button
+                                type="button"
+                                className="solution-chip"
+                                aria-label={`Filter by solution ${solutionName(solutions, idea.solution)}`}
+                                onClick={() => onSelectSolution(idea.solution ?? '')}
+                            >
+                                <Boxes size={11} aria-hidden="true" />
+                                {solutionName(solutions, idea.solution)}
+                            </button>
+                        )}
+                        {(idea.solution || idea.status !== 'open') && (
                             <span className="status-chip" data-status={idea.status}>
                                 {idea.status === 'n/a'
                                     ? 'N/A'
                                     : statusOptions.find((option) => option.value === idea.status)?.label}
                             </span>
-                        </div>
-                    )}
+                        )}
+                    </div>
                     {idea.body && (
                         <>
                             <ExpandableMarkdownBody id={detailsId} className="idea-details" body={idea.body} />
@@ -605,11 +642,11 @@ export function IdeasPage({
         if (error) setStorageNotice(error);
     };
 
-    const saveIdea = ({ title, body, tags, solution, status }: IdeaInput): string | null => {
+    const saveIdea = ({ title, body, tags, solution, status, priority }: IdeaInput): string | null => {
         const now = new Date().toISOString();
         const current = editingIdea ? ideas.find((idea) => idea.id === editingIdea.id) : undefined;
         return current
-            ? sync.update({ ...current, title, body, tags, solution, status, updatedAt: now })
+            ? sync.update({ ...current, title, body, tags, solution, status, priority, updatedAt: now })
             : sync.create({
                   id: window.crypto.randomUUID(),
                   title,
@@ -617,6 +654,7 @@ export function IdeasPage({
                   tags,
                   solution,
                   status,
+                  priority,
                   createdAt: now,
                   updatedAt: now,
                   pinned: false,

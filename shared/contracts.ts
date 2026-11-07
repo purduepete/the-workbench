@@ -1,8 +1,8 @@
 import { z } from 'zod';
-import { ideaStatuses, statusForSolution } from './status.js';
+import { defaultPriority, ideaPriorities, ideaStatuses, statusForSolution } from './status.js';
 
-export { ideaStatuses } from './status.js';
-export type { IdeaStatus } from './status.js';
+export { ideaPriorities, ideaStatuses } from './status.js';
+export type { IdeaPriority, IdeaStatus } from './status.js';
 
 export const limits = { title: 140, body: 20_000, tag: 40, tags: 12 } as const;
 
@@ -11,22 +11,36 @@ const isoTimestamp = z.iso.datetime({ offset: true });
 /** Solution ids match the hyphenated ids in Solution Directory's sites.json. */
 export const solutionIdPattern = /^[a-z0-9][a-z0-9-]{0,62}$/;
 
+const baseIdeaFields = {
+    title: z.string().trim().min(1).max(limits.title),
+    body: z.string().max(limits.body),
+    tags: z.array(z.string().trim().min(1).max(limits.tag)).max(limits.tags),
+    pinned: z.boolean(),
+    archived: z.boolean(),
+    // Defaults keep changes queued by an older client valid.
+    solution: z.string().regex(solutionIdPattern).nullable().default(null),
+    status: z.enum(ideaStatuses).default('open'),
+    updatedAt: isoTimestamp,
+};
+
+const normalizeStatus = <T extends { solution: string | null; status: (typeof ideaStatuses)[number] }>(fields: T) => ({
+    ...fields,
+    status: statusForSolution(fields.solution, fields.status),
+});
+
 export const ideaFieldsSchema = z
-    .object({
-        title: z.string().trim().min(1).max(limits.title),
-        body: z.string().max(limits.body),
-        tags: z.array(z.string().trim().min(1).max(limits.tag)).max(limits.tags),
-        pinned: z.boolean(),
-        archived: z.boolean(),
-        // Defaults keep changes queued by an older client valid.
-        solution: z.string().regex(solutionIdPattern).nullable().default(null),
-        status: z.enum(ideaStatuses).default('open'),
-        updatedAt: isoTimestamp,
-    })
+    .object({ ...baseIdeaFields, priority: z.enum(ideaPriorities).default(defaultPriority) })
     .strict()
-    .transform((fields) => ({ ...fields, status: statusForSolution(fields.solution, fields.status) }));
+    .transform(normalizeStatus);
+
+/** An update from a client that predates priority omits it; the server then keeps the stored priority. */
+export const ideaUpdateFieldsSchema = z
+    .object({ ...baseIdeaFields, priority: z.enum(ideaPriorities).optional() })
+    .strict()
+    .transform(normalizeStatus);
 
 export type IdeaFields = z.infer<typeof ideaFieldsSchema>;
+export type IdeaUpdateFields = z.infer<typeof ideaUpdateFieldsSchema>;
 
 export interface ServerIdea extends IdeaFields {
     id: string;
@@ -51,7 +65,7 @@ export const mutationSchema = z.discriminatedUnion('kind', [
             id: z.uuid(),
             baseVersion: z.number().int().min(1),
             copyId: z.uuid(),
-            fields: ideaFieldsSchema,
+            fields: ideaUpdateFieldsSchema,
         })
         .strict(),
     z.object({ kind: z.literal('delete'), mutationId: z.uuid(), id: z.uuid() }).strict(),

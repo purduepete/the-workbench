@@ -10,6 +10,7 @@ import type { TaskMutation } from '../shared/tasks.js';
 const url = process.env.TEST_DATABASE_URL;
 const enabled = Boolean(url && new URL(url).pathname.endsWith('_test'));
 const legacyReceiptId = randomUUID();
+const existingIdeaId = randomUUID();
 
 const save = (baseVersion: number, body: string): JournalSave => ({
     kind: 'save',
@@ -64,11 +65,76 @@ describe.skipIf(!enabled)('PostgresIdeasStore journal against a real database', 
         await pool.query(
             await readFile(new URL('../deploy/postgresql/006_daily_note_sections.sql', import.meta.url), 'utf8')
         );
+        await pool.query(
+            `INSERT INTO public.ideas (id, title, body, tags, pinned, archived, solution, status, created_at, updated_at, version)
+             VALUES ($1, 'Existing idea', 'Body', '{home}', TRUE, FALSE, 'ferry-tracker', 'done',
+                     '2026-01-01T00:00:00Z', '2026-01-02T00:00:00Z', 4)`,
+            [existingIdeaId]
+        );
+        await pool.query(
+            await readFile(new URL('../deploy/postgresql/007_idea_priority.sql', import.meta.url), 'utf8')
+        );
         store = new PostgresIdeasStore(pool);
     });
 
     afterAll(async () => {
         await pool?.end();
+    });
+
+    it('sets existing ideas to High and keeps their other fields', async () => {
+        expect(await store.list()).toMatchObject([
+            {
+                id: existingIdeaId,
+                title: 'Existing idea',
+                pinned: true,
+                solution: 'ferry-tracker',
+                status: 'done',
+                priority: 'high',
+                version: 4,
+            },
+        ]);
+        await expect(
+            pool.query(`UPDATE public.ideas SET priority = 'urgent' WHERE id = $1`, [existingIdeaId])
+        ).rejects.toThrow(/check constraint/);
+    });
+
+    it('keeps the stored priority when an older client updates an idea', async () => {
+        await store.apply({
+            kind: 'update',
+            mutationId: randomUUID(),
+            id: existingIdeaId,
+            baseVersion: 4,
+            copyId: randomUUID(),
+            fields: {
+                title: 'Medium now',
+                body: 'Body',
+                tags: ['home'],
+                pinned: true,
+                archived: false,
+                solution: 'ferry-tracker',
+                status: 'done',
+                priority: 'medium',
+                updatedAt: '2026-01-03T00:00:00.000Z',
+            },
+        });
+        const response = await store.apply({
+            kind: 'update',
+            mutationId: randomUUID(),
+            id: existingIdeaId,
+            baseVersion: 5,
+            copyId: randomUUID(),
+            fields: {
+                title: 'Old client edit',
+                body: 'Body',
+                tags: ['home'],
+                pinned: true,
+                archived: false,
+                solution: 'ferry-tracker',
+                status: 'done',
+                updatedAt: '2026-01-04T00:00:00.000Z',
+            },
+        });
+        expect(response).toMatchObject({ outcome: 'updated', idea: { title: 'Old client edit', priority: 'medium' } });
     });
 
     it('is ready after all migrations', async () => {

@@ -1,6 +1,6 @@
 import type { IdeaFields, Mutation, MutationResponse, ServerIdea } from '../shared/contracts';
 import type { Idea } from './types';
-import { statusForSolution } from '../shared/status';
+import { defaultPriority, statusForSolution } from '../shared/status';
 
 export const SYNC_STORAGE_KEY = 'the-workbench.sync';
 export const LEGACY_IDEAS_KEY = 'the-workbench.ideas';
@@ -26,11 +26,15 @@ export const fieldsOf = (idea: Idea): IdeaFields => ({
     archived: idea.archived,
     solution: idea.solution,
     status: statusForSolution(idea.solution, idea.status),
+    priority: idea.priority,
     updatedAt: idea.updatedAt,
 });
 
 /** Data saved before solutions and status existed gets the same defaults the server applies. */
 const withDefaults = <T extends object>(value: T) => ({ solution: null, status: 'open' as const, ...value });
+
+/** Confirmed rows cached before priority existed were High on the server after its migration. */
+const withServerDefaults = <T extends object>(value: T) => ({ priority: defaultPriority, ...withDefaults(value) });
 
 const stripVersion = ({ version: _version, ...idea }: ServerIdea): Idea => ({
     ...idea,
@@ -52,6 +56,8 @@ export function localIdeas(state: SyncState): Idea[] {
             createdAt,
             ...entry.fields,
             status: statusForSolution(entry.fields.solution, entry.fields.status),
+            // A change queued before priority existed keeps the priority the server stores.
+            priority: entry.fields.priority ?? current?.priority ?? defaultPriority,
             tags: [...entry.fields.tags],
         });
     }
@@ -172,9 +178,12 @@ export function readSyncState(): { state: SyncState; error: string | null } {
             const parsed: unknown = JSON.parse(saved);
             if (isSyncState(parsed)) {
                 const state: SyncState = {
-                    server: parsed.server.map(withDefaults),
-                    outbox: parsed.outbox.map((entry) =>
-                        entry.kind === 'delete' ? entry : { ...entry, fields: withDefaults(entry.fields) }
+                    server: parsed.server.map(withServerDefaults),
+                    // Queued changes keep their original payload; the server fills in a missing priority.
+                    outbox: parsed.outbox.map((entry): OutboxEntry =>
+                        entry.kind === 'delete'
+                            ? entry
+                            : ({ ...entry, fields: withDefaults(entry.fields) } as OutboxEntry)
                     ),
                 };
                 return { state, error: null };
@@ -188,7 +197,7 @@ export function readSyncState(): { state: SyncState; error: string | null } {
         const legacy = window.localStorage.getItem(LEGACY_IDEAS_KEY);
         const legacyIdeas: unknown = legacy === null ? [] : JSON.parse(legacy);
         const state = Array.isArray(legacyIdeas)
-            ? legacyIdeas.filter(isLegacyIdea).map(withDefaults).reduce(queueCreate, emptySyncState())
+            ? legacyIdeas.filter(isLegacyIdea).map(withServerDefaults).reduce(queueCreate, emptySyncState())
             : emptySyncState();
         return { state, error: null };
     } catch {

@@ -1,8 +1,8 @@
-import type { IdeaStatus } from '../shared/contracts';
+import type { IdeaPriority, IdeaStatus } from '../shared/contracts';
 
 export type ThemePreference = 'system' | 'light' | 'midnight';
 export type IdeaView = 'all' | 'pinned' | 'archived';
-export type { IdeaStatus };
+export type { IdeaPriority, IdeaStatus };
 
 export interface Idea {
     id: string;
@@ -16,4 +16,5 @@ export interface Idea {
     /** Solution Directory id this idea is for, or null. */
     solution: string | null;
     status: IdeaStatus;
+    priority: IdeaPriority;
 }

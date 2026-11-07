@@ -23,6 +23,7 @@ const fields = (title: string): IdeaFields => ({
     archived: false,
     solution: null,
     status: 'open',
+    priority: 'high',
     updatedAt: '2026-10-29T18:00:00.000Z',
 });
 
@@ -215,6 +216,37 @@ describe('solutions and status', () => {
         const { solution: _solution, status: _status, ...oldFields } = fields('Old client');
         const parsed = mutationSchema.parse({ ...create('Old client'), fields: oldFields });
         expect(parsed.kind === 'create' && parsed.fields).toMatchObject({ solution: null, status: 'n/a' });
+    });
+
+    it('defaults priority to High on create and keeps the stored priority on an older update', async () => {
+        const { priority: _priority, ...oldFields } = fields('Old client');
+        const created = create('Ranked');
+        if (created.kind !== 'create') throw new Error('Expected create.');
+        created.fields.priority = 'low';
+        await post('/api/mutations', created);
+        const omitted = { ...create('No priority'), fields: oldFields };
+        expect(await (await post('/api/mutations', omitted)).json()).toMatchObject({ idea: { priority: 'high' } });
+        const edit = { ...update(created.id, 1, 'Edited by old client'), fields: oldFields };
+        expect(await (await post('/api/mutations', edit)).json()).toMatchObject({
+            outcome: 'updated',
+            idea: { title: 'Old client', priority: 'low' },
+        });
+        const stale = { ...update(created.id, 1, 'Stale'), fields: oldFields };
+        expect(await (await post('/api/mutations', stale)).json()).toMatchObject({
+            outcome: 'copied',
+            idea: { priority: 'low' },
+        });
+        const medium = update(created.id, 2, 'Now medium');
+        if (medium.kind !== 'update') throw new Error('Expected update.');
+        medium.fields.priority = 'medium';
+        expect(await (await post('/api/mutations', medium)).json()).toMatchObject({ idea: { priority: 'medium' } });
+    });
+
+    it('rejects an unknown priority', async () => {
+        const bad = create('Urgent');
+        if (bad.kind !== 'create') throw new Error('Expected create.');
+        const response = await post('/api/mutations', { ...bad, fields: { ...bad.fields, priority: 'urgent' } });
+        expect(response.status).toBe(400);
     });
 
     it('sets N/A on unlinked writes and Open when linking an N/A idea', async () => {
@@ -645,12 +677,13 @@ describe('PostgresIdeasStore', () => {
     const fakePool = (handler: (sql: string, values?: unknown[]) => { rows: unknown[] }) =>
         ({ query: async (sql: string, values?: unknown[]) => handler(sql, values) }) as unknown as Pool;
 
-    it('is ready only at schema version 5 with journal sections, global-note and task tables', async () => {
+    it('is ready only at schema version 6 with journal sections, global-note and task tables', async () => {
         const at = (version: number) =>
             new PostgresIdeasStore(
                 fakePool((sql) => ({ rows: sql.includes('solutiondeploy_schema') ? [{ version }] : [] }))
             );
-        await expect(at(5).ready()).resolves.toBeUndefined();
+        await expect(at(6).ready()).resolves.toBeUndefined();
+        await expect(at(5).ready()).rejects.toThrow(/schema version/);
         await expect(at(4).ready()).rejects.toThrow(/schema version/);
         await expect(at(3).ready()).rejects.toThrow(/schema version/);
         await expect(at(2).ready()).rejects.toThrow(/schema version/);
@@ -658,14 +691,14 @@ describe('PostgresIdeasStore', () => {
         const missingJournal = new PostgresIdeasStore(
             fakePool((sql) => {
                 if (sql.includes('journal_entries')) throw new Error('relation does not exist');
-                return { rows: sql.includes('solutiondeploy_schema') ? [{ version: 5 }] : [] };
+                return { rows: sql.includes('solutiondeploy_schema') ? [{ version: 6 }] : [] };
             })
         );
         await expect(missingJournal.ready()).rejects.toThrow(/does not exist/);
         const missingGlobalNotes = new PostgresIdeasStore(
             fakePool((sql) => {
                 if (sql.includes('global_notes')) throw new Error('relation does not exist');
-                return { rows: sql.includes('solutiondeploy_schema') ? [{ version: 5 }] : [] };
+                return { rows: sql.includes('solutiondeploy_schema') ? [{ version: 6 }] : [] };
             })
         );
         await expect(missingGlobalNotes.ready()).rejects.toThrow(/does not exist/);
@@ -673,11 +706,40 @@ describe('PostgresIdeasStore', () => {
             const missingTasks = new PostgresIdeasStore(
                 fakePool((sql) => {
                     if (sql.includes(table)) throw new Error('relation does not exist');
-                    return { rows: sql.includes('solutiondeploy_schema') ? [{ version: 5 }] : [] };
+                    return { rows: sql.includes('solutiondeploy_schema') ? [{ version: 6 }] : [] };
                 })
             );
             await expect(missingTasks.ready()).rejects.toThrow(/does not exist/);
         }
+    });
+
+    it('preserves stored priority atomically and copies it on a stale older-client update', async () => {
+        const id = randomUUID();
+        const calls: { sql: string; values?: unknown[] }[] = [];
+        const pool = {
+            connect: async () => ({
+                query: async (sql: string, values?: unknown[]) => {
+                    calls.push({ sql, values });
+                    if (sql.startsWith('UPDATE public.ideas')) return { rows: [] };
+                    if (sql.includes('SELECT priority FROM public.ideas')) return { rows: [{ priority: 'low' }] };
+                    if (sql.startsWith('INSERT INTO public.ideas')) return { rows: [{ version: 1 }] };
+                    return { rows: [] };
+                },
+                release: () => undefined,
+            }),
+            query: async () => ({ rows: [] }),
+        } as unknown as Pool;
+        const { priority: _priority, ...oldFields } = fields('Old client');
+        const mutation = mutationSchema.parse({ ...update(id, 1, 'Old client'), fields: oldFields });
+        await new PostgresIdeasStore(pool).apply(mutation);
+        const updateCall = calls.find((call) => call.sql.startsWith('UPDATE public.ideas'));
+        expect(updateCall?.sql).toContain('priority = COALESCE($11::text, priority)');
+        expect(updateCall?.values?.[10]).toBeNull();
+        expect(
+            calls.some((call) => call.sql.includes('SELECT priority FROM public.ideas WHERE id = $1 FOR UPDATE'))
+        ).toBe(true);
+        const insert = calls.find((call) => call.sql.startsWith('INSERT INTO public.ideas'));
+        expect(insert?.values?.[8]).toBe('low');
     });
 
     it('returns the recorded receipt when a concurrent retry wins the race', async () => {

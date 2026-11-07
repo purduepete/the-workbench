@@ -7,7 +7,7 @@
     "name": "the_workbench",
     "connectionEnvironment": "DATABASE_URL",
     "backendEnvironment": "STORAGE_BACKEND",
-    "schemaVersion": 5,
+    "schemaVersion": 6,
     "migrationsDirectory": "deploy\\postgresql",
     "backupFormat": "custom"
   },

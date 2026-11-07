@@ -1269,6 +1269,28 @@ form.idea-form > .field-group:first-child {
     text-decoration: line-through;
 }
 
+.priority-chip {
+    display: inline-flex;
+    min-height: 22px;
+    align-items: center;
+    gap: 5px;
+    padding: 2px 7px;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.priority-chip[data-priority='high'] {
+    border-color: var(--accent);
+    color: var(--accent-contrast);
+    background: var(--accent);
+}
+
+.priority-chip[data-priority='low'] {
+    color: var(--quiet);
+}
+
 /* Header page switch. */
 .topbar .page-nav {
     width: auto;

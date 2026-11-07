@@ -14,6 +14,7 @@ const ideas: Idea[] = [
         archived: false,
         solution: null,
         status: 'open',
+        priority: 'high',
     },
     {
         id: 'pinned',
@@ -26,6 +27,7 @@ const ideas: Idea[] = [
         archived: false,
         solution: null,
         status: 'open',
+        priority: 'high',
     },
     {
         id: 'archived',
@@ -38,6 +40,7 @@ const ideas: Idea[] = [
         archived: true,
         solution: null,
         status: 'open',
+        priority: 'high',
     },
 ];
 
@@ -62,6 +65,69 @@ describe('filterIdeas', () => {
         expect(filterIdeas(linked, 'all', '', null, 'ferry-tracker').map((idea) => idea.id)).toEqual(['older']);
         expect(filterIdeas(linked, 'all', '', null, 'none').map((idea) => idea.id)).toEqual(['pinned']);
         expect(filterIdeas(linked, 'all', 'ferry', null).map((idea) => idea.id)).toEqual(['older']);
+    });
+});
+
+describe('idea order', () => {
+    const make = (
+        id: string,
+        status: Idea['status'],
+        priority: Idea['priority'],
+        updatedAt = '2026-10-27T18:00:00.000Z',
+        pinned = false
+    ): Idea => ({
+        id,
+        title: id,
+        body: '',
+        tags: [],
+        createdAt: updatedAt,
+        updatedAt,
+        pinned,
+        archived: false,
+        solution: status === 'n/a' ? null : 'ferry-tracker',
+        status,
+        priority,
+    });
+
+    it('orders pinned first, then status, then priority, then newest and id', () => {
+        const list = [
+            make('na-high', 'n/a', 'high'),
+            make('done-high', 'done', 'high'),
+            make('open-low', 'open', 'low'),
+            make('progress-medium', 'in-progress', 'medium'),
+            make('open-medium', 'open', 'medium'),
+            make('open-high-old', 'open', 'high', '2026-10-01T18:00:00.000Z'),
+            make('open-high-new', 'open', 'high', '2026-10-28T18:00:00.000Z'),
+            make('progress-high', 'in-progress', 'high'),
+            make('done-low', 'done', 'low'),
+            make('pinned-done-low', 'done', 'low', '2026-10-27T18:00:00.000Z', true),
+            make('pinned-open-high', 'open', 'high', '2026-10-27T18:00:00.000Z', true),
+            make('tie-b', 'done', 'medium'),
+            make('tie-a', 'done', 'medium'),
+        ];
+        expect(filterIdeas(list, 'all', '', null).map((idea) => idea.id)).toEqual([
+            'pinned-open-high',
+            'pinned-done-low',
+            'open-high-new',
+            'open-high-old',
+            'open-medium',
+            'open-low',
+            'progress-high',
+            'progress-medium',
+            'done-high',
+            'tie-a',
+            'tie-b',
+            'done-low',
+            'na-high',
+        ]);
+    });
+
+    it('applies the same order to the archived view', () => {
+        const list = [make('low', 'open', 'low'), make('high', 'open', 'high')].map((idea) => ({
+            ...idea,
+            archived: true,
+        }));
+        expect(filterIdeas(list, 'archived', '', null).map((idea) => idea.id)).toEqual(['high', 'low']);
     });
 });
 

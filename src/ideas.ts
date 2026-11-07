@@ -1,4 +1,19 @@
-import type { Idea, IdeaView } from './types';
+import type { Idea, IdeaPriority, IdeaStatus, IdeaView } from './types';
+import { statusForSolution } from '../shared/status';
+
+const statusRank: Record<IdeaStatus, number> = { open: 0, 'in-progress': 1, done: 2, 'n/a': 3 };
+const priorityRank: Record<IdeaPriority, number> = { high: 0, medium: 1, low: 2 };
+
+/** Pinned first, then Open, In progress, Done and N/A, then High, Medium and Low, newest first. */
+export function compareIdeas(a: Idea, b: Idea): number {
+    return (
+        Number(b.pinned) - Number(a.pinned) ||
+        statusRank[statusForSolution(a.solution, a.status)] - statusRank[statusForSolution(b.solution, b.status)] ||
+        (priorityRank[a.priority] ?? 0) - (priorityRank[b.priority] ?? 0) ||
+        b.updatedAt.localeCompare(a.updatedAt) ||
+        a.id.localeCompare(b.id)
+    );
+}
 
 export const VIEW_STORAGE_KEY = 'the-workbench.view';
 
@@ -64,7 +79,7 @@ export function filterIdeas(
                 value.toLocaleLowerCase().includes(normalizedQuery)
             );
         })
-        .sort((a, b) => Number(b.pinned) - Number(a.pinned) || b.updatedAt.localeCompare(a.updatedAt));
+        .sort(compareIdeas);
 }
 
 export function formatIdeaTimestamp(value: string): string {

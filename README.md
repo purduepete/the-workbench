@@ -8,7 +8,7 @@ Sync errors reveal the header and prompt immediately. Refreshes keep the shell v
 Reduced motion removes the entrance animation.
 
 The Workbench keeps ideas with tags, pins, search and archive alongside date-grouped notes and Home/Work tasks.
-Duplicate on an idea card opens a new-idea editor with its title, Markdown details, tags, solution and status copied.
+Duplicate on an idea card opens a new-idea editor with its title, Markdown details, tags, solution, status and priority copied.
 The card footer uses task-plus, pencil and copy icons for Create task, Edit and Duplicate, with accessible button names.
 Save creates a separate idea with new timestamps, without pinning or archiving it. Cancel creates nothing.
 Data syncs to a PostgreSQL database through a small Express server. The browser keeps an outbox, so capture works
@@ -233,6 +233,10 @@ reads the directory's `sites.json` from `SOLUTIONS_SOURCE` on every `/api/soluti
 directory appears with no change here. If the directory is down, the server returns the last list it read; the browser
 also keeps a copy for offline capture. An idea linked to a solution that later leaves the directory keeps its id.
 
+Every idea has a priority: High, Medium or Low. New ideas start at High, and ideas created before priority existed are
+High. Ideas are listed pinned first, then Open, In progress, Done and N/A, then High, Medium and Low, then newest first.
+An edit sent by an older client that does not know about priority keeps the idea's stored priority.
+
 The settings button beside the solution filter opens Manage solutions. Unchecking a solution hides it from the filter
 and the idea dialog on every device; the server stores the setting in `public.disabled_solutions` and
 `/api/solutions` returns it as `disabled`. Ideas already linked to it keep the link and still show its name. Changing
@@ -252,10 +256,11 @@ solution" in `solution-deploy\docs\Deployment.md`.
 and moves the schema to version 4 without assigning categories to existing notes.
 `006_daily_note_sections.sql` preserves those entries and receipts, uses date plus section as the journal key,
 and moves the schema to version 5. PostgreSQL stores the Unclassified key as `unclassified`; the API returns `null`.
+`007_idea_priority.sql` adds idea priority, sets every existing idea to High and moves the schema to version 6.
 Apply pending migrations through
 the reviewed database-change procedure in `Deployment.md` (stop the app, apply them in order as the migrator,
 re-run the `Manage-Postgres.ps1` grant plan, then release). The server reports not ready until all tables
-exist at schema version 5, including the daily-entry and receipt section columns.
+exist at schema version 6, including the daily-entry and receipt section columns and idea priority.
 
 `TEST_DATABASE_URL` runs `tests/journal-postgres.test.ts` against a real database. It drops and recreates `public`, so
 it only runs when the database name ends in `_test`; a disposable container is enough:

@@ -27,6 +27,7 @@ const idea = (title: string, id: string = crypto.randomUUID()): Idea => ({
     archived: false,
     solution: null,
     status: 'open',
+    priority: 'high',
 });
 
 /** Sends the head of the outbox the way the hook does: mark attempted, apply, acknowledge. */
@@ -135,6 +136,31 @@ describe('outbox', () => {
         expect(state.outbox).toEqual([]);
         expect(localIdeas(state)).toEqual([]);
     });
+
+    it('saves priority on create, edit, pin and archive and keeps it on a conflict copy', async () => {
+        const store = new MemoryIdeasStore();
+        const note = { ...idea('Ranked'), priority: 'low' as const };
+        let state = await drain(queueCreate(emptySyncState(), note), store);
+        expect(localIdeas(state)[0].priority).toBe('low');
+        state = await drain(queueUpdate(state, { ...localIdeas(state)[0], priority: 'medium' }), store);
+        state = await drain(queueUpdate(state, { ...localIdeas(state)[0], pinned: true, archived: true }), store);
+        expect(await store.list()).toMatchObject([{ priority: 'medium', pinned: true, archived: true }]);
+        await store.apply({
+            kind: 'update',
+            mutationId: crypto.randomUUID(),
+            id: note.id,
+            baseVersion: 3,
+            copyId: crypto.randomUUID(),
+            fields: { ...fieldsOf(localIdeas(state)[0]), title: 'Other device' },
+        });
+        await drain(queueUpdate(state, { ...localIdeas(state)[0], title: 'Stale edit' }), store);
+        expect(
+            (await store.list()).map((item) => [item.title, item.priority]).sort((a, b) => a[0].localeCompare(b[0]))
+        ).toEqual([
+            ['Other device', 'medium'],
+            ['Stale edit (copy)', 'medium'],
+        ]);
+    });
 });
 
 describe('readSyncState', () => {
@@ -144,8 +170,8 @@ describe('readSyncState', () => {
         vi.stubGlobal('window', { localStorage: { getItem: (key: string) => values[key] ?? null } });
 
     it('gives data saved before solutions existed the server defaults', () => {
-        const { solution: _solution, status: _status, ...old } = idea('Saved last month', 'old-1');
-        const { solution: _s, status: _st, ...oldFields } = fieldsOf(idea('Queued offline', 'old-2'));
+        const { solution: _solution, status: _status, priority: _p, ...old } = idea('Saved last month', 'old-1');
+        const { solution: _s, status: _st, priority: _pr, ...oldFields } = fieldsOf(idea('Queued offline', 'old-2'));
         withStorage({
             [SYNC_STORAGE_KEY]: JSON.stringify({
                 server: [{ ...old, version: 3 }],
@@ -163,14 +189,44 @@ describe('readSyncState', () => {
         });
         const { state, error } = readSyncState();
         expect(error).toBeNull();
-        expect(state.server[0]).toMatchObject({ id: 'old-1', solution: null, status: 'open', version: 3 });
+        expect(state.server[0]).toMatchObject({
+            id: 'old-1',
+            solution: null,
+            status: 'open',
+            priority: 'high',
+            version: 3,
+        });
         const entry = state.outbox[0];
         expect(entry.kind !== 'delete' && entry.fields).toMatchObject({ solution: null, status: 'open' });
-        expect(localIdeas(state).map((item) => [item.id, item.status])).toEqual(
+        // The queued payload is not rewritten; the server applies the priority default.
+        expect(entry.kind !== 'delete' && 'priority' in entry.fields).toBe(false);
+        expect(localIdeas(state).map((item) => [item.id, item.status, item.priority])).toEqual(
             expect.arrayContaining([
-                ['old-1', 'n/a'],
-                ['old-2', 'n/a'],
+                ['old-1', 'n/a', 'high'],
+                ['old-2', 'n/a', 'high'],
             ])
         );
+    });
+
+    it('keeps the priority of a queued pre-priority edit unchanged, including after it was attempted', async () => {
+        const store = new MemoryIdeasStore();
+        const note = { ...idea('Medium one'), priority: 'medium' as const };
+        const state = await drain(queueCreate(emptySyncState(), note), store);
+        const { priority: _priority, ...oldFields } = fieldsOf({ ...note, title: 'Edited by old client' });
+        const payload = {
+            kind: 'update' as const,
+            mutationId: crypto.randomUUID(),
+            id: note.id,
+            baseVersion: 1,
+            copyId: crypto.randomUUID(),
+            fields: oldFields,
+            attempted: true,
+        };
+        withStorage({ [SYNC_STORAGE_KEY]: JSON.stringify({ server: state.server, outbox: [payload] }) });
+        const restored = readSyncState().state;
+        expect(restored.outbox[0]).toEqual(payload);
+        expect(localIdeas(restored)[0]).toMatchObject({ title: 'Edited by old client', priority: 'medium' });
+        await drain(restored, store);
+        expect(await store.list()).toMatchObject([{ title: 'Edited by old client', priority: 'medium' }]);
     });
 });

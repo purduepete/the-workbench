@@ -16,6 +16,7 @@ import type {
     NoteCategory,
 } from '../shared/contracts.js';
 import { limits } from '../shared/contracts.js';
+import { defaultPriority } from '../shared/status.js';
 import {
     journalEntryKey,
     JournalOverflowError,
@@ -26,7 +27,7 @@ import {
 import type { CurrentEntry } from '../shared/journal.js';
 import type { ServerTask, TaskMutation, TaskMutationResponse, TaskOutcome } from '../shared/tasks.js';
 
-export const SCHEMA_VERSION = 5;
+export const SCHEMA_VERSION = 6;
 
 export interface IdeasStore {
     list(): Promise<ServerIdea[]>;
@@ -330,13 +331,17 @@ export class MemoryIdeasStore implements IdeasStore {
             return { outcome: 'deleted', resultId: mutation.id, resultVersion: 0 };
         }
         const current = this.ideas.get(mutation.id);
+        const fields: IdeaFields = {
+            ...mutation.fields,
+            priority: mutation.fields.priority ?? current?.priority ?? defaultPriority,
+        };
         if (current && current.version === mutation.baseVersion) {
             const version = current.version + 1;
-            this.ideas.set(mutation.id, { ...current, ...mutation.fields, tags: [...mutation.fields.tags], version });
+            this.ideas.set(mutation.id, { ...current, ...fields, tags: [...fields.tags], version });
             return { outcome: 'updated', resultId: mutation.id, resultVersion: version };
         }
-        const fields = { ...mutation.fields, title: copyTitle(mutation.fields.title) };
-        const version = this.insert(mutation.copyId, new Date().toISOString(), fields);
+        const copy = { ...fields, title: copyTitle(fields.title) };
+        const version = this.insert(mutation.copyId, new Date().toISOString(), copy);
         return { outcome: 'copied', resultId: mutation.copyId, resultVersion: version };
     }
 }
@@ -350,12 +355,14 @@ interface IdeaRow {
     archived: boolean;
     solution: string | null;
     status: IdeaFields['status'];
+    priority: IdeaFields['priority'];
     created_at: Date;
     updated_at: Date;
     version: number;
 }
 
-const ideaColumns = 'id, title, body, tags, pinned, archived, solution, status, created_at, updated_at, version';
+const ideaColumns =
+    'id, title, body, tags, pinned, archived, solution, status, priority, created_at, updated_at, version';
 
 const toIdea = (row: IdeaRow): ServerIdea => ({
     id: row.id,
@@ -366,6 +373,7 @@ const toIdea = (row: IdeaRow): ServerIdea => ({
     archived: row.archived,
     solution: row.solution,
     status: row.status,
+    priority: row.priority,
     createdAt: row.created_at.toISOString(),
     updatedAt: row.updated_at.toISOString(),
     version: row.version,
@@ -574,7 +582,7 @@ export class PostgresIdeasStore implements IdeasStore {
         );
         if (result.rows[0]?.version !== SCHEMA_VERSION)
             throw new Error(`The Workbench schema version is not ${SCHEMA_VERSION}.`);
-        await this.pool.query('SELECT id FROM public.ideas LIMIT 1');
+        await this.pool.query('SELECT id, priority FROM public.ideas LIMIT 1');
         await this.pool.query('SELECT mutation_id FROM public.applied_mutations LIMIT 1');
         await this.pool.query('SELECT solution_id FROM public.disabled_solutions LIMIT 1');
         await this.pool.query('SELECT entry_date, category FROM public.journal_entries LIMIT 1');
@@ -867,8 +875,8 @@ export class PostgresIdeasStore implements IdeasStore {
     private async insert(client: PoolClient, id: string, createdAt: string | null, fields: IdeaFields) {
         const inserted = await client.query<{ version: number }>(
             `INSERT INTO public.ideas
-                 (id, title, body, tags, pinned, archived, solution, status, created_at, updated_at, version)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, COALESCE($9::timestamptz, CURRENT_TIMESTAMP), $10, 1)
+                 (id, title, body, tags, pinned, archived, solution, status, priority, created_at, updated_at, version)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, COALESCE($10::timestamptz, CURRENT_TIMESTAMP), $11, 1)
              ON CONFLICT (id) DO NOTHING RETURNING version`,
             [
                 id,
@@ -879,6 +887,7 @@ export class PostgresIdeasStore implements IdeasStore {
                 fields.archived,
                 fields.solution,
                 fields.status,
+                fields.priority,
                 createdAt,
                 fields.updatedAt,
             ]
@@ -900,10 +909,11 @@ export class PostgresIdeasStore implements IdeasStore {
             return { outcome: 'deleted', resultId: mutation.id, resultVersion: 0 };
         }
         const { fields } = mutation;
+        // An update from a client that predates priority leaves the stored priority unchanged.
         const updated = await client.query<{ version: number }>(
             `UPDATE public.ideas
              SET title = $3, body = $4, tags = $5, pinned = $6, archived = $7, solution = $8, status = $9,
-                 updated_at = $10, version = version + 1
+                 priority = COALESCE($11::text, priority), updated_at = $10, version = version + 1
              WHERE id = $1 AND version = $2 RETURNING version`,
             [
                 mutation.id,
@@ -916,11 +926,24 @@ export class PostgresIdeasStore implements IdeasStore {
                 fields.solution,
                 fields.status,
                 fields.updatedAt,
+                fields.priority ?? null,
             ]
         );
         if (updated.rows[0])
             return { outcome: 'updated', resultId: mutation.id, resultVersion: updated.rows[0].version };
-        const version = await this.insert(client, mutation.copyId, null, { ...fields, title: copyTitle(fields.title) });
+        let priority = fields.priority;
+        if (!priority) {
+            const stored = await client.query<{ priority: IdeaFields['priority'] }>(
+                'SELECT priority FROM public.ideas WHERE id = $1 FOR UPDATE',
+                [mutation.id]
+            );
+            priority = stored.rows[0]?.priority ?? defaultPriority;
+        }
+        const version = await this.insert(client, mutation.copyId, null, {
+            ...fields,
+            priority,
+            title: copyTitle(fields.title),
+        });
         return { outcome: 'copied', resultId: mutation.copyId, resultVersion: version };
     }
 
