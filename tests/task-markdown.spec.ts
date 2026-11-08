@@ -110,4 +110,17 @@ test.describe('touch task details', () => {
         await expect.poll(isExpanded).toBe(false);
         expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(0);
     });
+
+    test('hides Show details when the whole task already fits', async ({ page }) => {
+        await page.goto('/tasks');
+        await page.getByRole('button', { name: 'New task', exact: true }).tap();
+        const dialog = page.getByRole('dialog');
+        const title = 'Short touch task';
+        await dialog.getByLabel('Task title', { exact: true }).fill(title);
+        await dialog.getByRole('textbox', { name: 'Details', exact: true }).fill('One short line.');
+        await dialog.getByRole('button', { name: 'Save task', exact: true }).tap();
+        const row = page.getByRole('listitem', { name: title, exact: true });
+        await expect(row.locator('.task-details')).toHaveAttribute('data-truncated', 'false');
+        await expect(row.getByRole('button', { name: 'Show details', exact: true })).toBeHidden();
+    });
 });

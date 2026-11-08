@@ -108,6 +108,18 @@ test.describe('touch idea details', () => {
         await expect.poll(isExpanded).toBe(false);
         expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(0);
     });
+
+    test('hides Show details when the whole idea already fits', async ({ page }) => {
+        await page.goto('/');
+        await page.getByRole('button', { name: 'New idea', exact: true }).tap();
+        const dialog = page.getByRole('dialog');
+        await dialog.getByLabel('Idea title', { exact: true }).fill('Short touch idea');
+        await dialog.getByRole('textbox', { name: 'Details', exact: true }).fill('One short line.');
+        await dialog.getByRole('button', { name: 'Save idea', exact: true }).tap();
+        const card = page.getByRole('article', { name: 'Short touch idea', exact: true });
+        await expect(card.locator('.idea-details')).toHaveAttribute('data-truncated', 'false');
+        await expect(card.getByRole('button', { name: 'Show details', exact: true })).toBeHidden();
+    });
 });
 
 test('shows no overflow indicator when idea details fit', async ({ page }) => {

@@ -728,6 +728,11 @@ main.page-width {
     margin-top: 6px;
 }
 
+/* Only offer Show details when the preview hides content; stays hidden until measured. */
+:is(.idea-details, .task-details):not([data-truncated='true']) ~ :is(.idea-details-toggle, .task-details-toggle) {
+    display: none;
+}
+
 /* A quiet ellipsis marks collapsed details that hide content; touch devices show Show details instead. */
 .details-more {
     display: none;
