@@ -59,14 +59,14 @@ for (const kind of ['idea', 'task'] as const) {
         await page.clock.pauseAt(now);
         const content = container.locator(kind === 'idea' ? '.idea-card-body' : '.task-text');
         await content.hover();
-        await page.clock.runFor(249);
+        await page.clock.runFor(999);
         await expect(content).toHaveAttribute('data-hovered', 'false');
         expect(await details.evaluate((node) => node.clientHeight)).toBe(collapsed);
         await page.mouse.move(0, 0);
-        await page.clock.runFor(600);
+        await page.clock.runFor(1200);
         await expect(content).toHaveAttribute('data-hovered', 'false');
         await content.hover();
-        await page.clock.runFor(249);
+        await page.clock.runFor(999);
         await expect(content).toHaveAttribute('data-hovered', 'false');
         await page.clock.runFor(1);
         await expect(content).toHaveAttribute('data-hovered', 'true');

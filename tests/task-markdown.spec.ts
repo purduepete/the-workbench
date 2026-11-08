@@ -46,7 +46,7 @@ for (const theme of ['midnight', 'light']) {
             row.getByRole('button', { name: `Edit ${title}`, exact: true }),
         ]) {
             await control.hover();
-            await page.waitForTimeout(400);
+            await page.waitForTimeout(1200);
             expect(await isExpanded()).toBe(false);
         }
         await row.locator('.task-text').hover();

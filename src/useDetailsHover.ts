@@ -12,7 +12,7 @@ export function useDetailsHover() {
         'data-hovered': hovered,
         onPointerEnter: () => {
             cancel();
-            if (matchMedia('(hover: hover)').matches) timer.current = setTimeout(() => setHovered(true), 250);
+            if (matchMedia('(hover: hover)').matches) timer.current = setTimeout(() => setHovered(true), 1000);
         },
         onPointerLeave: () => {
             cancel();

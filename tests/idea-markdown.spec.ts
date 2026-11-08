@@ -42,7 +42,7 @@ for (const theme of ['midnight', 'light']) {
         const isExpanded = () => details.evaluate((node) => node.scrollHeight <= node.clientHeight + 1);
         await expect.poll(isExpanded).toBe(false);
         await card.locator('.idea-card-bottom').hover();
-        await page.waitForTimeout(400);
+        await page.waitForTimeout(1200);
         expect(await isExpanded()).toBe(false);
         await card.locator('.idea-card-body').hover();
         await expect.poll(isExpanded).toBe(true);
@@ -55,15 +55,15 @@ for (const theme of ['midnight', 'light']) {
         await page.mouse.move(0, 0);
         await expect.poll(isExpanded).toBe(false);
         await card.getByRole('button', { name: /^Pin / }).hover();
-        await page.waitForTimeout(400);
+        await page.waitForTimeout(1200);
         expect(await isExpanded()).toBe(false);
         await card.getByRole('button', { name: /^Archive / }).hover();
-        await page.waitForTimeout(400);
+        await page.waitForTimeout(1200);
         expect(await isExpanded()).toBe(false);
         await card.getByRole('button', { name: 'Edit', exact: true }).hover();
         await expect.poll(isExpanded).toBe(false);
         await card.getByRole('button', { name: /^Create task from/ }).hover();
-        await page.waitForTimeout(400);
+        await page.waitForTimeout(1200);
         expect(await isExpanded()).toBe(false);
         await page.mouse.move(0, 0);
         await card.focus();
