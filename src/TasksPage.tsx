@@ -250,11 +250,13 @@ function TaskRow({
     filtering,
     onComplete,
     onEdit,
+    onChangeBody,
 }: {
     task: ServerTask;
     filtering: boolean;
     onComplete: (task: ServerTask, completed: boolean) => void;
     onEdit: (task: ServerTask) => void;
+    onChangeBody: (task: ServerTask, body: string) => void;
 }) {
     const [expanded, setExpanded] = useState(false);
     const detailsId = useId();
@@ -299,7 +301,12 @@ function TaskRow({
                 </h5>
                 {task.body && (
                     <>
-                        <ExpandableMarkdownBody id={detailsId} className="task-details" body={task.body} />
+                        <ExpandableMarkdownBody
+                            id={detailsId}
+                            className="task-details"
+                            body={task.body}
+                            onBodyChange={(body) => onChangeBody(task, body)}
+                        />
                         <button
                             type="button"
                             className="text-button task-details-toggle"
@@ -330,12 +337,14 @@ function TaskDay({
     onComplete,
     onEdit,
     onReorder,
+    onChangeBody,
 }: {
     tasks: ServerTask[];
     filtering: boolean;
     onComplete: (task: ServerTask, completed: boolean) => void;
     onEdit: (task: ServerTask) => void;
     onReorder: (ids: string[]) => void;
+    onChangeBody: (task: ServerTask, body: string) => void;
 }) {
     const sensors = useSensors(
         useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -362,6 +371,7 @@ function TaskDay({
                             filtering={filtering}
                             onComplete={onComplete}
                             onEdit={onEdit}
+                            onChangeBody={onChangeBody}
                         />
                     ))}
                 </ul>
@@ -541,6 +551,15 @@ export function TasksPage({
                                                     onEdit={editTask}
                                                     onComplete={(task, completed) => {
                                                         tasks.complete(task, completed);
+                                                    }}
+                                                    onChangeBody={(task, body) => {
+                                                        tasks.save({
+                                                            id: task.id,
+                                                            taskDate: task.taskDate,
+                                                            category: task.category,
+                                                            title: task.title,
+                                                            body,
+                                                        });
                                                     }}
                                                     onReorder={(ids) => {
                                                         if (displayedCategory !== 'all')

@@ -10,6 +10,7 @@ import { ChevronDown, Ellipsis, Info, Plus } from 'lucide-react';
 import { ImageLinkEditor } from './ImageLinks';
 import { OneDriveThumbnail } from './OneDriveThumbnail';
 import { oneDriveImageUrl } from './oneDriveLinks';
+import { setMarkdownTask } from './markdownTasks';
 
 interface NoteSection {
     type: 'noteSection';
@@ -97,13 +98,92 @@ function CollapsibleSection({ children }: { children?: ReactNode }) {
     );
 }
 
-export function MarkdownNoteBody({ body, className = 'markdown-body' }: { body: string; className?: string }) {
+interface HastLike {
+    type: string;
+    tagName?: string;
+    value?: string;
+    children?: HastLike[];
+    position?: { start: { offset?: number } };
+}
+
+/** The item's own words for its checkbox label, without nested lists. */
+function taskItemLabel(node: HastLike | undefined): string {
+    if (!node) return '';
+    if (node.type === 'text') return node.value ?? '';
+    if (node.tagName === 'ul' || node.tagName === 'ol' || node.tagName === 'input') return '';
+    return (node.children ?? []).map(taskItemLabel).join('').trim();
+}
+
+function MarkdownListItem({
+    node,
+    className,
+    body,
+    onBodyChange,
+    children,
+}: {
+    node?: HastLike;
+    className?: string;
+    body: string;
+    onBodyChange?: (body: string) => void;
+    children?: ReactNode;
+}) {
+    if (!className?.split(' ').includes('task-list-item')) return <li className={className}>{children}</li>;
+    const items = Children.toArray(children);
+    const boxIndex = items.findIndex(
+        (child) => isValidElement<{ type?: string }>(child) && child.props.type === 'checkbox'
+    );
+    const box = items[boxIndex];
+    const checked = isValidElement<{ checked?: boolean }>(box) && Boolean(box.props.checked);
+    const rest = items.filter((_, index) => index !== boxIndex);
+    const isList = (child: ReactNode) => isValidElement(child) && (child.type === 'ul' || child.type === 'ol');
+    const own = rest.filter((child) => !isList(child));
+    const nested = rest.filter(isList);
+    const offset = node?.position?.start.offset;
+    const editable = Boolean(onBodyChange) && offset !== undefined;
+    const Text = own.some((child) => isValidElement(child) && child.type === 'p') ? 'div' : 'span';
+    return (
+        <li className={className} data-checked={checked}>
+            <input
+                type="checkbox"
+                className="markdown-task-checkbox"
+                checked={checked}
+                disabled={!editable}
+                readOnly={!editable}
+                aria-label={taskItemLabel(node) || 'Checklist item'}
+                onClick={(event) => event.stopPropagation()}
+                onChange={(event) => {
+                    if (!editable || offset === undefined) return;
+                    const next = setMarkdownTask(body, offset, event.target.checked);
+                    if (next !== null && next !== body) onBodyChange?.(next);
+                }}
+            />
+            <Text className="markdown-task-text">{own}</Text>
+            {nested}
+        </li>
+    );
+}
+
+export function MarkdownNoteBody({
+    body,
+    className = 'markdown-body',
+    onBodyChange,
+}: {
+    body: string;
+    className?: string;
+    /** When given, task-list checkboxes are clickable and report the updated Markdown. */
+    onBodyChange?: (body: string) => void;
+}) {
     return (
         <div className={className}>
             <ReactMarkdown
                 remarkPlugins={[remarkGfm, remarkBreaks, remarkNoteSections]}
                 urlTransform={allowedMarkdownUrl}
                 components={{
+                    li: ({ node, className: itemClass, children }) => (
+                        <MarkdownListItem node={node} className={itemClass} body={body} onBodyChange={onBodyChange}>
+                            {children}
+                        </MarkdownListItem>
+                    ),
                     a: ({ href, children }) => {
                         const safeHref = allowedMarkdownUrl(href ?? '', 'href');
                         if (oneDriveImageUrl(safeHref)) {
@@ -133,7 +213,17 @@ export function MarkdownNoteBody({ body, className = 'markdown-body' }: { body: 
     );
 }
 
-export function ExpandableMarkdownBody({ body, id, className }: { body: string; id: string; className: string }) {
+export function ExpandableMarkdownBody({
+    body,
+    id,
+    className,
+    onBodyChange,
+}: {
+    body: string;
+    id: string;
+    className: string;
+    onBodyChange?: (body: string) => void;
+}) {
     const containerRef = useRef<HTMLDivElement>(null);
     const contentRef = useRef<HTMLDivElement>(null);
 
@@ -178,7 +268,7 @@ export function ExpandableMarkdownBody({ body, id, className }: { body: string; 
         <>
             <div ref={containerRef} id={id} className={className}>
                 <div ref={contentRef} className="expandable-markdown-content">
-                    <MarkdownNoteBody body={body} />
+                    <MarkdownNoteBody body={body} onBodyChange={onBodyChange} />
                 </div>
             </div>
             <span className="details-more" aria-hidden="true">
@@ -199,7 +289,7 @@ const markdownExamples = [
     ['Quote', '> quote'],
     ['Inline code', '`code`'],
     ['Code block', '```\ncode\n```'],
-    ['Task list', '- [ ] item'],
+    ['Checkbox', '- [ ] to do\n- [x] done'],
     ['Table', '| A | B |\n| --- | --- |\n| 1 | 2 |'],
 ] as const;
 
@@ -302,6 +392,7 @@ function MarkdownSyntaxHelp({ label, labelId }: { label: string; labelId: string
                 ))}
             </dl>
             <p>Leave a blank line around a divider. A level 2 heading creates a collapsible section.</p>
+            <p>Start a line with - [ ] for a checkbox. Tick it on the saved card; it saves as - [x].</p>
         </div>
     );
 

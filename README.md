@@ -131,7 +131,13 @@ The header's `Ideas | Notes | Tasks` control switches between pages. `/notes` is
 Work and Unclassified entries per local day. Journal and global note bodies support Markdown, including headings, lists, tables and links. The info button
 beside the entry label shows syntax examples. Use the Edit / Preview control while writing. **Add section** inserts a
 collapsible `##` heading; new sections start expanded. Raw HTML is shown as text, and links are limited to `http`,
-`https` and `mailto`. The entry's date is the local calendar day it was written on and never changes. Entries are
+`https` and `mailto`.
+
+Checklist items (`- [ ] item`, `- [x] item`) in ideas, tasks, daily notes and global notes show as checkboxes.
+Ticking one on the saved card rewrites that item's box in the stored Markdown and saves it like any other edit,
+including offline queueing. Ticked items show muted with a strikethrough. The editor's Preview shows them read-only.
+
+The entry's date is the local calendar day it was written on and never changes. Entries are
 grouped by week (Monday to Sunday), newest week first, with search over the text and tags and a tag filter. The **New
 note** button opens today's entry; older entries open from their card. The Calendar button opens a month view with
 marked entry days; select any day to open its entry or start a blank one. Saving an empty entry asks to confirm, then

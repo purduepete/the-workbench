@@ -547,6 +547,9 @@ export function NotesPage({
                         <MarkdownNoteBody
                             body={note.body || 'No body text.'}
                             className="idea-body journal-body markdown-body"
+                            onBodyChange={(body) =>
+                                globalNotes.save({ id: note.id, title: note.title, body, tags: note.tags })
+                            }
                         />
                         {note.tags.length > 0 && (
                             <div className="idea-tags">
@@ -735,6 +738,14 @@ export function NotesPage({
                                                     <MarkdownNoteBody
                                                         body={entry.body}
                                                         className="idea-body journal-body markdown-body"
+                                                        onBodyChange={(body) =>
+                                                            journal.save(
+                                                                entry.entryDate,
+                                                                body,
+                                                                entry.tags,
+                                                                entry.category
+                                                            )
+                                                        }
                                                     />
                                                     {entry.tags.length > 0 && (
                                                         <div className="idea-tags">

@@ -70,6 +70,8 @@ for (const theme of ['midnight', 'light']) {
         await page.waitForTimeout(1200);
         expect(await isExpanded()).toBe(false);
         await page.mouse.move(0, 0);
+        // Keyboard focus expands the details; mouse focus does not.
+        await page.keyboard.press('Shift');
         await card.focus();
         await expect.poll(isExpanded).toBe(true);
         await card.evaluate((node) => node.blur());

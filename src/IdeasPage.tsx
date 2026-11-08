@@ -433,6 +433,7 @@ interface IdeaCardProps {
     onToggleArchive: (idea: Idea) => void;
     onSelectTag: (tag: string) => void;
     onSelectSolution: (solution: string) => void;
+    onChangeBody: (idea: Idea, body: string) => void;
 }
 
 function IdeaCard({
@@ -445,6 +446,7 @@ function IdeaCard({
     onToggleArchive,
     onSelectTag,
     onSelectSolution,
+    onChangeBody,
 }: IdeaCardProps) {
     const [expanded, setExpanded] = useState(false);
     const detailsId = useId();
@@ -521,7 +523,12 @@ function IdeaCard({
                     </div>
                     {idea.body && (
                         <>
-                            <ExpandableMarkdownBody id={detailsId} className="idea-details" body={idea.body} />
+                            <ExpandableMarkdownBody
+                                id={detailsId}
+                                className="idea-details"
+                                body={idea.body}
+                                onBodyChange={(body) => onChangeBody(idea, body)}
+                            />
                             <button
                                 type="button"
                                 className="text-button idea-details-toggle"
@@ -662,7 +669,7 @@ export function IdeasPage({
               });
     };
 
-    const updateIdea = (target: Idea, update: Partial<Pick<Idea, 'pinned' | 'archived'>>) => {
+    const updateIdea = (target: Idea, update: Partial<Pick<Idea, 'pinned' | 'archived' | 'body'>>) => {
         const current = ideas.find((idea) => idea.id === target.id);
         if (current) sync.update({ ...current, ...update, updatedAt: new Date().toISOString() });
     };
@@ -814,6 +821,7 @@ export function IdeasPage({
                                             chooseView('all');
                                         }}
                                         onSelectSolution={setSolutionFilter}
+                                        onChangeBody={(target, body) => updateIdea(target, { body })}
                                     />
                                 ))}
                             </div>

@@ -62,6 +62,8 @@ for (const theme of ['midnight', 'light']) {
         );
         await expect(row.locator('script, a[href^="javascript:"]')).toHaveCount(0);
         await page.mouse.move(0, 0);
+        // Keyboard focus expands the details; mouse focus does not.
+        await page.keyboard.press('Shift');
         await row.focus();
         await expect.poll(isExpanded).toBe(true);
         await row.evaluate((node) => node.blur());

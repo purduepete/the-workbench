@@ -699,13 +699,13 @@ main.page-width {
 }
 
 :is(.idea-markdown-card, .task-row)[data-expanded='true'] :is(.idea-details, .task-details),
-:is(.idea-markdown-card, .task-row):focus :is(.idea-details, .task-details),
-:is(.idea-details, .task-details):focus-within {
+:is(.idea-markdown-card, .task-row):focus-visible :is(.idea-details, .task-details),
+:is(.idea-details, .task-details):has(:focus-visible) {
     max-height: var(--details-height);
 }
 
 .idea-markdown-card[data-expanded='true'] .idea-title,
-.idea-markdown-card:focus .idea-title {
+.idea-markdown-card:focus-visible .idea-title {
     display: block;
     overflow: visible;
 }
@@ -750,8 +750,8 @@ main.page-width {
     }
 
     :is(.idea-markdown-card, .task-row)[data-expanded='true'] .details-more,
-    :is(.idea-markdown-card, .task-row):focus .details-more,
-    :is(.idea-details, .task-details):focus-within + .details-more,
+    :is(.idea-markdown-card, .task-row):focus-visible .details-more,
+    :is(.idea-details, .task-details):has(:focus-visible) + .details-more,
     :is(.idea-card-body, .task-text)[data-hovered='true'] .details-more {
         opacity: 0;
         transition-delay: 0ms;
@@ -1501,6 +1501,41 @@ form.idea-form > .field-group:first-child {
 .markdown-body li::marker {
     color: currentColor;
     content: normal;
+}
+
+.markdown-body li.task-list-item {
+    list-style: none;
+}
+
+.markdown-body .contains-task-list {
+    padding-left: 0.2em;
+}
+
+.markdown-body .task-list-item .contains-task-list {
+    padding-left: 1.5em;
+}
+
+.markdown-task-checkbox {
+    width: 14px;
+    height: 14px;
+    margin: 0 0.45em 0 0;
+    vertical-align: -0.15em;
+    accent-color: var(--accent);
+    cursor: pointer;
+}
+
+.markdown-task-checkbox:disabled {
+    cursor: default;
+}
+
+div.markdown-task-text {
+    display: inline-block;
+    vertical-align: top;
+}
+
+.task-list-item[data-checked='true'] > .markdown-task-text {
+    color: var(--quiet);
+    text-decoration: line-through;
 }
 
 .markdown-body blockquote {
