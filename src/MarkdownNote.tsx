@@ -6,7 +6,7 @@ import remarkBreaks from 'remark-breaks';
 import remarkGfm from 'remark-gfm';
 import type { Root, RootContent } from 'mdast';
 import type { Plugin } from 'unified';
-import { ChevronDown, Info, Plus } from 'lucide-react';
+import { ChevronDown, Ellipsis, Info, Plus } from 'lucide-react';
 import { ImageLinkEditor } from './ImageLinks';
 import { OneDriveThumbnail } from './OneDriveThumbnail';
 import { oneDriveImageUrl } from './oneDriveLinks';
@@ -163,6 +163,7 @@ export function ExpandableMarkdownBody({ body, id, className }: { body: string; 
             }
             container.style.setProperty('--details-height', `${bounds.height}px`);
             container.style.setProperty('--details-collapsed-height', `${Math.floor(cutoff)}px`);
+            container.dataset.truncated = String(bounds.height - Math.floor(cutoff) > 1);
         };
         measure();
         // Establish the measured preview height before enabling expansion transitions.
@@ -174,11 +175,16 @@ export function ExpandableMarkdownBody({ body, id, className }: { body: string; 
     }, [body]);
 
     return (
-        <div ref={containerRef} id={id} className={className}>
-            <div ref={contentRef} className="expandable-markdown-content">
-                <MarkdownNoteBody body={body} />
+        <>
+            <div ref={containerRef} id={id} className={className}>
+                <div ref={contentRef} className="expandable-markdown-content">
+                    <MarkdownNoteBody body={body} />
+                </div>
             </div>
-        </div>
+            <span className="details-more" aria-hidden="true">
+                <Ellipsis size={14} />
+            </span>
+        </>
     );
 }
 

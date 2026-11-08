@@ -728,6 +728,37 @@ main.page-width {
     margin-top: 6px;
 }
 
+/* A quiet ellipsis marks collapsed details that hide content; touch devices show Show details instead. */
+.details-more {
+    display: none;
+}
+
+@media (hover: hover) and (pointer: fine) {
+    :is(.idea-details, .task-details)[data-truncated='true'] + .details-more {
+        display: flex;
+        height: 10px;
+        align-items: center;
+        color: var(--quiet);
+        line-height: 1;
+        opacity: 1;
+        transition: opacity 150ms ease-out 350ms;
+    }
+
+    :is(.idea-markdown-card, .task-row)[data-expanded='true'] .details-more,
+    :is(.idea-markdown-card, .task-row):focus .details-more,
+    :is(.idea-details, .task-details):focus-within + .details-more,
+    :is(.idea-card-body, .task-text)[data-hovered='true'] .details-more {
+        opacity: 0;
+        transition-delay: 0ms;
+    }
+}
+
+@media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: reduce) {
+    :is(.idea-details, .task-details)[data-truncated='true'] + .details-more {
+        transition: none;
+    }
+}
+
 @media (hover: hover) and (pointer: fine) {
     .idea-details-toggle,
     .task-details-toggle {

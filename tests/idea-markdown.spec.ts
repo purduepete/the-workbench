@@ -41,11 +41,15 @@ for (const theme of ['midnight', 'light']) {
         await expect(card.locator('strong')).toHaveText('Important detail');
         const isExpanded = () => details.evaluate((node) => node.scrollHeight <= node.clientHeight + 1);
         await expect.poll(isExpanded).toBe(false);
+        const more = card.locator('.details-more');
+        await expect(more).toBeVisible();
+        await expect(more).toHaveCSS('opacity', '1');
         await card.locator('.idea-card-bottom').hover();
         await page.waitForTimeout(1200);
         expect(await isExpanded()).toBe(false);
         await card.locator('.idea-card-body').hover();
         await expect.poll(isExpanded).toBe(true);
+        await expect(more).toHaveCSS('opacity', '0');
         expect(await details.evaluate((node) => node.scrollHeight <= node.clientHeight)).toBe(true);
         await expect(card.getByRole('link', { name: 'Read the final reference' })).toHaveAttribute(
             'href',
@@ -104,4 +108,17 @@ test.describe('touch idea details', () => {
         await expect.poll(isExpanded).toBe(false);
         expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(0);
     });
+});
+
+test('shows no overflow indicator when idea details fit', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.goto('/');
+    await page.getByRole('button', { name: 'New idea', exact: true }).click();
+    const dialog = page.getByRole('dialog');
+    await dialog.getByLabel('Idea title', { exact: true }).fill('Short idea');
+    await dialog.getByRole('textbox', { name: 'Details', exact: true }).fill('One short line.');
+    await dialog.getByRole('button', { name: 'Save idea', exact: true }).click();
+    const card = page.getByRole('article', { name: 'Short idea', exact: true });
+    await expect(card.locator('.idea-details')).toHaveAttribute('data-truncated', 'false');
+    await expect(card.locator('.details-more')).toBeHidden();
 });

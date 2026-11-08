@@ -40,6 +40,9 @@ for (const theme of ['midnight', 'light']) {
         await expect(row.locator('strong')).toHaveText('Important detail');
         const isExpanded = () => details.evaluate((node) => node.scrollHeight <= node.clientHeight + 1);
         await expect.poll(isExpanded).toBe(false);
+        const more = row.locator('.details-more');
+        await expect(more).toBeVisible();
+        await expect(more).toHaveCSS('opacity', '1');
         for (const control of [
             row.getByRole('checkbox', { name: `Complete ${title}`, exact: true }),
             row.getByRole('button', { name: `Move ${title}`, exact: true }),
@@ -51,6 +54,7 @@ for (const theme of ['midnight', 'light']) {
         }
         await row.locator('.task-text').hover();
         await expect.poll(isExpanded).toBe(true);
+        await expect(more).toHaveCSS('opacity', '0');
         expect(await details.evaluate((node) => node.scrollHeight <= node.clientHeight)).toBe(true);
         await expect(row.getByRole('link', { name: 'Read the final reference' })).toHaveAttribute(
             'href',
