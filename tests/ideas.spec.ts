@@ -103,7 +103,7 @@ for (const theme of ['midnight', 'light']) {
                 if (opener === 'New idea') {
                     await expect(dialog.getByRole('button', { name: 'Close dialog' })).toHaveCount(0);
                     const form = dialog.locator('form.idea-form');
-                    const fields = form.locator(':scope > .field-group');
+                    const fields = form.locator('.field-group');
                     const firstField = fields.first();
                     await expect(firstField).toHaveCSS('margin-top', '0px');
                     await expect(fields.nth(1)).toHaveCSS('margin-top', '16px');
@@ -354,7 +354,7 @@ for (const device of [
         const editDialog = page.getByRole('dialog', { name: 'Edit idea' });
         await expect(device.touch ? editDialog : editDialog.getByLabel('Idea title')).toBeFocused();
         if (device.touch) await expect(page.locator('html')).not.toHaveAttribute('data-idea-input-focused', 'true');
-        await expect(editDialog.locator('form.idea-form > .field-group').first()).toHaveCSS('margin-top', '0px');
+        await expect(editDialog.locator('form.idea-form .field-group').first()).toHaveCSS('margin-top', '0px');
         await page.keyboard.press('Escape');
         await expect(editDialog).toBeVisible();
         await expect(editDialog.getByLabel('Idea title')).toHaveValue(ideaTitle);

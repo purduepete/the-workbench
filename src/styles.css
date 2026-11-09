@@ -1003,7 +1003,9 @@ main.page-width {
     margin-top: 16px;
 }
 
-form.idea-form > .field-group:first-child {
+form.idea-form > .field-group:first-child,
+form.idea-form > .editor-size-toggle:first-child + .field-group,
+form.idea-form > .editor-title-row:first-child > .field-group {
     margin-top: 0;
 }
 
@@ -2180,6 +2182,61 @@ div.markdown-task-text {
 
     .editor-dialog .markdown-editor-preview {
         overflow-y: auto;
+    }
+
+    /* Maximize fills the viewport, leaving a 16px margin so the backdrop stays visible. */
+    .dialog-backdrop.editor-dialog[data-maximized='true'] {
+        --dialog-top: 16px;
+        width: calc(100% - 32px);
+        max-width: none;
+        height: calc(100dvh - 32px);
+        max-height: none;
+    }
+
+    /* The size toggle sits in the editor's upper-right corner. */
+    .editor-dialog .idea-form {
+        position: relative;
+    }
+
+    .idea-form > .editor-size-toggle {
+        position: absolute;
+        top: 16px;
+        right: 16px;
+    }
+
+    .editor-size-toggle {
+        display: inline-flex;
+        width: 34px;
+        height: 34px;
+        flex: 0 0 auto;
+    }
+
+    .editor-dialog .dialog-heading {
+        padding-right: 48px;
+    }
+
+    /* The idea editor has no heading, so the toggle shares a row with a narrower title field. */
+    .editor-title-row {
+        display: flex;
+        align-items: flex-end;
+        gap: 6px;
+    }
+
+    .editor-title-row > .field-group {
+        flex: 1 1 auto;
+        min-width: 0;
+    }
+
+    .editor-title-row > .editor-size-toggle {
+        width: 42px;
+        height: 42px;
+    }
+}
+
+/* Editors only size to the viewport on desktop; smaller screens keep their fitted layout. */
+@media not ((min-width: 1024px) and (pointer: fine)) {
+    .editor-size-toggle {
+        display: none;
     }
 }
 

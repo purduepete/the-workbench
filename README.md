@@ -9,6 +9,8 @@ Reduced motion removes the entrance animation.
 
 The Workbench keeps ideas with tags, pins, search and archive alongside date-grouped notes and Home/Work tasks.
 Duplicate on an idea card opens a new-idea editor with its title, Markdown details, tags, solution, status and priority copied.
+On desktop, the maximize button in the upper-right corner of an idea, task or note editor expands it to fill the viewport;
+the choice is remembered for later editors in the same browser, and the button restores the normal size.
 The card footer uses task-plus, pencil and copy icons for Create task, Edit and Duplicate, with accessible button names.
 Save creates a separate idea with new timestamps, without pinning or archiving it. Cancel creates nothing.
 Data syncs to a PostgreSQL database through a small Express server. The browser keeps an outbox, so capture works

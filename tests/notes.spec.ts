@@ -405,7 +405,7 @@ test('journal notes preview Markdown safely and preserve edits when saved', asyn
     await firstSection.press('Space');
     await expect(preview.getByRole('link', { name: 'Cross-section' })).toBeVisible();
 
-    await dialog.getByRole('button', { name: 'Edit' }).click();
+    await dialog.getByRole('button', { name: 'Edit', exact: true }).click();
     await expect(body).toHaveValue(markdown);
     await dialog.getByRole('button', { name: 'Save entry' }).click();
     await expect(dialog).toBeHidden();
@@ -607,7 +607,7 @@ test('global note editor previews Markdown and submits its hidden textarea value
     await body.fill('A **global** note.');
     await dialog.getByRole('button', { name: 'Preview' }).click();
     await expect(dialog.locator('.markdown-editor-preview').getByText('global', { exact: true })).toBeVisible();
-    await dialog.getByRole('button', { name: 'Edit' }).click();
+    await dialog.getByRole('button', { name: 'Edit', exact: true }).click();
     await expect(body).toHaveValue('A **global** note.');
     await dialog.getByRole('button', { name: 'Save note' }).click();
     await expect(dialog).toBeHidden();

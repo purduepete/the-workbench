@@ -30,6 +30,7 @@ import { useTheme } from './ThemeContext';
 import type { useJournalSync } from './useJournalSync';
 import type { useGlobalNotesSync } from './useGlobalNotesSync';
 import { useEditorDismissal } from './useEditorDismissal';
+import { EditorSizeToggle, useEditorSize } from './EditorSize';
 
 interface JournalDialogProps {
     entryDate: string;
@@ -53,6 +54,7 @@ function JournalDialog({
     fromCalendar = false,
 }: JournalDialogProps) {
     const dialogRef = useRef<HTMLDialogElement>(null);
+    const editorSize = useEditorSize();
     const formRef = useRef<HTMLFormElement>(null);
     const bodyRef = useRef<HTMLTextAreaElement>(null);
     const returnFocusRef = useRef(document.activeElement instanceof HTMLElement ? document.activeElement : null);
@@ -187,6 +189,7 @@ function JournalDialog({
         <dialog
             ref={dialogRef}
             className="dialog-backdrop editor-dialog"
+            data-maximized={editorSize.maximized}
             data-replacing={fromCalendar}
             aria-labelledby="journal-dialog-title"
             tabIndex={-1}
@@ -216,6 +219,7 @@ function JournalDialog({
                     );
                 }}
             >
+                <EditorSizeToggle maximized={editorSize.maximized} onToggle={editorSize.toggle} />
                 <div className="dialog-heading">
                     <div>
                         <p className="eyebrow">Daily note</p>
@@ -311,6 +315,7 @@ function GlobalNoteDialog({
     onDraftProtectionChange: (protectedDraft: boolean) => void;
 }) {
     const dialogRef = useRef<HTMLDialogElement>(null);
+    const editorSize = useEditorSize();
     const formRef = useRef<HTMLFormElement>(null);
     const titleRef = useRef<HTMLInputElement>(null);
     const bodyRef = useRef<HTMLTextAreaElement>(null);
@@ -373,6 +378,7 @@ function GlobalNoteDialog({
         <dialog
             ref={dialogRef}
             className="dialog-backdrop editor-dialog"
+            data-maximized={editorSize.maximized}
             aria-labelledby="global-note-title-label"
             tabIndex={-1}
             onKeyDown={(event) => {
@@ -403,6 +409,7 @@ function GlobalNoteDialog({
                     );
                 }}
             >
+                <EditorSizeToggle maximized={editorSize.maximized} onToggle={editorSize.toggle} />
                 <div className="dialog-heading">
                     <div>
                         <p className="eyebrow">Date-agnostic note</p>

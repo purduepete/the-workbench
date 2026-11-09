@@ -32,6 +32,7 @@ import { SelectField } from './SelectField';
 import { PageLoading } from './Loading';
 import { useTheme } from './ThemeContext';
 import { useEditorDismissal } from './useEditorDismissal';
+import { EditorSizeToggle, useEditorSize } from './EditorSize';
 import type { Idea, IdeaPriority, IdeaStatus, IdeaView } from './types';
 import type { Solution } from '../shared/contracts';
 import type { useIdeasSync } from './useIdeasSync';
@@ -186,6 +187,7 @@ function IdeaDialog({
 }: IdeaDialogProps & { onDraftProtectionChange: (protectedDraft: boolean) => void }) {
     const initialIdea = idea ?? duplicateSource;
     const dialogRef = useRef<HTMLDialogElement>(null);
+    const editorSize = useEditorSize();
     const formRef = useRef<HTMLFormElement>(null);
     const titleRef = useRef<HTMLInputElement>(null);
     const bodyRef = useRef<HTMLTextAreaElement>(null);
@@ -265,6 +267,7 @@ function IdeaDialog({
         <dialog
             ref={dialogRef}
             className="dialog-backdrop editor-dialog"
+            data-maximized={editorSize.maximized}
             aria-label={idea ? 'Edit idea' : 'New idea'}
             tabIndex={-1}
             onKeyDown={(event) => {
@@ -295,18 +298,21 @@ function IdeaDialog({
                     );
                 }}
             >
-                <label className="field-group">
-                    <span className="field-label">Idea title</span>
-                    <input
-                        ref={titleRef}
-                        className="field-input"
-                        name="title"
-                        type="text"
-                        maxLength={100}
-                        defaultValue={initialIdea?.title ?? ''}
-                        required
-                    />
-                </label>
+                <div className="editor-title-row">
+                    <label className="field-group">
+                        <span className="field-label">Idea title</span>
+                        <input
+                            ref={titleRef}
+                            className="field-input"
+                            name="title"
+                            type="text"
+                            maxLength={100}
+                            defaultValue={initialIdea?.title ?? ''}
+                            required
+                        />
+                    </label>
+                    <EditorSizeToggle maximized={editorSize.maximized} onToggle={editorSize.toggle} />
+                </div>
                 <MarkdownNoteEditor
                     label="Details"
                     bodyRef={bodyRef}

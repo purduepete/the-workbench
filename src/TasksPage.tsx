@@ -19,6 +19,7 @@ import { NoteGroup } from './NoteGroup';
 import { readTaskCategory, writeTaskCategory } from './tasksSync';
 import type { TaskSection } from './tasksSync';
 import { useEditorDismissal } from './useEditorDismissal';
+import { EditorSizeToggle, useEditorSize } from './EditorSize';
 import { useTheme } from './ThemeContext';
 import type { useTasksSync } from './useTasksSync';
 import { ExpandableMarkdownBody, MarkdownNoteEditor } from './MarkdownNote';
@@ -84,6 +85,7 @@ function TaskDialog({
     onDraftProtectionChange: (value: boolean) => void;
 }) {
     const dialogRef = useRef<HTMLDialogElement>(null);
+    const editorSize = useEditorSize();
     const formRef = useRef<HTMLFormElement>(null);
     const titleRef = useRef<HTMLInputElement>(null);
     const bodyRef = useRef<HTMLTextAreaElement>(null);
@@ -142,6 +144,7 @@ function TaskDialog({
         <dialog
             ref={dialogRef}
             className="dialog-backdrop editor-dialog"
+            data-maximized={editorSize.maximized}
             aria-labelledby="task-dialog-title"
             tabIndex={-1}
             data-replacing={target.fromCalendar ?? false}
@@ -172,6 +175,7 @@ function TaskDialog({
                     );
                 }}
             >
+                <EditorSizeToggle maximized={editorSize.maximized} onToggle={editorSize.toggle} />
                 <div className="dialog-heading">
                     <div>
                         <p className="eyebrow">{formatEntryDate(target.taskDate)}</p>
