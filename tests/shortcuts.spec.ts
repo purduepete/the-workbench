@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures';
 
 test('I, N and T switch pages, but not while typing or in a dialog', async ({ page }) => {
     await page.goto('/');

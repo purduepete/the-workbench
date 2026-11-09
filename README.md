@@ -55,7 +55,8 @@ memory store loses every note when the server stops.
 ## Checks
 
 Run `npm run lint`, `npm run typecheck`, `npm test` and `npm run build`. `npx playwright test` builds the app and runs
-the browser tests against the server on port 4180.
+the browser tests on 3 workers. Each worker gets its own in-memory server on ports 4180 to 4182, so tests never share
+data. Import `test` and `expect` from `tests/fixtures.ts` in new specs that use the shared server.
 
 ## Sync rules
 

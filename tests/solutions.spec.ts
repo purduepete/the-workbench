@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures';
 
 for (const theme of ['midnight', 'light']) {
     test(`automatically selects N/A without a solution in ${theme}`, async ({ page }) => {

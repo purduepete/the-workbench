@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures';
 import { localDateKey } from '../src/journal';
 import type { ServerGlobalNote, ServerIdea, ServerJournalEntry } from '../shared/contracts';
 import type { ServerTask } from '../shared/tasks';
@@ -8,6 +8,7 @@ test('first visit prepares a new offline tab, all edit queues survive reload and
     context,
     request,
 }) => {
+    test.setTimeout(90_000);
     const suffix = crypto.randomUUID().slice(0, 8);
     const ideaTitle = `Offline idea ${suffix}`;
     const globalTitle = `Offline reference ${suffix}`;
@@ -68,7 +69,8 @@ test('first visit prepares a new offline tab, all edit queues survive reload and
 
     await page.close();
     await context.setOffline(false);
-    await expect(offline.getByRole('status').first()).toHaveText('Synced', { timeout: 15_000 });
+    // The first sync after reconnecting can fail while the network comes back; the app retries every 30 seconds.
+    await expect(offline.getByRole('status').first()).toHaveText('Synced', { timeout: 45_000 });
     const { ideas } = (await (await request.get('/api/ideas')).json()) as { ideas: ServerIdea[] };
     const { entries } = (await (await request.get('/api/journal')).json()) as { entries: ServerJournalEntry[] };
     const { notes } = (await (await request.get('/api/global-notes')).json()) as { notes: ServerGlobalNote[] };

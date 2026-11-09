@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures';
 
 const editors = [
     { path: '/', open: 'New idea' },
@@ -19,12 +19,17 @@ test('desktop editors maximize to the viewport, remember the choice and restore'
         if (!normal) throw new Error(`${editor.open} editor is missing.`);
         expect(normal.width).toBeCloseTo(1100, 0);
         if (editor.open === 'New idea') {
-            // The idea title is narrowed so the toggle shares its row.
-            const title = await dialog.getByRole('textbox', { name: 'Idea title', exact: true }).boundingBox();
-            const toggle = await dialog.getByRole('button', { name: 'Maximize editor', exact: true }).boundingBox();
-            if (!title || !toggle) throw new Error('Idea title row is missing.');
+            // Measure both in one frame so a settling dialog cannot shift one between reads.
+            const { title, toggle } = await dialog.evaluate((node) => {
+                const box = (selector: string) => {
+                    const element = node.querySelector(selector);
+                    if (!element) throw new Error(`${selector} is missing.`);
+                    return element.getBoundingClientRect().toJSON() as DOMRect;
+                };
+                return { title: box('input[name="title"]'), toggle: box('.editor-size-toggle') };
+            });
             expect(toggle.y).toBeCloseTo(title.y, 0);
-            expect(toggle.x).toBeGreaterThan(title.x + title.width);
+            expect(toggle.x - (title.x + title.width)).toBeCloseTo(6, 0);
         }
 
         await dialog.getByRole('button', { name: 'Maximize editor', exact: true }).click();

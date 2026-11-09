@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures';
 
 for (const theme of ['midnight', 'light']) {
     test(`idea and note tags share formatting in ${theme}`, async ({ page }) => {

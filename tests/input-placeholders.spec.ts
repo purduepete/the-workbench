@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures';
 
 test('only search fields show placeholders', async ({ page }) => {
     for (const [path, buttons] of [

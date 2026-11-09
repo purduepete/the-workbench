@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures';
 
 const body = ['Shopping', '', '- [ ] Buy milk', '- [x] Call Sam'].join('\n');
 

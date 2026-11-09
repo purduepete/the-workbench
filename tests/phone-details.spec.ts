@@ -1,5 +1,5 @@
-import { devices, expect, test } from '@playwright/test';
-import type { Locator } from '@playwright/test';
+import { devices, expect, test } from './fixtures';
+import type { Locator } from './fixtures';
 
 // Safari on iPhone: WebKit with touch input and no hover.
 test.use({ ...devices['iPhone 13'], browserName: 'webkit', channel: '' });

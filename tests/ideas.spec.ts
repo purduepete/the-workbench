@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures';
 
 test('uses The Workbench for the site and installed app', async ({ page, request }) => {
     await page.goto('/');

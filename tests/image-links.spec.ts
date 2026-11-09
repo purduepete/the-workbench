@@ -20,7 +20,9 @@ test.beforeAll(async () => {
         stdio: 'ignore',
     });
     exited = new Promise((resolve) => child.on('exit', resolve));
-    await expect.poll(async () => (await fetch(`${origin}/api/health`).catch(() => null))?.status ?? 0).toBe(200);
+    await expect
+        .poll(async () => (await fetch(`${origin}/api/health`).catch(() => null))?.status ?? 0, { timeout: 20_000 })
+        .toBe(200);
 });
 test.afterAll(async () => {
     child.kill();

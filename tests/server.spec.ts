@@ -2,7 +2,7 @@ import { spawn } from 'node:child_process';
 import { existsSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures';
 
 test('loads under the production CSP without violations in light and midnight', async ({ page }) => {
     const violations: string[] = [];

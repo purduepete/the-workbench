@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures';
 
 for (const theme of ['midnight', 'light']) {
     test(`duplicate opens an independent idea draft in ${theme}`, async ({ page }) => {

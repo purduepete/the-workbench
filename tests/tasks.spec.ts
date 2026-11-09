@@ -1,5 +1,5 @@
-import { expect, test } from '@playwright/test';
-import type { APIRequestContext, Page } from '@playwright/test';
+import { expect, test, workerOrigin } from './fixtures';
+import type { APIRequestContext, Page } from './fixtures';
 import { taskLimits } from '../shared/tasks';
 import type { ServerTask } from '../shared/tasks';
 import { formatEntryDate, localDateKey, weekStart } from '../src/journal';
@@ -12,7 +12,7 @@ const dayOffset = (offset: number) => {
 };
 async function seed(request: APIRequestContext, title: string, taskDate = today(), category = 'home') {
     const response = await request.post('/api/tasks/mutations', {
-        headers: { Origin: 'http://127.0.0.1:4180' },
+        headers: { Origin: workerOrigin() },
         data: {
             kind: 'save',
             mutationId: crypto.randomUUID(),
@@ -29,7 +29,7 @@ async function seed(request: APIRequestContext, title: string, taskDate = today(
 async function seedIdea(request: APIRequestContext, title: string) {
     const now = new Date().toISOString();
     const response = await request.post('/api/mutations', {
-        headers: { Origin: 'http://127.0.0.1:4180' },
+        headers: { Origin: workerOrigin() },
         data: {
             kind: 'create',
             mutationId: crypto.randomUUID(),
@@ -70,7 +70,7 @@ test.beforeEach(async ({ request }) => {
     const result = (await response.json()) as { tasks: ServerTask[] };
     for (const task of result.tasks.filter((value) => !value.deleted)) {
         const deleted = await request.post('/api/tasks/mutations', {
-            headers: { Origin: 'http://127.0.0.1:4180' },
+            headers: { Origin: workerOrigin() },
             data: {
                 kind: 'delete',
                 mutationId: crypto.randomUUID(),

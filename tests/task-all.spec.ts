@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures';
 
 for (const theme of ['midnight', 'light']) {
     test(`All shows Home and Work tasks and persists in ${theme}`, async ({ page }) => {

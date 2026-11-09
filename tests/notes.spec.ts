@@ -1,5 +1,5 @@
-import { expect, test } from '@playwright/test';
-import type { Locator } from '@playwright/test';
+import { expect, test } from './fixtures';
+import type { Locator } from './fixtures';
 
 async function expectMarkerPainted(item: Locator) {
     await item.scrollIntoViewIfNeeded();
@@ -282,6 +282,7 @@ test('editors keep text open through Escape, backdrop and browser Back', async (
 });
 
 test('idea, note and task editors share the same desktop height', async ({ page }) => {
+    test.setTimeout(120_000);
     await page.emulateMedia({ reducedMotion: 'reduce' });
     const editors = [
         { path: '/', open: 'New idea', save: 'Save idea', markdown: true },

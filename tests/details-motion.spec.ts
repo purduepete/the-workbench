@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures';
 
 for (const kind of ['idea', 'task'] as const) {
     test(`${kind} details animate through intermediate heights in both directions`, async ({ page }) => {
@@ -54,9 +54,10 @@ for (const kind of ['idea', 'task'] as const) {
             }
         }
         expect(await details.evaluate((node) => node.clientHeight)).toBe(collapsed);
-        const now = new Date();
+        const now = Date.now();
         await page.clock.install({ time: now });
-        await page.clock.pauseAt(now);
+        // Pause ahead of the installed time; the install itself can take longer than a second under load.
+        await page.clock.pauseAt(now + 5_000);
         const content = container.locator(kind === 'idea' ? '.idea-card-body' : '.task-text');
         await content.hover();
         await page.clock.runFor(599);
