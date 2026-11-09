@@ -59,7 +59,7 @@ for (const kind of ['idea', 'task'] as const) {
         await page.clock.pauseAt(now);
         const content = container.locator(kind === 'idea' ? '.idea-card-body' : '.task-text');
         await content.hover();
-        await page.clock.runFor(999);
+        await page.clock.runFor(599);
         await expect(container).toHaveAttribute('data-expanded', 'false');
         expect(await details.evaluate((node) => node.clientHeight)).toBe(collapsed);
         // Leaving before the delay cancels the expansion.
@@ -67,7 +67,7 @@ for (const kind of ['idea', 'task'] as const) {
         await page.clock.runFor(1200);
         await expect(container).toHaveAttribute('data-expanded', 'false');
         await content.hover();
-        await page.clock.runFor(999);
+        await page.clock.runFor(599);
         await expect(container).toHaveAttribute('data-expanded', 'false');
         await page.clock.runFor(1);
         await expect(container).toHaveAttribute('data-expanded', 'true');
