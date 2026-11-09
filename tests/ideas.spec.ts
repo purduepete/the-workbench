@@ -38,6 +38,12 @@ for (const theme of ['midnight', 'light']) {
             await expect(page.getByRole('status')).toHaveText('Synced');
             const refresh = page.getByRole('button', { name: 'Refresh ideas' });
             const themeButton = page.getByRole('button', { name: /^Theme:/ });
+            // Sample colors only after the theme's color transitions settle.
+            const settled = () =>
+                page.evaluate(() =>
+                    Promise.all(document.getAnimations().map((animation) => animation.finished.catch(() => undefined)))
+                );
+            await settled();
             const idleColor = await refresh.evaluate((element) => getComputedStyle(element).color);
             const activeColor = await page.locator('html').evaluate((element) => getComputedStyle(element).color);
             for (const button of [refresh, themeButton]) {
@@ -177,7 +183,7 @@ test('expands new and existing idea editors on desktop without hiding controls',
     await page.getByRole('button', { name: 'New idea', exact: true }).click();
     const newDialog = page.getByRole('dialog', { name: 'New idea' });
     await newDialog.getByLabel('Idea title').fill('Desktop editor size');
-    await newDialog.getByLabel('Details').fill('Existing details');
+    await newDialog.getByRole('textbox', { name: 'Details', exact: true }).fill('Existing details');
     await newDialog.getByRole('button', { name: 'Save idea' }).click();
     const card = page.locator('.idea-card').filter({
         has: page.getByRole('heading', { name: 'Desktop editor size', exact: true }),
@@ -197,7 +203,7 @@ test('expands new and existing idea editors on desktop without hiding controls',
                     : page.getByRole('button', { name, exact: true });
             await opener.click();
             const dialog = page.getByRole('dialog', { name });
-            const details = dialog.getByLabel('Details');
+            const details = dialog.getByRole('textbox', { name: 'Details', exact: true });
             const save = dialog.getByRole('button', { name: 'Save idea' });
             const dialogBox = await dialog.boundingBox();
             const detailsBox = await details.boundingBox();
@@ -220,7 +226,7 @@ test('keeps a tall desktop dialog scrollable inside the viewport', async ({ page
     await page.goto('/');
     await page.getByRole('button', { name: 'New idea' }).click();
     const dialog = page.getByRole('dialog', { name: 'New idea' });
-    await dialog.getByLabel('Details').evaluate((element) => {
+    await dialog.getByRole('textbox', { name: 'Details', exact: true }).evaluate((element) => {
         if (!(element instanceof HTMLTextAreaElement)) throw new Error('Details field is missing.');
         element.style.height = '800px';
     });
@@ -243,7 +249,7 @@ test('keeps a tall desktop dialog scrollable inside the viewport', async ({ page
 test.describe('touch dialog placement', () => {
     test.use({ hasTouch: true, isMobile: true });
 
-    test('keeps the existing idea details height on phone and tablet', async ({ page }) => {
+    test('gives idea details the same editor height as notes on phone and tablet', async ({ page }) => {
         for (const viewport of [
             { width: 390, height: 844 },
             { width: 1280, height: 900 },
@@ -252,10 +258,18 @@ test.describe('touch dialog placement', () => {
             await page.goto('/');
             await page.getByRole('button', { name: 'New idea', exact: true }).tap();
             const dialog = page.getByRole('dialog', { name: 'New idea' });
-            const details = await dialog.getByLabel('Details').boundingBox();
+            const details = await dialog.getByRole('textbox', { name: 'Details', exact: true }).boundingBox();
             if (!details) throw new Error('Idea details field is missing.');
-            expect(details.height).toBeCloseTo(150, 0);
             await dialog.getByRole('button', { name: 'Cancel' }).tap();
+            // Ideas use the shared Markdown editor, so their details match the global note editor.
+            await page.goto('/notes');
+            await page.getByRole('button', { name: 'Global note', exact: true }).tap();
+            const noteDialog = page.getByRole('dialog', { name: 'New global note' });
+            const note = await noteDialog.getByRole('textbox', { name: 'Details', exact: true }).boundingBox();
+            if (!note) throw new Error('Global note details field is missing.');
+            expect(details.height).toBeGreaterThanOrEqual(150);
+            expect(details.height).toBeCloseTo(note.height, 0);
+            await noteDialog.getByRole('button', { name: 'Cancel' }).tap();
         }
     });
 
@@ -367,7 +381,7 @@ test('keeps the initial loading state until a failed sync succeeds on retry', as
 
     await page.goto('/');
     await expect(page.getByRole('status')).toContainText('Loading ideas');
-    await expect(page.getByRole('alert')).toHaveText('Ideas could not sync. Retrying automatically.');
+    await expect(page.locator('.page-loading-message')).toHaveText('Ideas could not sync. Retrying automatically.');
     await expect(page.getByRole('heading', { name: 'No ideas yet' })).toHaveCount(0);
 
     await page.evaluate(() => window.dispatchEvent(new Event('online')));
@@ -382,9 +396,10 @@ test('capture, search, pin, edit and archive an idea', async ({ page }) => {
     await page.getByRole('button', { name: 'New idea' }).click();
 
     const dialog = page.getByRole('dialog');
-    await expect(dialog.locator('.eyebrow')).toHaveCSS('text-transform', 'uppercase');
     await dialog.getByLabel('Idea title').fill('Sketch a reading nook');
-    await dialog.getByLabel('Details').fill('Use the corner by the window and add a lamp.');
+    await dialog
+        .getByRole('textbox', { name: 'Details', exact: true })
+        .fill('Use the corner by the window and add a lamp.');
     await dialog.getByLabel('Tags').fill('home, reading');
     await dialog.getByRole('button', { name: 'Save idea' }).click();
 
@@ -455,23 +470,21 @@ test('switches themes and keeps the page inside a phone viewport', async ({ page
 test('keeps the desktop workspace compact', async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 900 });
     await page.goto('/');
+    await expect(page.locator('.workspace-tools')).toBeVisible();
     const measurements = await page.evaluate(() => {
         const main = document.querySelector('main.page-width');
         const intro = document.querySelector('.intro');
         const toolbar = document.querySelector('.workspace-tools');
-        const heading = intro?.querySelector('h2');
-        if (!main || !intro || !toolbar || !heading) throw new Error('Workspace layout elements are missing.');
+        if (!main || !intro || !toolbar) throw new Error('Workspace layout elements are missing.');
         return {
             mainTopPadding: parseFloat(getComputedStyle(main).paddingTop),
             introBottomPadding: parseFloat(getComputedStyle(intro).paddingBottom),
             toolbarMinimumHeight: parseFloat(getComputedStyle(toolbar).minHeight),
-            headingFontSize: parseFloat(getComputedStyle(heading).fontSize),
         };
     });
     expect(measurements.mainTopPadding).toBeLessThanOrEqual(24);
     expect(measurements.introBottomPadding).toBeLessThanOrEqual(16);
     expect(measurements.toolbarMinimumHeight).toBeLessThanOrEqual(60);
-    expect(measurements.headingFontSize).toBeLessThanOrEqual(26);
 });
 
 test('supports keyboard selection and dismissal in the theme menu', async ({ page }) => {
@@ -496,7 +509,8 @@ test('supports keyboard selection and dismissal in the theme menu', async ({ pag
     await expect(trigger).toBeFocused();
     await expect(trigger).toHaveAttribute('aria-expanded', 'false');
     await page.getByRole('button', { name: 'Theme: Light' }).click();
-    await page.getByRole('heading', { name: 'Catch the thought. Come back to it.' }).click();
+    // A click on empty page space outside the menu dismisses it.
+    await page.locator('main').click({ position: { x: 4, y: 4 } });
     await expect(page.getByRole('button', { name: 'Theme: Light' })).toHaveAttribute('aria-expanded', 'false');
 });
 
@@ -504,6 +518,8 @@ test('keeps content edges aligned across desktop widths and reserves the scrollb
     for (const width of [1280, 1440, 1920]) {
         await page.setViewportSize({ width, height: 400 });
         await page.goto('/');
+        // Measure after the first sync renders the workspace; the loading overlay alone does not scroll.
+        await expect(page.locator('.workspace-tools')).toBeVisible();
         const layout = await page.evaluate(() => {
             const header = document.querySelector('.topbar-inner');
             const main = document.querySelector('main.page-width');

@@ -243,8 +243,10 @@ textarea:focus-visible {
     font-size: 12px;
 }
 
-.text-button:hover {
-    color: var(--text);
+@media (hover: hover) {
+    .text-button:hover {
+        color: var(--text);
+    }
 }
 
 .theme-wrap {
@@ -389,10 +391,13 @@ main.page-width {
 
 .local-badge {
     display: inline-flex;
+    height: 15px;
     align-items: center;
     gap: 7px;
     color: var(--muted);
     font-size: 11px;
+    /* A fixed line box keeps the toolbar from shifting while the web font loads. */
+    line-height: 15px;
 }
 
 .local-badge svg {
@@ -698,16 +703,27 @@ main.page-width {
     transition: none;
 }
 
-:is(.idea-markdown-card, .task-row)[data-expanded='true'] :is(.idea-details, .task-details),
-:is(.idea-markdown-card, .task-row):focus-visible :is(.idea-details, .task-details),
-:is(.idea-details, .task-details):has(:focus-visible) {
+:is(.idea-markdown-card, .task-row)[data-expanded='true'] :is(.idea-details, .task-details) {
     max-height: var(--details-height);
 }
 
-.idea-markdown-card[data-expanded='true'] .idea-title,
-.idea-markdown-card:focus-visible .idea-title {
+.idea-markdown-card[data-expanded='true'] .idea-title {
     display: block;
     overflow: visible;
+}
+
+/* Keyboard focus expands on hover-capable devices. Touch browsers can mark restored focus as focus-visible,
+   which would override Show less, so touch devices rely on the Show details button alone. */
+@media (hover: hover) {
+    :is(.idea-markdown-card, .task-row):focus-visible :is(.idea-details, .task-details),
+    :is(.idea-details, .task-details):has(:focus-visible) {
+        max-height: var(--details-height);
+    }
+
+    .idea-markdown-card:focus-visible .idea-title {
+        display: block;
+        overflow: visible;
+    }
 }
 
 @media (hover: hover) {
@@ -1247,6 +1263,13 @@ form.idea-form > .field-group:first-child {
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     gap: 14px;
+}
+
+/* Solution, Status and Priority share one row on wider screens so the details editor keeps its height. */
+@media (min-width: 761px) {
+    .field-row.idea-meta-row {
+        grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr) minmax(0, 1fr);
+    }
 }
 
 .status-segmented {
@@ -2069,6 +2092,7 @@ div.markdown-task-text {
     }
 
     .notes-actions {
+        flex: 1 1 100%;
         justify-content: stretch;
     }
 
@@ -2076,15 +2100,26 @@ div.markdown-task-text {
         flex: 1 1 0;
         justify-content: center;
         padding-inline: 8px;
+        white-space: nowrap;
     }
 
+    /* Section selector and Calendar share one row under the search box. */
     .task-toolbar-actions {
-        justify-content: space-between;
-        flex-wrap: wrap;
+        flex-wrap: nowrap;
+        gap: 8px;
     }
 
     .task-toolbar-actions .task-categories {
-        width: 270px;
+        flex: 1 1 auto;
+        width: auto;
+        min-width: 0;
+    }
+
+    .task-toolbar-actions > .secondary-button {
+        flex: 0 0 auto;
+        align-self: stretch;
+        padding-inline: 10px;
+        white-space: nowrap;
     }
 
     .task-row {

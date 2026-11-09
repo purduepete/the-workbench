@@ -328,7 +328,7 @@ function IdeaDialog({
                         Separate tags with commas. Up to 12 tags.
                     </span>
                 </label>
-                <div className="field-row">
+                <div className="field-row idea-meta-row">
                     <div className="field-group">
                         <span className="field-label" id="solution-label">
                             Solution
@@ -371,8 +371,6 @@ function IdeaDialog({
                             )}
                         </div>
                     </div>
-                </div>
-                <div className="field-row">
                     <div className="field-group">
                         <span className="field-label">Priority</span>
                         <div className="segmented status-segmented" role="group" aria-label="Priority">

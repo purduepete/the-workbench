@@ -370,15 +370,25 @@ test('pointer and keyboard reorder persist and completion preserves order', asyn
     await page.mouse.move(target.x + target.width / 2, target.y + target.height / 2, { steps: 12 });
     await page.mouse.up();
     await expect(taskOrder(page)).toHaveText(['Second', 'Third', 'First']);
+    // Let the drop animation and its sync finish before starting a keyboard sort on the same handle.
+    await expect(page.getByRole('status').first()).toHaveText('Synced');
     const handle = page.getByRole('button', { name: 'Move First', exact: true });
+    const firstRow = page.getByRole('listitem', { name: 'First', exact: true });
+    // Each key waits for the visible drag state, so no keystroke lands before the library is ready.
     await handle.focus();
     await handle.press('Space');
+    await expect(handle).toHaveAttribute('aria-pressed', 'true');
     await handle.press('ArrowUp');
+    await expect(firstRow).toHaveAttribute('style', /translate3d\(0px, -/);
     await handle.press('Space');
+    await expect(handle).not.toHaveAttribute('aria-pressed', 'true');
     await expect(taskOrder(page)).toHaveText(['Second', 'First', 'Third']);
     await handle.press('Space');
+    await expect(handle).toHaveAttribute('aria-pressed', 'true');
     await handle.press('ArrowDown');
+    await expect(firstRow).toHaveAttribute('style', /translate3d\(0px, \d/);
     await handle.press('Escape');
+    await expect(handle).not.toHaveAttribute('aria-pressed', 'true');
     await expect(taskOrder(page)).toHaveText(['Second', 'First', 'Third']);
     await page.getByRole('checkbox', { name: 'Complete First', exact: true }).check();
     await expect(taskOrder(page)).toHaveText(['Second', 'First', 'Third']);

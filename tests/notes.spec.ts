@@ -75,8 +75,13 @@ test('global note comes before calendar on phone and desktop', async ({ page }) 
     await expect(buttons).toHaveText(['Global note', 'Calendar']);
     for (const width of [390, 1280, 1920]) {
         await page.setViewportSize({ width, height: 900 });
-        const globalNote = await buttons.nth(0).boundingBox();
-        const calendar = await buttons.nth(1).boundingBox();
+        // Measure both buttons in one frame; separate reads can straddle a scroll adjustment after the resize.
+        const [globalNote, calendar] = await buttons.evaluateAll((elements) =>
+            elements.map((element) => {
+                const { x, y, width: w, height } = element.getBoundingClientRect();
+                return { x, y, width: w, height };
+            })
+        );
         if (!globalNote || !calendar) throw new Error('Notes action buttons are not visible');
         expect(globalNote.x + globalNote.width).toBeLessThanOrEqual(calendar.x);
         expect(globalNote.y).toBeCloseTo(calendar.y, 0);
@@ -628,7 +633,8 @@ test('modal opening fades without moving the page and calendar swaps keep the ba
             document
                 .getAnimations()
                 .filter((animation) => animation.effect?.getTiming().iterations !== Infinity)
-                .map((animation) => animation.finished)
+                // A cancelled animation (element re-rendered mid-fade) rejects; it is finished for this purpose.
+                .map((animation) => animation.finished.catch(() => undefined))
         );
     });
     const frames = await page.evaluate(async () => {
