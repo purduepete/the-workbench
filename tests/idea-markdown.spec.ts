@@ -49,15 +49,21 @@ for (const theme of ['midnight', 'light']) {
         expect(await isExpanded()).toBe(false);
         await card.locator('.idea-card-body').hover();
         await expect.poll(isExpanded).toBe(true);
-        await expect(more).toHaveCSS('opacity', '0');
+        await expect(more).toBeHidden();
         expect(await details.evaluate((node) => node.scrollHeight <= node.clientHeight)).toBe(true);
         await expect(card.getByRole('link', { name: 'Read the final reference' })).toHaveAttribute(
             'href',
             'https://example.com/reference'
         );
         expect(await card.locator('script').count()).toBe(0);
+        // Hover expansion stays after the pointer leaves; Show less collapses it.
+        await page.mouse.move(0, 0);
+        await page.waitForTimeout(500);
+        expect(await isExpanded()).toBe(true);
+        await card.getByRole('button', { name: 'Show less', exact: true }).click();
         await page.mouse.move(0, 0);
         await expect.poll(isExpanded).toBe(false);
+        await expect(more).toHaveCSS('opacity', '1');
         await card.getByRole('button', { name: /^Pin / }).hover();
         await page.waitForTimeout(1200);
         expect(await isExpanded()).toBe(false);

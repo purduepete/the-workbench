@@ -210,7 +210,8 @@ devices and hidden on mouse-based desktops, where hover or keyboard focus expand
 Task hover expansion is limited to the title-and-details area, excluding the drag
 handle, completion checkbox and Edit button.
 Ideas and tasks require 1 second of continuous hover before expanding. Leaving the
-content area cancels the pending expansion; keyboard focus and touch toggles respond immediately.
+content area before then cancels the expansion. Once expanded, details stay open until you choose **Show less**;
+keyboard focus and touch toggles respond immediately.
 Multiple tasks can share a day. Days are grouped into Monday-to-Sunday weeks, newest first;
 only the current week starts expanded.
 

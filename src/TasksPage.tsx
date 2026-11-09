@@ -260,7 +260,7 @@ function TaskRow({
 }) {
     const [expanded, setExpanded] = useState(false);
     const detailsId = useId();
-    const hover = useDetailsHover();
+    const hover = useDetailsHover(() => setExpanded(true));
     const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({
         id: task.id,
         disabled: filtering,

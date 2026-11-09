@@ -54,14 +54,20 @@ for (const theme of ['midnight', 'light']) {
         }
         await row.locator('.task-text').hover();
         await expect.poll(isExpanded).toBe(true);
-        await expect(more).toHaveCSS('opacity', '0');
+        await expect(more).toBeHidden();
         expect(await details.evaluate((node) => node.scrollHeight <= node.clientHeight)).toBe(true);
         await expect(row.getByRole('link', { name: 'Read the final reference' })).toHaveAttribute(
             'href',
             'https://example.com/reference'
         );
         await expect(row.locator('script, a[href^="javascript:"]')).toHaveCount(0);
+        // Hover expansion stays after the pointer leaves; Show less collapses it.
         await page.mouse.move(0, 0);
+        await page.waitForTimeout(500);
+        expect(await isExpanded()).toBe(true);
+        await row.getByRole('button', { name: 'Show less', exact: true }).click();
+        await page.mouse.move(0, 0);
+        await expect.poll(isExpanded).toBe(false);
         // Keyboard focus expands the details; mouse focus does not.
         await page.keyboard.press('Shift');
         await row.focus();
@@ -77,6 +83,10 @@ for (const theme of ['midnight', 'light']) {
         if (!rowBox || !editBox) throw new Error('Task card or edit control is missing.');
         expect(rowBox.y + rowBox.height - editBox.y - editBox.height).toBeCloseTo(11, 0);
         await row.getByRole('button', { name: `Edit ${title}`, exact: true }).hover();
+        await page.waitForTimeout(300);
+        expect(await isExpanded()).toBe(true);
+        await row.getByRole('button', { name: 'Show less', exact: true }).click();
+        await page.mouse.move(0, 0);
         await expect.poll(isExpanded).toBe(false);
         await page.mouse.move(0, 0);
         await row.getByRole('checkbox', { name: `Complete ${title}`, exact: true }).check();

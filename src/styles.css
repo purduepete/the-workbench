@@ -726,18 +726,6 @@ main.page-width {
     }
 }
 
-@media (hover: hover) {
-    .idea-card-body[data-hovered='true'] .idea-details,
-    .task-text[data-hovered='true'] .task-details {
-        max-height: var(--details-height);
-    }
-
-    .idea-card-body[data-hovered='true'] .idea-title {
-        display: block;
-        overflow: visible;
-    }
-}
-
 .idea-details-toggle,
 .task-details-toggle {
     align-self: flex-start;
@@ -765,12 +753,15 @@ main.page-width {
         transition: opacity 150ms ease-out 350ms;
     }
 
-    :is(.idea-markdown-card, .task-row)[data-expanded='true'] .details-more,
     :is(.idea-markdown-card, .task-row):focus-visible .details-more,
-    :is(.idea-details, .task-details):has(:focus-visible) + .details-more,
-    :is(.idea-card-body, .task-text)[data-hovered='true'] .details-more {
+    :is(.idea-details, .task-details):has(:focus-visible) + .details-more {
         opacity: 0;
         transition-delay: 0ms;
+    }
+
+    /* Expanded details show Show less in the ellipsis's place. */
+    :is(.idea-markdown-card, .task-row)[data-expanded='true'] .details-more {
+        display: none;
     }
 }
 
@@ -780,9 +771,9 @@ main.page-width {
     }
 }
 
+/* With a mouse, hover expands and the details stay open; Show less is the only way to collapse them. */
 @media (hover: hover) and (pointer: fine) {
-    .idea-details-toggle,
-    .task-details-toggle {
+    :is(.idea-markdown-card, .task-row):not([data-expanded='true']) :is(.idea-details-toggle, .task-details-toggle) {
         display: none;
     }
 }

@@ -1,7 +1,10 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 
-export function useDetailsHover() {
-    const [hovered, setHovered] = useState(false);
+/**
+ * Expands details after a 1 second hover on mouse and trackpad devices. The expansion stays until the user
+ * collapses it with Show less; leaving the content only cancels an expansion that has not happened yet.
+ */
+export function useDetailsHover(onExpand: () => void) {
     const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
     const cancel = () => {
         clearTimeout(timer.current);
@@ -9,16 +12,12 @@ export function useDetailsHover() {
     };
     useEffect(() => () => clearTimeout(timer.current), []);
     return {
-        'data-hovered': hovered,
         onPointerEnter: () => {
             cancel();
-            if (matchMedia('(hover: hover)').matches) timer.current = setTimeout(() => setHovered(true), 1000);
+            if (matchMedia('(hover: hover)').matches) timer.current = setTimeout(onExpand, 1000);
         },
-        // A click (ticking a checklist box, opening a link) means acting, not reading: don't expand until the pointer leaves.
+        // A click (ticking a checklist box, opening a link) means acting, not reading: don't expand.
         onPointerDown: cancel,
-        onPointerLeave: () => {
-            cancel();
-            setHovered(false);
-        },
+        onPointerLeave: cancel,
     };
 }

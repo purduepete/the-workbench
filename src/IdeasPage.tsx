@@ -448,7 +448,7 @@ function IdeaCard({
 }: IdeaCardProps) {
     const [expanded, setExpanded] = useState(false);
     const detailsId = useId();
-    const hover = useDetailsHover();
+    const hover = useDetailsHover(() => setExpanded(true));
     return (
         <article
             className="idea-card idea-markdown-card"

@@ -60,18 +60,26 @@ for (const kind of ['idea', 'task'] as const) {
         const content = container.locator(kind === 'idea' ? '.idea-card-body' : '.task-text');
         await content.hover();
         await page.clock.runFor(999);
-        await expect(content).toHaveAttribute('data-hovered', 'false');
+        await expect(container).toHaveAttribute('data-expanded', 'false');
         expect(await details.evaluate((node) => node.clientHeight)).toBe(collapsed);
+        // Leaving before the delay cancels the expansion.
         await page.mouse.move(0, 0);
         await page.clock.runFor(1200);
-        await expect(content).toHaveAttribute('data-hovered', 'false');
+        await expect(container).toHaveAttribute('data-expanded', 'false');
         await content.hover();
         await page.clock.runFor(999);
-        await expect(content).toHaveAttribute('data-hovered', 'false');
+        await expect(container).toHaveAttribute('data-expanded', 'false');
         await page.clock.runFor(1);
-        await expect(content).toHaveAttribute('data-hovered', 'true');
+        await expect(container).toHaveAttribute('data-expanded', 'true');
+        // Once expanded, details stay open after the pointer leaves until Show less is used.
         await page.mouse.move(0, 0);
-        await expect(content).toHaveAttribute('data-hovered', 'false');
+        await page.clock.runFor(2000);
+        await expect(container).toHaveAttribute('data-expanded', 'true');
+        const showLess = container.getByRole('button', { name: 'Show less', exact: true });
+        await expect(showLess).toBeVisible();
+        await showLess.click();
+        await expect(container).toHaveAttribute('data-expanded', 'false');
+        await page.mouse.move(0, 0);
         await page.clock.resume();
         await expect.poll(() => details.evaluate((node) => node.clientHeight)).toBe(collapsed);
         const clippedLines = await details.evaluate((node) => {
