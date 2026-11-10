@@ -52,13 +52,17 @@ for (const editor of [
         );
         await page.route('https://api.onedrive.com/**', (route) => {
             expect(route.request().headers().authorization).toBe('Bearer synthetic-test-token');
+            if (new URL(route.request().url()).searchParams.get('select') === 'c2560x2560')
+                return route.fulfill({
+                    json: { value: [{ c2560x2560: { url: 'https://southcentralus1-medias.svc.ms/full' } }] },
+                });
             return route.fulfill({
                 json: { value: [{ medium: { url: 'https://southcentralus1-medias.svc.ms/thumbnail' } }] },
             });
         });
         const image = await page.request.get(`${origin}/apple-touch-icon.png`);
         const imageBody = await image.body();
-        await page.route('https://southcentralus1-medias.svc.ms/thumbnail', (route) =>
+        await page.route(/^https:\/\/southcentralus1-medias\.svc\.ms\/(thumbnail|full)$/, (route) =>
             route.fulfill({ body: imageBody, contentType: 'image/png' })
         );
         await page.goto(`${origin}${editor.path}`);
@@ -85,6 +89,25 @@ for (const editor of [
         await expect(link).toHaveAttribute('href', 'https://onedrive.live.com/?id=abc!123');
         await expect(link).toHaveAttribute('target', '_blank');
         expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(0);
+
+        // Clicking a loaded thumbnail shows the full image in the app instead of opening OneDrive.
+        const popups: unknown[] = [];
+        page.on('popup', (popup) => popups.push(popup));
+        await link.click();
+        const viewer = page.getByRole('dialog', { name: 'Reference photo' });
+        await expect(viewer).toBeVisible();
+        const full = viewer.getByRole('img', { name: 'Reference photo' });
+        await expect(full).toHaveAttribute('src', 'https://southcentralus1-medias.svc.ms/full');
+        await expect.poll(() => full.evaluate((element: HTMLImageElement) => element.naturalWidth)).toBeGreaterThan(0);
+        const box = await full.boundingBox();
+        if (!box) throw new Error('Full image is not visible.');
+        expect(box.x).toBeGreaterThanOrEqual(0);
+        expect(box.x + box.width).toBeLessThanOrEqual(390);
+        await page.keyboard.press('Escape');
+        await expect(viewer).toHaveCount(0);
+        expect(popups).toHaveLength(0);
+        await expect(thumbnail).toBeVisible();
+
         await thumbnail.evaluate((image) => image.dispatchEvent(new Event('error')));
         await expect(page.getByText('Thumbnail could not load. Open the image in OneDrive.').last()).toBeVisible();
         await expect(link).toBeVisible();

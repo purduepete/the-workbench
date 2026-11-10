@@ -1654,6 +1654,73 @@ div.markdown-task-text {
     background: var(--input);
 }
 
+/* Full image viewer: the picture fits the viewport without scrolling. */
+.dialog-backdrop.image-viewer {
+    inset: 0;
+    margin: auto;
+    width: fit-content;
+    max-width: calc(100vw - 32px);
+    max-height: calc(100dvh - 32px);
+    overflow: hidden;
+    background: var(--input);
+}
+
+.image-viewer-stage {
+    position: relative;
+    display: grid;
+    place-items: center;
+    padding: 56px 16px 16px;
+}
+
+.image-viewer-stage img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    animation: image-viewer-reveal 0.45s ease-out both;
+}
+
+/* Fits the image's shape inside the viewport, leaving room for the close button. */
+.image-viewer-frame {
+    position: relative;
+    display: grid;
+    place-items: center;
+    width: min(calc(100vw - 66px), calc((100dvh - 106px) * var(--image-ratio)));
+    aspect-ratio: var(--image-ratio);
+}
+
+.dialog-backdrop.image-viewer[open],
+.dialog-backdrop.image-viewer[open]::backdrop {
+    animation: dialog-open 0.4s ease-out both;
+}
+
+@keyframes image-viewer-reveal {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .image-viewer-stage img,
+    .dialog-backdrop.image-viewer[open],
+    .dialog-backdrop.image-viewer[open]::backdrop {
+        animation: none;
+    }
+}
+
+.image-viewer-error {
+    margin: 12px 0 0;
+    color: var(--muted);
+    font-size: 13px;
+}
+
+.image-viewer-error a {
+    color: var(--accent);
+}
+
 .image-link-editor {
     min-width: 0;
 }

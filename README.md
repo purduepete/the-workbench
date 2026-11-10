@@ -80,8 +80,9 @@ as saved references, but opening the image requires a connection. To remove a li
 delete its `[label](url)` text in the editor.
 
 Image links show a 120 x 90 thumbnail in saved ideas, notes and tasks, including
-the note editor's Preview mode, while signed in to OneDrive. Click the thumbnail
-or label to open the original. Use **Sign in for thumbnail** after a reload.
+the note editor's Preview mode, while signed in to OneDrive. Click a loaded thumbnail
+or its label to view the image in the app, up to 2560 pixels on the long side; Escape, the X or a click
+outside closes it. Ctrl-click, or a click while no thumbnail is shown, opens OneDrive. Use **Sign in for thumbnail** after a reload.
 Thumbnails are requested with read-only Microsoft access; neither image bytes nor
 temporary thumbnail URLs are saved in the body or database. OneDrive permissions
 remain unchanged. Offline, expired access and unavailable previews show an
