@@ -250,6 +250,8 @@ test.describe('touch dialog placement', () => {
     test.use({ hasTouch: true, isMobile: true });
 
     test('editors fit tablets without scrolling and give details the remaining height', async ({ page }) => {
+        // Opens 16 editors; allow for a loaded machine.
+        test.setTimeout(90_000);
         const editors = [
             { path: '/', open: 'New idea' },
             { path: '/notes', open: 'New note' },

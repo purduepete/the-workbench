@@ -119,7 +119,7 @@ export function App() {
                         </span>
                         <div className="brand-text">
                             <h1 className="brand-name">The Workbench</h1>
-                            <p className="brand-caption">Ideas, notes and tasks</p>
+                            <p className="brand-caption">Notes, tasks and ideas</p>
                         </div>
                     </div>
                     <nav className="segmented page-nav" aria-label="Pages">
