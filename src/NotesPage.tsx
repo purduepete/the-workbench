@@ -409,25 +409,27 @@ function GlobalNoteDialog({
                     );
                 }}
             >
-                <EditorSizeToggle maximized={editorSize.maximized} onToggle={editorSize.toggle} />
                 <div className="dialog-heading">
                     <div>
                         <p className="eyebrow">Date-agnostic note</p>
                         <h2 id="global-note-title-label">{note ? 'Edit global note' : 'New global note'}</h2>
                     </div>
                 </div>
-                <label className="field-group">
-                    <span className="field-label">Title</span>
-                    <input
-                        ref={titleRef}
-                        className="field-input"
-                        name="title"
-                        type="text"
-                        maxLength={globalNoteLimits.title}
-                        defaultValue={note?.title ?? ''}
-                        required
-                    />
-                </label>
+                <div className="editor-title-row">
+                    <label className="field-group">
+                        <span className="field-label">Title</span>
+                        <input
+                            ref={titleRef}
+                            className="field-input"
+                            name="title"
+                            type="text"
+                            maxLength={globalNoteLimits.title}
+                            defaultValue={note?.title ?? ''}
+                            required
+                        />
+                    </label>
+                    <EditorSizeToggle maximized={editorSize.maximized} onToggle={editorSize.toggle} />
+                </div>
                 <MarkdownNoteEditor
                     label="Details"
                     bodyRef={bodyRef}

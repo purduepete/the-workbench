@@ -18,7 +18,7 @@ test('desktop editors maximize to the viewport, remember the choice and restore'
         const normal = await dialog.boundingBox();
         if (!normal) throw new Error(`${editor.open} editor is missing.`);
         expect(normal.width).toBeCloseTo(1100, 0);
-        if (editor.open === 'New idea') {
+        if (editor.open === 'New idea' || editor.open === 'Global note') {
             // Measure both in one frame so a settling dialog cannot shift one between reads.
             const { title, toggle } = await dialog.evaluate((node) => {
                 const box = (selector: string) => {
