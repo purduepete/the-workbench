@@ -8,12 +8,13 @@ Sync errors reveal the header and prompt immediately. Refreshes keep the shell v
 Reduced motion removes the entrance animation.
 
 The Workbench keeps ideas with tags, pins, search and archive alongside date-grouped notes and Home/Work tasks.
+Search highlights the matching text in idea, note and task results in the theme accent color.
 Duplicate on an idea card opens a new-idea editor with its title, Markdown details, tags, solution, status and priority copied.
 On desktop, the maximize button expands an idea, task or note editor to fill the viewport. It sits beside the title in
-the idea and global note editors and in the upper-right corner of the others. The choice is remembered for later editors
+the idea editor and in the upper-right corner of the others. The choice is remembered for later editors
 in the same browser, and the button restores the normal size.
 The card footer uses task-plus, pencil and copy icons for Create task, Edit and Duplicate, with accessible button names.
-Save creates a separate idea with new timestamps, without pinning or archiving it. Cancel creates nothing.
+Save creates a separate idea with new timestamps, without pinning or archiving it. Closing it creates nothing.
 Data syncs to a PostgreSQL database through a small Express server. The browser keeps an outbox, so capture works
 offline and changes upload when the connection returns.
 
@@ -32,7 +33,7 @@ Network requests time out after 10 seconds rather than holding refresh and sync 
 
 New and edit dialogs focus the dialog on iPhone and iPad, including iPads using a desktop user agent.
 The keyboard stays closed until you tap a field. Desktop dialogs focus the title; closing a dialog restores focus
-to its opener. Empty idea dialogs close from Cancel, Escape or the backdrop. Editors containing title or body text require Cancel or Save.
+to its opener. Empty idea dialogs close from the X, Escape or the backdrop. Editors containing title or body text close only through Save or the X, which first turns into a Discard button to confirm.
 On desktop, idea, note and task editors have the same height and use the extra space for writing. Dialogs open near
 the top of the page; touch layouts stay centered.
 
@@ -144,15 +145,15 @@ including offline queueing. Ticked items show muted with a strikethrough. The ed
 The entry's date is the local calendar day it was written on and never changes. Entries are
 grouped by week (Monday to Sunday), newest week first, with search over the text and tags and a tag filter. The **New
 note** button opens today's entry; older entries open from their card. The Calendar button opens a month view with
-marked entry days; select any day to open its entry or start a blank one. Saving an empty entry asks to confirm, then
+marked entry days; click a day (or press Enter on it) to open its entry or start a blank one. Today jumps to the current day. Saving an empty entry asks to confirm, then
 deletes it.
 
 Global notes have titles and tags, are not tied to a date, and appear above the journal entries. The global group and
 each weekly group can be collapsed independently. The search box and tag filter cover both types of notes. Global note
 titles are required, but the body can be empty.
 
-Only the current week starts expanded; older weeks and global notes start collapsed. Modals use Cancel instead of
-a close icon and open with an opacity-only fade.
+Only the current week starts expanded; older weeks and global notes start collapsed. Modals close from an X in the upper-right corner,
+to the right of the maximize button when there is one, and open with an opacity-only fade.
 Each daily note also collapses independently from its date header. Today starts expanded; every other day starts
 collapsed. Collapsing a day hides its details, tags and Edit control while keeping its date and section visible.
 
@@ -182,7 +183,7 @@ is refused with a reload notice, so it cannot modify the wrong section.
 Global notes use UUIDs and the same offline mutation receipts. A current-version save replaces the note. A stale save
 merges text and tags, preserving title-only edits in the edit separator. Deleting a stale version keeps the note;
 deletion leaves a tombstone so a later save restores it without resetting its version.
-An editor containing title or body text stays open on Escape, backdrop click and navigation; use Cancel or Save to close.
+An editor containing title or body text stays open on Escape, backdrop click and navigation; use Save, or press the X and then Discard to throw the text away. Clicking elsewhere cancels the pending discard.
 
 Idea details support the same Markdown editor, Preview and syntax help as notes.
 Saved idea cards render headings, lists, emphasis, links and OneDrive thumbnails.
@@ -219,8 +220,8 @@ keyboard focus and touch toggles respond immediately.
 Multiple tasks can share a day. Days are grouped into Monday-to-Sunday weeks, newest first;
 only the current week starts expanded.
 
-The calendar marks task days in the selected section. Selecting a populated day expands its week
-and scrolls to it; selecting an empty day opens a new task for that date. New task uses today.
+The calendar marks task days in the selected section. Clicking a populated day expands its week
+and scrolls to it; clicking an empty day opens a new task for that date. New task uses today.
 Editing a task can move it between Home and Work.
 
 On an idea card, Create task opens the task editor with the idea's title and details, today's date and the last-used

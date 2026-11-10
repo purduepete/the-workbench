@@ -1,4 +1,4 @@
-import { expect, test } from './fixtures';
+import { expect, test, closeDialog } from './fixtures';
 
 const body = [
     '# A formatted idea',
@@ -87,7 +87,7 @@ for (const theme of ['midnight', 'light']) {
         await page.reload();
         await card.getByRole('button', { name: 'Edit', exact: true }).click();
         await expect(dialog.getByRole('textbox', { name: 'Details', exact: true })).toHaveValue(body);
-        await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+        await closeDialog(dialog);
         await page.setViewportSize({ width: 390, height: 844 });
         await expect(card.locator('.idea-details-toggle')).toBeHidden();
         expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(0);

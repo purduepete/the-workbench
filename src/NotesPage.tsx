@@ -31,6 +31,8 @@ import type { useJournalSync } from './useJournalSync';
 import type { useGlobalNotesSync } from './useGlobalNotesSync';
 import { useEditorDismissal } from './useEditorDismissal';
 import { EditorSizeToggle, useEditorSize } from './EditorSize';
+import { DialogCloseButton } from './DialogClose';
+import { useSearchHighlight } from './searchHighlight';
 
 interface JournalDialogProps {
     entryDate: string;
@@ -219,7 +221,10 @@ function JournalDialog({
                     );
                 }}
             >
-                <EditorSizeToggle maximized={editorSize.maximized} onToggle={editorSize.toggle} />
+                <div className="dialog-corner-actions">
+                    <EditorSizeToggle maximized={editorSize.maximized} onToggle={editorSize.toggle} />
+                    <DialogCloseButton onClose={onClose} isProtected={dismissal.isProtected} />
+                </div>
                 <div className="dialog-heading">
                     <div>
                         <p className="eyebrow">Daily note</p>
@@ -286,9 +291,6 @@ function JournalDialog({
                             {confirmingDelete ? 'Confirm' : 'Delete'}
                         </button>
                     )}
-                    <button type="button" className="secondary-button" onClick={onClose}>
-                        Cancel
-                    </button>
                     <button type="submit" className="primary-button">
                         <Check size={15} aria-hidden="true" />
                         Save entry
@@ -409,27 +411,28 @@ function GlobalNoteDialog({
                     );
                 }}
             >
+                <div className="dialog-corner-actions">
+                    <EditorSizeToggle maximized={editorSize.maximized} onToggle={editorSize.toggle} />
+                    <DialogCloseButton onClose={onClose} isProtected={dismissal.isProtected} />
+                </div>
                 <div className="dialog-heading">
                     <div>
                         <p className="eyebrow">Date-agnostic note</p>
                         <h2 id="global-note-title-label">{note ? 'Edit global note' : 'New global note'}</h2>
                     </div>
                 </div>
-                <div className="editor-title-row">
-                    <label className="field-group">
-                        <span className="field-label">Title</span>
-                        <input
-                            ref={titleRef}
-                            className="field-input"
-                            name="title"
-                            type="text"
-                            maxLength={globalNoteLimits.title}
-                            defaultValue={note?.title ?? ''}
-                            required
-                        />
-                    </label>
-                    <EditorSizeToggle maximized={editorSize.maximized} onToggle={editorSize.toggle} />
-                </div>
+                <label className="field-group">
+                    <span className="field-label">Title</span>
+                    <input
+                        ref={titleRef}
+                        className="field-input"
+                        name="title"
+                        type="text"
+                        maxLength={globalNoteLimits.title}
+                        defaultValue={note?.title ?? ''}
+                        required
+                    />
+                </label>
                 <MarkdownNoteEditor
                     label="Details"
                     bodyRef={bodyRef}
@@ -466,9 +469,6 @@ function GlobalNoteDialog({
                             {confirmingDelete ? 'Confirm' : 'Delete'}
                         </button>
                     )}
-                    <button type="button" className="secondary-button" onClick={onClose}>
-                        Cancel
-                    </button>
                     <button type="submit" className="primary-button">
                         <Check size={15} aria-hidden="true" />
                         Save note
@@ -509,6 +509,8 @@ export function NotesPage({
         setFilterNotice(null);
     };
     const [query, setQuery] = useState('');
+    const workspaceRef = useRef<HTMLElement>(null);
+    useSearchHighlight(workspaceRef, query, '.idea-card');
     const [categoryFilter, setCategoryFilter] = useState<NoteFilter>(readNoteFilter);
     const newCategory: NoteCategory =
         categoryFilter === 'unclassified' ? null : categoryFilter === 'work' ? 'work' : 'home';
@@ -628,7 +630,7 @@ export function NotesPage({
                         <div className="intro-aside">{syncBadge}</div>
                     </section>
 
-                    <section className="workspace" aria-label="Your notes">
+                    <section ref={workspaceRef} className="workspace" aria-label="Your notes">
                         <div className="workspace-tools">
                             <label className="search-wrap">
                                 <Search size={16} aria-hidden="true" />

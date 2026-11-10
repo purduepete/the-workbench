@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { closeDialog } from './fixtures';
 import { spawn } from 'node:child_process';
 import type { ChildProcess } from 'node:child_process';
 
@@ -193,7 +194,7 @@ for (const theme of ['midnight', 'light']) {
         await expect(tags).toHaveValue('');
         await select('Work');
         await expect(body).toHaveValue(`Daily work ${theme} offline`);
-        await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+        await closeDialog(dialog);
         await expect(page.getByRole('status')).toHaveText('Synced');
         const journal = await (await page.request.get('/api/journal')).json();
         expect(

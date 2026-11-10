@@ -1,4 +1,4 @@
-import { expect, test } from './fixtures';
+import { expect, test, closeDialog } from './fixtures';
 
 const body = [
     '# A formatted task',
@@ -95,7 +95,7 @@ for (const theme of ['midnight', 'light']) {
         await page.reload();
         await row.getByRole('button', { name: `Edit ${title}`, exact: true }).click();
         await expect(dialog.getByRole('textbox', { name: 'Details', exact: true })).toHaveValue(body);
-        await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+        await closeDialog(dialog);
     });
 }
 

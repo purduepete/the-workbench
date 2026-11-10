@@ -1,4 +1,4 @@
-import { expect, test } from './fixtures';
+import { expect, test, closeDialog } from './fixtures';
 
 for (const theme of ['midnight', 'light']) {
     test(`automatically selects N/A without a solution in ${theme}`, async ({ page }) => {
@@ -34,7 +34,7 @@ for (const theme of ['midnight', 'light']) {
         await dialog.getByRole('button', { name: 'Solution: No solution' }).click();
         await page.getByRole('option', { name: 'Ferry Tracker' }).click();
         await expect(status.getByRole('button', { name: 'Open', exact: true })).toHaveAttribute('aria-pressed', 'true');
-        await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+        await closeDialog(dialog);
     });
 }
 
@@ -112,7 +112,7 @@ test('links an idea to a solution with the keyboard, filters by it, and reads it
     // A new idea started while filtered defaults to that solution.
     await page.getByRole('button', { name: 'New idea' }).click();
     await expect(page.getByRole('dialog').getByRole('button', { name: 'Solution: Ferry Tracker' })).toBeVisible();
-    await page.getByRole('dialog').getByRole('button', { name: 'Cancel' }).click();
+    await closeDialog(page.getByRole('dialog'));
 });
 
 for (const theme of ['midnight', 'light']) {
@@ -141,7 +141,7 @@ for (const theme of ['midnight', 'light']) {
             await workLog.uncheck();
             expect((await saved).ok()).toBe(true);
             await expect(manage.getByText('2 of 3 enabled')).toBeVisible();
-            await manage.getByRole('button', { name: 'OK', exact: true }).click();
+            await closeDialog(manage);
             await expect(manage).toBeHidden();
 
             const filter = page.getByRole('button', { name: /^Filter by solution:/ });
@@ -162,14 +162,14 @@ for (const theme of ['midnight', 'light']) {
                 'Solution Directory',
             ]);
             await page.keyboard.press('Escape');
-            await dialog.getByRole('button', { name: 'Cancel' }).click();
+            await closeDialog(dialog);
 
             // The existing link shows by name, in the card and as the edit dialog's current value.
             const card = page.locator('.idea-card', { hasText: title });
             await expect(card.getByRole('button', { name: 'Filter by solution Work Log' })).toBeVisible();
             await card.getByRole('button', { name: 'Edit', exact: true }).click();
             await expect(dialog.getByRole('button', { name: 'Solution: Work Log' })).toBeVisible();
-            await dialog.getByRole('button', { name: 'Cancel' }).click();
+            await closeDialog(dialog);
 
             // The setting comes from the server, so a fresh browser sees it too.
             const other = await page.context().browser()!.newPage();
@@ -192,7 +192,7 @@ test('fits a phone screen with the solution filter and dialog fields', async ({ 
     await page.getByRole('button', { name: 'Manage solutions' }).click();
     await expect(page.getByRole('checkbox', { name: 'Ferry Tracker' })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
-    await page.getByRole('dialog').getByRole('button', { name: 'OK', exact: true }).click();
+    await closeDialog(page.getByRole('dialog'));
     await page.getByRole('button', { name: 'New idea' }).click();
     await page
         .getByRole('dialog')

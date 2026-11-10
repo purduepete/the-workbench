@@ -1,4 +1,4 @@
-import { expect, test } from './fixtures';
+import { expect, test, closeDialog } from './fixtures';
 import type { Locator } from './fixtures';
 
 async function expectMarkerPainted(item: Locator) {
@@ -149,7 +149,7 @@ for (const device of [
             const dialog = page.getByRole('dialog');
             await expect(device.touch ? dialog : dialog.getByRole('textbox', { name: editor.focus })).toBeFocused();
             if (device.touch) await expect(page.locator('html')).not.toHaveAttribute('data-note-input-focused', 'true');
-            await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+            await closeDialog(dialog);
             await expect(opener).toBeFocused();
         }
     });
@@ -210,13 +210,12 @@ test('calendar opens an existing entry and a blank entry for another day', async
 
     await page.getByRole('button', { name: 'Calendar', exact: true }).click();
     const calendar = page.getByRole('dialog', { name: 'Choose a day' });
-    await expect(calendar.locator('.dialog-close')).toHaveCount(0);
-    await expect(calendar.getByRole('button', { name: 'Cancel', exact: true })).toBeVisible();
+    await expect(calendar.getByRole('button', { name: 'Close', exact: true })).toBeVisible();
+    await expect(calendar.getByRole('button', { name: /^Open / })).toHaveCount(0);
     const todayButton = calendar.getByRole('button', { name: todayLabel, exact: true });
     await expect(todayButton).toHaveAttribute('data-has-entry', 'true');
     await todayButton.press('ArrowLeft');
     await expect(calendar.getByRole('button', { name: yesterdayLabel, exact: true })).toBeFocused();
-    await calendar.getByRole('button', { name: yesterdayLabel, exact: true }).click();
     await expect(calendar.getByRole('button', { name: yesterdayLabel, exact: true })).toHaveAttribute(
         'aria-pressed',
         'true'
@@ -228,18 +227,41 @@ test('calendar opens an existing entry and a blank entry for another day', async
         'true'
     );
     await expect(page.getByRole('dialog', { name: `Entry for ${todayLabel}` })).toHaveCount(0);
-    await calendar.getByRole('button', { name: `Open ${todayLabel}` }).click();
+    // A single click on a day opens it.
+    await calendar.getByRole('button', { name: todayLabel, exact: true }).click();
     await expect(page.getByRole('dialog').locator('textarea[name="body"]')).toHaveValue('Calendar existing-day entry');
-    await page.getByRole('dialog').getByRole('button', { name: 'Cancel' }).click();
+    await closeDialog(page.getByRole('dialog'));
 
     await page.getByRole('button', { name: 'Calendar', exact: true }).click();
     const secondCalendar = page.getByRole('dialog', { name: 'Choose a day' });
     const emptyDay = secondCalendar.getByRole('button', { name: yesterdayLabel, exact: true });
     await expect(emptyDay).toHaveAttribute('data-has-entry', 'false');
     await emptyDay.click();
-    await secondCalendar.getByRole('button', { name: `Open ${yesterdayLabel}` }).click();
     await expect(page.getByRole('dialog', { name: `Entry for ${yesterdayLabel}` })).toBeVisible();
     await expect(page.getByRole('dialog').locator('textarea[name="body"]')).toHaveValue('');
+});
+
+test('calendar arrow keys move between days wherever focus is in the dialog', async ({ page }) => {
+    await page.goto('/notes');
+    await page.getByRole('button', { name: 'Calendar', exact: true }).click();
+    const calendar = page.getByRole('dialog', { name: 'Choose a day' });
+    const previous = calendar.getByRole('button', { name: 'Previous month', exact: true });
+    await previous.click();
+    await previous.click();
+    const shown = (await calendar.locator('.calendar-month strong').textContent()) ?? '';
+    const [month, year] = shown.split('/');
+    await previous.focus();
+    await page.keyboard.press('ArrowRight');
+    const first = calendar.getByRole('button', { name: `${month}/01/${year}`, exact: true });
+    await expect(first).toBeFocused();
+    await expect(first).toHaveAttribute('aria-pressed', 'true');
+    await calendar.locator('h2').click();
+    await page.keyboard.press('ArrowDown');
+    await expect(calendar.getByRole('button', { name: `${month}/08/${year}`, exact: true })).toBeFocused();
+    expect(await page.evaluate(() => String(getSelection()))).toBe('');
+    await page.keyboard.press('Escape');
+    await expect(calendar).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Calendar', exact: true })).toBeFocused();
 });
 
 test('editors keep text open through Escape, backdrop and browser Back', async ({ page }) => {
@@ -248,7 +270,7 @@ test('editors keep text open through Escape, backdrop and browser Back', async (
     await page.getByRole('navigation', { name: 'Pages' }).getByRole('link', { name: 'Notes' }).click();
     await page.getByRole('button', { name: 'New note', exact: true }).click();
     const dialog = page.getByRole('dialog');
-    await expect(dialog.locator('.dialog-close')).toHaveCount(0);
+    await expect(dialog.getByRole('button', { name: 'Close', exact: true })).toBeVisible();
     const initialBox = await dialog.boundingBox();
     expect(initialBox?.width).toBeCloseTo(1100, 0);
     const body = dialog.locator('textarea[name="body"]');
@@ -263,7 +285,11 @@ test('editors keep text open through Escape, backdrop and browser Back', async (
     await expect(page).toHaveURL(/\/notes$/);
     await expect(dialog).toBeVisible();
 
-    await dialog.getByRole('button', { name: 'Cancel' }).click();
+    // The X asks before discarding text.
+    await dialog.getByRole('button', { name: 'Close', exact: true }).click();
+    await expect(dialog).toBeVisible();
+    await expect(body).toHaveValue('Draft text must stay open');
+    await dialog.getByRole('button', { name: 'Discard changes', exact: true }).click();
     await expect(dialog).toBeHidden();
     await page.goBack();
     await expect(page).toHaveURL(/\/$/);
@@ -277,7 +303,13 @@ test('editors keep text open through Escape, backdrop and browser Back', async (
     await ideaDialog.locator('input[name="title"]').fill('Protected idea');
     for (let index = 0; index < 3; index += 1) await ideaDialog.locator('input[name="title"]').press('Escape');
     await expect(ideaDialog).toBeVisible();
-    await ideaDialog.getByRole('button', { name: 'Cancel' }).click();
+    await ideaDialog.getByRole('button', { name: 'Close', exact: true }).click();
+    await expect(ideaDialog).toBeVisible();
+    // Clicking elsewhere cancels the pending discard.
+    await ideaDialog.locator('input[name="title"]').click();
+    await expect(ideaDialog.getByRole('button', { name: 'Close', exact: true })).toBeVisible();
+    await ideaDialog.getByRole('button', { name: 'Close', exact: true }).click();
+    await ideaDialog.getByRole('button', { name: 'Discard changes', exact: true }).click();
     await expect(ideaDialog).toBeHidden();
 });
 
@@ -344,7 +376,7 @@ test('idea, note and task editors share the same desktop height', async ({ page 
                 await dialog.getByRole('button', { name: 'Edit', exact: true }).click();
                 await expect(body).toHaveValue(text);
             }
-            await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+            await closeDialog(dialog);
         }
     }
 });
@@ -577,7 +609,7 @@ test('global notes can be searched and reopened without pin controls', async ({ 
     const title = `Global ${Date.now()}`;
     await page.getByRole('button', { name: 'Global note', exact: true }).click();
     const dialog = page.getByRole('dialog', { name: 'New global note' });
-    await expect(dialog.locator('.dialog-close')).toHaveCount(0);
+    await expect(dialog.getByRole('button', { name: 'Close', exact: true })).toBeVisible();
     await dialog.locator('input[name="title"]').fill(title);
     await dialog.locator('textarea[name="body"]').fill('Reference for later');
     await dialog.locator('input[name="tags"]').fill('reference');
@@ -594,7 +626,7 @@ test('global notes can be searched and reopened without pin controls', async ({ 
     await expect(page.getByRole('heading', { name: title })).toBeVisible();
     await page.getByRole('button', { name: `Edit ${title}` }).click();
     await expect(page.getByRole('dialog').locator('textarea[name="body"]')).toHaveValue('Reference for later');
-    await page.getByRole('dialog').getByRole('button', { name: 'Cancel' }).click();
+    await closeDialog(page.getByRole('dialog'));
     await expect(page.getByRole('button', { name: `Pin ${title}` })).toHaveCount(0);
 });
 
@@ -667,16 +699,13 @@ test('modal opening fades without moving the page and calendar swaps keep the ba
             Math.min(...frames.samples.map((sample) => sample.top))
     ).toBeLessThanOrEqual(1);
     expect(frames.scrollAfter).toBe(frames.scrollBefore);
-    await page.getByRole('dialog').getByRole('button', { name: 'Cancel' }).click();
+    await closeDialog(page.getByRole('dialog'));
     await page.getByRole('button', { name: 'Calendar', exact: true }).click();
-    await page
-        .getByRole('dialog')
-        .getByRole('button', { name: /^Open / })
-        .click();
+    await page.getByRole('dialog').locator('.calendar-day[aria-pressed="true"]').click();
     const entry = page.getByRole('dialog');
     await expect(entry).toHaveAttribute('data-replacing', 'true');
     expect(await entry.evaluate((element) => getComputedStyle(element, '::backdrop').animationName)).toBe('none');
-    await entry.getByRole('button', { name: 'Cancel' }).click();
+    await closeDialog(entry);
 });
 
 for (const { theme, width } of [

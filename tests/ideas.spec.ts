@@ -1,4 +1,4 @@
-import { expect, test } from './fixtures';
+import { expect, test, closeDialog } from './fixtures';
 
 test('uses The Workbench for the site and installed app', async ({ page, request }) => {
     await page.goto('/');
@@ -101,7 +101,7 @@ for (const theme of ['midnight', 'light']) {
                 await page.getByRole('button', { name: opener, exact: true }).click();
                 const dialog = page.getByRole('dialog', { name: opener });
                 if (opener === 'New idea') {
-                    await expect(dialog.getByRole('button', { name: 'Close dialog' })).toHaveCount(0);
+                    await expect(dialog.getByRole('button', { name: 'Close', exact: true })).toBeVisible();
                     const form = dialog.locator('form.idea-form');
                     const fields = form.locator('.field-group');
                     const firstField = fields.first();
@@ -114,13 +114,13 @@ for (const theme of ['midnight', 'light']) {
                         parseFloat(getComputedStyle(element).paddingTop)
                     );
                     expect(fieldBox.y - formBox.y).toBeCloseTo(paddingTop, 0);
-                    await dialog.getByRole('button', { name: 'Cancel' }).click();
+                    await closeDialog(dialog);
                     await expect(dialog).toHaveCount(0);
                     continue;
                 }
-                await expect(dialog.getByRole('button', { name: 'Close dialog' })).toHaveCount(0);
+                await expect(dialog.getByRole('button', { name: 'Close', exact: true })).toBeVisible();
                 await expect(dialog.getByRole('button', { name: 'Done', exact: true })).toHaveCount(0);
-                await dialog.getByRole('button', { name: 'OK', exact: true }).click();
+                await closeDialog(dialog);
                 await expect(dialog).toHaveCount(0);
             }
         }
@@ -172,7 +172,7 @@ test('positions desktop dialogs near the top and keeps their controls usable', a
                 await listbox.getByRole('option', { name: 'Ferry Tracker' }).click();
                 await expect(trigger).toContainText('Ferry Tracker');
             }
-            await dialog.getByRole('button', { name: name === 'Manage solutions' ? 'OK' : 'Cancel' }).click();
+            await closeDialog(dialog);
         }
     }
 });
@@ -216,7 +216,7 @@ test('expands new and existing idea editors on desktop without hiding controls',
             const overflow = await dialog.evaluate((element) => element.scrollHeight - element.clientHeight);
             expect(overflow).toBeLessThanOrEqual(1);
             if (name === 'Edit idea') await expect(details).toHaveValue('Existing details');
-            await dialog.getByRole('button', { name: 'Cancel' }).click();
+            await closeDialog(dialog);
         }
     }
 });
@@ -260,7 +260,7 @@ test.describe('touch dialog placement', () => {
             const dialog = page.getByRole('dialog', { name: 'New idea' });
             const details = await dialog.getByRole('textbox', { name: 'Details', exact: true }).boundingBox();
             if (!details) throw new Error('Idea details field is missing.');
-            await dialog.getByRole('button', { name: 'Cancel' }).tap();
+            await dialog.getByRole('button', { name: 'Close', exact: true }).tap();
             // Ideas use the shared Markdown editor, so their details match the global note editor.
             await page.goto('/notes');
             await page.getByRole('button', { name: 'Global note', exact: true }).tap();
@@ -269,7 +269,7 @@ test.describe('touch dialog placement', () => {
             if (!note) throw new Error('Global note details field is missing.');
             expect(details.height).toBeGreaterThanOrEqual(150);
             expect(details.height).toBeCloseTo(note.height, 0);
-            await noteDialog.getByRole('button', { name: 'Cancel' }).tap();
+            await noteDialog.getByRole('button', { name: 'Close', exact: true }).tap();
         }
     });
 
@@ -287,7 +287,7 @@ test.describe('touch dialog placement', () => {
                 const box = await dialog.boundingBox();
                 if (!box) throw new Error(`${name} dialog is missing.`);
                 expect(box.y).toBeCloseTo((viewport.height - box.height) / 2, 0);
-                await dialog.getByRole('button', { name: name === 'Manage solutions' ? 'OK' : 'Cancel' }).click();
+                await closeDialog(dialog);
             }
         }
     });
@@ -358,7 +358,7 @@ for (const device of [
         await page.keyboard.press('Escape');
         await expect(editDialog).toBeVisible();
         await expect(editDialog.getByLabel('Idea title')).toHaveValue(ideaTitle);
-        await editDialog.getByRole('button', { name: 'Cancel' }).click();
+        await closeDialog(editDialog);
         await expect(editDialog).toHaveCount(0);
         await expect(edit).toBeFocused();
     });

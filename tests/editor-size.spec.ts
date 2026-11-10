@@ -1,4 +1,4 @@
-import { expect, test } from './fixtures';
+import { expect, test, closeDialog } from './fixtures';
 
 const editors = [
     { path: '/', open: 'New idea' },
@@ -18,18 +18,26 @@ test('desktop editors maximize to the viewport, remember the choice and restore'
         const normal = await dialog.boundingBox();
         if (!normal) throw new Error(`${editor.open} editor is missing.`);
         expect(normal.width).toBeCloseTo(1100, 0);
-        if (editor.open === 'New idea' || editor.open === 'Global note') {
-            // Measure both in one frame so a settling dialog cannot shift one between reads.
-            const { title, toggle } = await dialog.evaluate((node) => {
-                const box = (selector: string) => {
-                    const element = node.querySelector(selector);
-                    if (!element) throw new Error(`${selector} is missing.`);
-                    return element.getBoundingClientRect().toJSON() as DOMRect;
-                };
-                return { title: box('input[name="title"]'), toggle: box('.editor-size-toggle') };
-            });
-            expect(toggle.y).toBeCloseTo(title.y, 0);
-            expect(toggle.x - (title.x + title.width)).toBeCloseTo(6, 0);
+        // Measure in one frame so a settling dialog cannot shift one box between reads.
+        const boxes = await dialog.evaluate((node) => {
+            const box = (selector: string) => {
+                const element = node.querySelector(selector);
+                if (!element) throw new Error(`${selector} is missing.`);
+                return element.getBoundingClientRect().toJSON() as DOMRect;
+            };
+            return {
+                title: node.querySelector('.editor-title-row') ? box('input[name="title"]') : null,
+                toggle: box('.editor-size-toggle'),
+                close: box('.dialog-close'),
+            };
+        });
+        // Close sits immediately right of the maximize button, on the same row.
+        expect(boxes.close.y).toBeCloseTo(boxes.toggle.y, 0);
+        expect(boxes.close.x - (boxes.toggle.x + boxes.toggle.width)).toBeCloseTo(6, 0);
+        if (editor.open === 'New idea') {
+            if (!boxes.title) throw new Error(`${editor.open} title row is missing.`);
+            expect(boxes.toggle.y).toBeCloseTo(boxes.title.y, 0);
+            expect(boxes.toggle.x - (boxes.title.x + boxes.title.width)).toBeCloseTo(6, 0);
         }
 
         await dialog.getByRole('button', { name: 'Maximize editor', exact: true }).click();
@@ -50,22 +58,25 @@ test('desktop editors maximize to the viewport, remember the choice and restore'
         expect(await dialog.evaluate((element) => element.scrollHeight - element.clientHeight)).toBeLessThanOrEqual(1);
 
         // The choice is remembered for the next editor.
-        await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+        await closeDialog(dialog);
         await page.getByRole('button', { name: editor.open, exact: true }).first().click();
         await expect(dialog.getByRole('button', { name: 'Restore editor size', exact: true })).toBeVisible();
         await dialog.getByRole('button', { name: 'Restore editor size', exact: true }).click();
         await expect(dialog.getByRole('button', { name: 'Maximize editor', exact: true })).toBeVisible();
         expect((await dialog.boundingBox())?.width).toBeCloseTo(normal.width, 0);
-        await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+        await closeDialog(dialog);
     }
 });
 
 test.describe('phone editors', () => {
     test.use({ hasTouch: true, isMobile: true, viewport: { width: 390, height: 844 } });
 
-    test('do not offer the maximize control', async ({ page }) => {
+    test('do not offer the maximize control but keep the close button', async ({ page }) => {
         await page.goto('/');
         await page.getByRole('button', { name: 'New idea', exact: true }).tap();
-        await expect(page.getByRole('dialog').locator('.editor-size-toggle')).toBeHidden();
+        const dialog = page.getByRole('dialog');
+        await expect(dialog.locator('.editor-size-toggle')).toBeHidden();
+        await dialog.getByRole('button', { name: 'Close', exact: true }).tap();
+        await expect(dialog).toHaveCount(0);
     });
 });

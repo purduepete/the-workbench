@@ -1,6 +1,7 @@
 import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react';
 import { formatEntryDate, localDateKey } from './journal';
+import { DialogCloseButton } from './DialogClose';
 
 function monthDays(month: Date): string[] {
     const first = new Date(month.getFullYear(), month.getMonth(), 1, 12);
@@ -12,6 +13,8 @@ function monthDays(month: Date): string[] {
         return localDateKey(date);
     });
 }
+
+const arrowSteps: Record<string, number> = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -7, ArrowDown: 7 };
 
 function shiftDay(day: string, amount: number): string {
     const [year, month, date] = day.split('-').map(Number);
@@ -60,12 +63,22 @@ export function CalendarDialog({
     const moveMonth = (amount: number) => {
         setMonth((current) => new Date(current.getFullYear(), current.getMonth() + amount, 1, 12));
     };
+    const monthKey = `${month.getFullYear()}-${String(month.getMonth() + 1).padStart(2, '0')}`;
+    const goToDay = (next: string) => {
+        const [year, monthNumber] = next.split('-').map(Number);
+        if (year !== month.getFullYear() || monthNumber - 1 !== month.getMonth())
+            setMonth(new Date(year, monthNumber - 1, 1, 12));
+        setSelected(next);
+        setFocusDate(next);
+        dayRefs.current.get(next)?.focus({ preventScroll: true });
+    };
 
     return (
         <dialog
             ref={dialogRef}
             className="dialog-backdrop calendar-dialog"
             aria-labelledby="calendar-title"
+            tabIndex={-1}
             onCancel={(event) => {
                 event.preventDefault();
                 onClose();
@@ -73,8 +86,29 @@ export function CalendarDialog({
             onClick={(event) => {
                 if (event.target === dialogRef.current) onClose();
             }}
+            onKeyDown={(event) => {
+                if (event.key === 'Escape') {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    onClose();
+                    return;
+                }
+                const step = arrowSteps[event.key];
+                if (!step) return;
+                // Arrows always move between days, even when focus is on the month buttons or the dialog itself.
+                event.preventDefault();
+                const from =
+                    event.target instanceof HTMLElement
+                        ? event.target.closest<HTMLElement>('.calendar-day')?.dataset.day
+                        : undefined;
+                const start = from ?? (selected.startsWith(monthKey) ? selected : null);
+                goToDay(start ? shiftDay(start, step) : `${monthKey}-01`);
+            }}
         >
             <div className="idea-form">
+                <div className="dialog-corner-actions">
+                    <DialogCloseButton onClose={onClose} />
+                </div>
                 <div className="dialog-heading">
                     <div>
                         <p className="eyebrow">{label}</p>
@@ -104,9 +138,7 @@ export function CalendarDialog({
                 </div>
                 <div className="calendar-grid" aria-label="Calendar days">
                     {days.map((day) => {
-                        const inMonth =
-                            day.slice(0, 7) ===
-                            `${month.getFullYear()}-${String(month.getMonth() + 1).padStart(2, '0')}`;
+                        const inMonth = day.slice(0, 7) === monthKey;
                         return (
                             <button
                                 key={day}
@@ -116,36 +148,13 @@ export function CalendarDialog({
                                 }}
                                 type="button"
                                 className="calendar-day"
+                                data-day={day}
                                 data-outside-month={!inMonth}
                                 data-has-entry={entryDays.has(day)}
                                 data-today={day === today}
                                 aria-label={formatEntryDate(day)}
                                 aria-pressed={selected === day}
-                                onClick={() => setSelected(day)}
-                                onDoubleClick={() => onSelect(day)}
-                                onKeyDown={(event) => {
-                                    const move =
-                                        event.key === 'ArrowLeft'
-                                            ? -1
-                                            : event.key === 'ArrowRight'
-                                              ? 1
-                                              : event.key === 'ArrowUp'
-                                                ? -7
-                                                : event.key === 'ArrowDown'
-                                                  ? 7
-                                                  : 0;
-                                    if (!move) return;
-                                    event.preventDefault();
-                                    const next = shiftDay(day, move);
-                                    const [year, monthNumber] = next.split('-').map(Number);
-                                    if (year !== month.getFullYear() || monthNumber - 1 !== month.getMonth())
-                                        setMonth(new Date(year, monthNumber - 1, 1, 12));
-                                    setSelected(next);
-                                    setFocusDate(next);
-                                }}
-                                onKeyUp={(event) => {
-                                    if (event.key === 'Enter' || event.key === ' ') onSelect(day);
-                                }}
+                                onClick={() => onSelect(day)}
                             >
                                 {Number(day.slice(-2))}
                                 {entryDays.has(day) && <span className="calendar-entry-dot" aria-hidden="true" />}
@@ -154,9 +163,6 @@ export function CalendarDialog({
                     })}
                 </div>
                 <div className="dialog-footer calendar-footer">
-                    <button type="button" className="secondary-button" onClick={onClose}>
-                        Cancel
-                    </button>
                     <button
                         type="button"
                         className="secondary-button"
@@ -169,9 +175,6 @@ export function CalendarDialog({
                     >
                         <CalendarDays size={15} aria-hidden="true" />
                         Today
-                    </button>
-                    <button type="button" className="primary-button" onClick={() => onSelect(selected)}>
-                        Open {formatEntryDate(selected)}
                     </button>
                 </div>
             </div>

@@ -1,4 +1,4 @@
-import { expect, test } from './fixtures';
+import { expect, test, closeDialog } from './fixtures';
 
 for (const theme of ['midnight', 'light']) {
     test(`All shows Home and Work tasks and persists in ${theme}`, async ({ page }) => {
@@ -53,7 +53,7 @@ for (const theme of ['midnight', 'light']) {
         await page.getByRole('button', { name: 'New task', exact: true }).click();
         const dialog = page.getByRole('dialog');
         await expect(dialog.getByRole('button', { name: 'Home', exact: true })).toHaveAttribute('aria-pressed', 'true');
-        await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+        await closeDialog(dialog);
         await page.setViewportSize({ width: 1280, height: 900 });
         await expect(filter.getByRole('button')).toHaveText(['All', 'Home', 'Work']);
         await filter.getByRole('button', { name: 'Home', exact: true }).click();

@@ -20,6 +20,8 @@ import { readTaskCategory, writeTaskCategory } from './tasksSync';
 import type { TaskSection } from './tasksSync';
 import { useEditorDismissal } from './useEditorDismissal';
 import { EditorSizeToggle, useEditorSize } from './EditorSize';
+import { DialogCloseButton } from './DialogClose';
+import { useSearchHighlight } from './searchHighlight';
 import { useTheme } from './ThemeContext';
 import type { useTasksSync } from './useTasksSync';
 import { ExpandableMarkdownBody, MarkdownNoteEditor } from './MarkdownNote';
@@ -175,7 +177,10 @@ function TaskDialog({
                     );
                 }}
             >
-                <EditorSizeToggle maximized={editorSize.maximized} onToggle={editorSize.toggle} />
+                <div className="dialog-corner-actions">
+                    <EditorSizeToggle maximized={editorSize.maximized} onToggle={editorSize.toggle} />
+                    <DialogCloseButton onClose={onClose} isProtected={dismissal.isProtected} />
+                </div>
                 <div className="dialog-heading">
                     <div>
                         <p className="eyebrow">{formatEntryDate(target.taskDate)}</p>
@@ -236,9 +241,6 @@ function TaskDialog({
                             {confirmingDelete ? 'Confirm' : 'Delete'}
                         </button>
                     )}
-                    <button type="button" className="secondary-button" onClick={onClose}>
-                        Cancel
-                    </button>
                     <button type="submit" className="primary-button">
                         <Check size={15} aria-hidden="true" />
                         Save task
@@ -421,6 +423,8 @@ export function TasksPage({
     }, [category]);
     const [categoryNotice, setCategoryNotice] = useState(initialCategory.error);
     const [query, setQuery] = useState('');
+    const workspaceRef = useRef<HTMLElement>(null);
+    useSearchHighlight(workspaceRef, query, '.task-row');
     const [calendarOpen, setCalendarOpen] = useState(false);
     const [expandedWeeks, setExpandedWeeks] = useState<Record<string, boolean>>({});
     const dayRefs = useRef(new Map<string, HTMLElement>());
@@ -487,7 +491,7 @@ export function TasksPage({
                         <div className="intro-aside">{syncBadge}</div>
                     </section>
 
-                    <section className="workspace" aria-label="Your tasks">
+                    <section ref={workspaceRef} className="workspace" aria-label="Your tasks">
                         <div className="workspace-tools">
                             <label className="search-wrap">
                                 <Search size={16} aria-hidden="true" />

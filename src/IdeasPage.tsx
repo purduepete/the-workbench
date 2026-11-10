@@ -33,6 +33,8 @@ import { PageLoading } from './Loading';
 import { useTheme } from './ThemeContext';
 import { useEditorDismissal } from './useEditorDismissal';
 import { EditorSizeToggle, useEditorSize } from './EditorSize';
+import { DialogCloseButton } from './DialogClose';
+import { useSearchHighlight } from './searchHighlight';
 import type { Idea, IdeaPriority, IdeaStatus, IdeaView } from './types';
 import type { Solution } from '../shared/contracts';
 import type { useIdeasSync } from './useIdeasSync';
@@ -121,6 +123,9 @@ function SolutionsDialog({ solutions, onToggle, onClose }: SolutionsDialogProps)
             }}
         >
             <div className="idea-form">
+                <div className="dialog-corner-actions">
+                    <DialogCloseButton onClose={onClose} />
+                </div>
                 <div className="dialog-heading">
                     <div>
                         <p className="eyebrow">Applies on every device</p>
@@ -159,11 +164,6 @@ function SolutionsDialog({ solutions, onToggle, onClose }: SolutionsDialogProps)
                         {error}
                     </p>
                 )}
-                <div className="dialog-footer">
-                    <button type="button" className="secondary-button" onClick={onClose}>
-                        OK
-                    </button>
-                </div>
             </div>
         </dialog>
     );
@@ -312,6 +312,7 @@ function IdeaDialog({
                         />
                     </label>
                     <EditorSizeToggle maximized={editorSize.maximized} onToggle={editorSize.toggle} />
+                    <DialogCloseButton onClose={onClose} isProtected={dismissal.isProtected} />
                 </div>
                 <MarkdownNoteEditor
                     label="Details"
@@ -414,9 +415,6 @@ function IdeaDialog({
                             {confirmingDelete ? 'Confirm' : 'Delete'}
                         </button>
                     )}
-                    <button type="button" className="secondary-button" onClick={onClose}>
-                        Cancel
-                    </button>
                     <button type="submit" className="primary-button">
                         <Check size={15} aria-hidden="true" />
                         Save idea
@@ -623,6 +621,8 @@ export function IdeasPage({
         setViewNotice(notice);
     };
     const [query, setQuery] = useState('');
+    const workspaceRef = useRef<HTMLElement>(null);
+    useSearchHighlight(workspaceRef, query, '.idea-card');
     const [selectedTag, setSelectedTag] = useState<string | null>(null);
     const [solutionFilter, setSolutionFilterState] = useState<SolutionFilter>(readSolutionFilter);
     const [managingSolutions, setManagingSolutions] = useState(false);
@@ -727,7 +727,7 @@ export function IdeasPage({
                         <div className="intro-aside">{syncBadge}</div>
                     </section>
 
-                    <section className="workspace" aria-label="Your ideas">
+                    <section ref={workspaceRef} className="workspace" aria-label="Your ideas">
                         <div className="workspace-tools">
                             <label className="search-wrap">
                                 <Search size={16} aria-hidden="true" />

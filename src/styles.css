@@ -973,7 +973,59 @@ main.page-width {
 }
 
 .idea-form {
+    position: relative;
     padding: 24px;
+}
+
+/* Close (and, on desktop editors, maximize) sit in the dialog's upper-right corner. */
+.dialog-corner-actions {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    z-index: 1;
+    display: flex;
+    gap: 6px;
+}
+
+.dialog-corner-actions + .dialog-heading {
+    padding-right: 84px;
+}
+
+.dialog-close,
+.editor-size-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    flex: 0 0 auto;
+}
+
+/* Editors without a heading put maximize and close on the title row. */
+.editor-title-row {
+    display: flex;
+    align-items: flex-end;
+    gap: 6px;
+}
+
+.editor-title-row > .field-group {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.editor-title-row > .icon-button {
+    width: 42px;
+    height: 42px;
+}
+
+.dialog-close[data-confirming='true'] {
+    width: auto;
+    gap: 6px;
+    padding: 0 10px;
+    border-color: var(--danger);
+    color: var(--danger);
+    background: var(--danger-soft);
+    font-size: 13px;
 }
 
 .dialog-heading {
@@ -1004,7 +1056,6 @@ main.page-width {
 }
 
 form.idea-form > .field-group:first-child,
-form.idea-form > .editor-size-toggle:first-child + .field-group,
 form.idea-form > .editor-title-row:first-child > .field-group {
     margin-top: 0;
 }
@@ -1989,6 +2040,11 @@ div.markdown-task-text {
     margin: 4px 0 12px;
 }
 
+.calendar-month,
+.calendar-weekdays {
+    user-select: none;
+}
+
 .calendar-month strong {
     font-size: 14px;
     font-variant-numeric: tabular-nums;
@@ -2060,8 +2116,8 @@ div.markdown-task-text {
     margin-top: 12px;
 }
 
-.calendar-footer .primary-button {
-    flex-basis: 100%;
+.calendar-footer .secondary-button {
+    margin-left: auto;
 }
 
 @media (max-width: 540px) {
@@ -2191,45 +2247,6 @@ div.markdown-task-text {
         max-width: none;
         height: calc(100dvh - 32px);
         max-height: none;
-    }
-
-    /* The size toggle sits in the editor's upper-right corner. */
-    .editor-dialog .idea-form {
-        position: relative;
-    }
-
-    .idea-form > .editor-size-toggle {
-        position: absolute;
-        top: 16px;
-        right: 16px;
-    }
-
-    .editor-size-toggle {
-        display: inline-flex;
-        width: 34px;
-        height: 34px;
-        flex: 0 0 auto;
-    }
-
-    .editor-dialog .dialog-heading {
-        padding-right: 48px;
-    }
-
-    /* The idea editor has no heading, so the toggle shares a row with a narrower title field. */
-    .editor-title-row {
-        display: flex;
-        align-items: flex-end;
-        gap: 6px;
-    }
-
-    .editor-title-row > .field-group {
-        flex: 1 1 auto;
-        min-width: 0;
-    }
-
-    .editor-title-row > .editor-size-toggle {
-        width: 42px;
-        height: 42px;
     }
 }
 
@@ -2399,4 +2416,9 @@ div.markdown-task-text {
     .field-textarea {
         font-size: 16px;
     }
+}
+
+::highlight(search-match) {
+    background-color: var(--accent);
+    color: var(--accent-contrast);
 }

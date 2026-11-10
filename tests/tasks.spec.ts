@@ -1,4 +1,4 @@
-import { expect, test, workerOrigin } from './fixtures';
+import { expect, test, workerOrigin, closeDialog } from './fixtures';
 import type { APIRequestContext, Page } from './fixtures';
 import { taskLimits } from '../shared/tasks';
 import type { ServerTask } from '../shared/tasks';
@@ -104,7 +104,7 @@ test('creates a task from an idea title without changing the idea', async ({ pag
     await page.goBack();
     await expect(page).toHaveURL(/\/tasks$/);
     await expect(dialog).toBeVisible();
-    await dialog.getByRole('button', { name: 'Cancel' }).click();
+    await closeDialog(dialog);
     await expect(dialog).toBeHidden();
     await expect(page.getByRole('button', { name: 'New task', exact: true })).toBeFocused();
     const afterCancel = (await (await request.get('/api/tasks')).json()) as { tasks: ServerTask[] };
@@ -206,7 +206,7 @@ for (const device of [
             await expect(dialog).toBeFocused();
             await expect(dialog.getByRole('textbox', { name: 'Task title' })).toHaveValue(title);
             await expect(page.locator('html')).not.toHaveAttribute('data-task-input-focused', 'true');
-            await dialog.getByRole('button', { name: 'Cancel' }).click();
+            await closeDialog(dialog);
             await expect(page.getByRole('button', { name: 'New task', exact: true })).toBeFocused();
         });
     });
@@ -308,15 +308,15 @@ test('current week defaults, calendar jumps and empty-day editor', async ({ page
     await expect(page.getByRole('heading', { name: 'Current', exact: true })).toBeHidden();
     await page.getByRole('button', { name: 'Calendar', exact: true }).click();
     const calendar = page.getByRole('dialog', { name: 'Choose a day' });
-    await expect(calendar.locator('.dialog-close')).toHaveCount(0);
     await expect(calendar.getByRole('button', { name: formatEntryDate(today()), exact: true })).toHaveAttribute(
         'data-has-entry',
         'true'
     );
     await calendar.getByRole('button', { name: formatEntryDate(today()), exact: true }).press('ArrowLeft');
     for (let step = 1; step < 14; step++) await page.keyboard.press('ArrowLeft');
-    await calendar.getByRole('button', { name: formatEntryDate(dayOffset(-14)), exact: true }).click();
-    await calendar.getByRole('button', { name: `Open ${formatEntryDate(dayOffset(-14))}` }).click();
+    // Enter on the focused day opens it, the same as a click.
+    await expect(calendar.getByRole('button', { name: formatEntryDate(dayOffset(-14)), exact: true })).toBeFocused();
+    await page.keyboard.press('Enter');
     await expect(older).toHaveAttribute('aria-expanded', 'true');
     await expect(page.getByRole('heading', { name: 'Older', exact: true })).toBeVisible();
     await expect(page.getByRole('dialog')).toHaveCount(0);
@@ -327,7 +327,6 @@ test('current week defaults, calendar jumps and empty-day editor', async ({ page
         'false'
     );
     await calendar.getByRole('button', { name: formatEntryDate(dayOffset(1)), exact: true }).click();
-    await calendar.getByRole('button', { name: `Open ${formatEntryDate(dayOffset(1))}` }).click();
     const editor = page.getByRole('dialog', { name: 'New task', exact: true });
     await expect(editor).toBeVisible();
     await expect(editor.getByText(formatEntryDate(dayOffset(1)), { exact: true })).toBeVisible();
@@ -342,7 +341,7 @@ test('calendar Today selects the current day without opening an editor', async (
     const calendar = page.getByRole('dialog', { name: 'Choose a day' });
     const yesterday = formatEntryDate(dayOffset(-1));
     const currentDay = formatEntryDate(today());
-    await calendar.getByRole('button', { name: yesterday, exact: true }).click();
+    await calendar.getByRole('button', { name: currentDay, exact: true }).press('ArrowLeft');
     await expect(calendar.getByRole('button', { name: yesterday, exact: true })).toHaveAttribute(
         'aria-pressed',
         'true'
@@ -354,7 +353,7 @@ test('calendar Today selects the current day without opening an editor', async (
         'true'
     );
     await expect(page.getByRole('dialog')).toHaveCount(1);
-    await calendar.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await closeDialog(calendar);
     await expect(page.getByRole('dialog')).toHaveCount(0);
 });
 
@@ -405,7 +404,7 @@ test('task drafts require Cancel or Save and offline capture survives reload', a
     await page.getByRole('navigation', { name: 'Pages' }).getByRole('link', { name: 'Tasks' }).click();
     await page.getByRole('button', { name: 'New task', exact: true }).first().click();
     const dialog = page.getByRole('dialog', { name: 'New task', exact: true });
-    await expect(dialog.locator('.dialog-close')).toHaveCount(0);
+    await expect(dialog.getByRole('button', { name: 'Close', exact: true })).toBeVisible();
     expect((await dialog.boundingBox())?.width).toBeCloseTo(1100, 0);
     const body = dialog.getByRole('textbox', { name: 'Details' });
     await body.fill('Body-only protected draft');
@@ -414,7 +413,9 @@ test('task drafts require Cancel or Save and offline capture survives reload', a
     await page.goBack();
     await expect(page).toHaveURL(/\/tasks$/);
     await expect(dialog).toBeVisible();
-    await dialog.getByRole('button', { name: 'Cancel' }).click();
+    await dialog.getByRole('button', { name: 'Close', exact: true }).click();
+    await expect(dialog).toBeVisible();
+    await dialog.getByRole('button', { name: 'Discard changes', exact: true }).click();
     await expect(dialog).toBeHidden();
     await page.evaluate(() => navigator.serviceWorker.ready.then(() => undefined));
     await page.reload();

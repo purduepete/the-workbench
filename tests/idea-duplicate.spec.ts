@@ -1,4 +1,4 @@
-import { expect, test } from './fixtures';
+import { expect, test, closeDialog } from './fixtures';
 
 for (const theme of ['midnight', 'light']) {
     test(`duplicate opens an independent idea draft in ${theme}`, async ({ page }) => {
@@ -39,7 +39,7 @@ for (const theme of ['midnight', 'light']) {
             'true'
         );
         await expect(dialog.getByRole('button', { name: 'Delete idea' })).toHaveCount(0);
-        await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+        await closeDialog(dialog);
         await expect(page.getByRole('article', { name: title, exact: true })).toHaveCount(1);
         await original.getByRole('button', { name: `Duplicate ${title}`, exact: true }).click();
         await dialog.getByLabel('Idea title', { exact: true }).fill(`Copied ${theme}`);
@@ -58,10 +58,10 @@ for (const theme of ['midnight', 'light']) {
         await expect(copy).toBeVisible();
         await copy.getByRole('button', { name: 'Edit', exact: true }).click();
         await expect(dialog.getByRole('textbox', { name: 'Details', exact: true })).toHaveValue(body);
-        await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+        await closeDialog(dialog);
         await page.getByRole('button', { name: 'New idea', exact: true }).click();
         await expect(dialog.getByLabel('Idea title', { exact: true })).toHaveValue('');
-        await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+        await closeDialog(dialog);
         expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(0);
     });
 }

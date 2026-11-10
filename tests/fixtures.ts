@@ -1,4 +1,5 @@
 import { test as base } from '@playwright/test';
+import type { Locator } from '@playwright/test';
 
 export * from '@playwright/test';
 
@@ -13,3 +14,10 @@ export const test = base.extend({
         await provide(baseURL === defaultOrigin ? workerOrigin(testInfo.parallelIndex) : baseURL);
     },
 });
+
+/** Presses the dialog's X and, when it asks to discard unsaved text, confirms. */
+export async function closeDialog(dialog: Locator) {
+    await dialog.getByRole('button', { name: 'Close', exact: true }).click();
+    const discard = dialog.getByRole('button', { name: 'Discard changes', exact: true });
+    if (await discard.isVisible()) await discard.click();
+}
