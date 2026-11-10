@@ -249,27 +249,35 @@ test('keeps a tall desktop dialog scrollable inside the viewport', async ({ page
 test.describe('touch dialog placement', () => {
     test.use({ hasTouch: true, isMobile: true });
 
-    test('gives idea details the same editor height as notes on phone and tablet', async ({ page }) => {
+    test('editors fit tablets without scrolling and give details the remaining height', async ({ page }) => {
+        const editors = [
+            { path: '/', open: 'New idea' },
+            { path: '/notes', open: 'New note' },
+            { path: '/notes', open: 'Global note' },
+            { path: '/tasks', open: 'New task' },
+        ];
         for (const viewport of [
+            { width: 810, height: 1080 },
+            { width: 1080, height: 810 },
+            { width: 1194, height: 834 },
             { width: 390, height: 844 },
-            { width: 1280, height: 900 },
         ]) {
             await page.setViewportSize(viewport);
-            await page.goto('/');
-            await page.getByRole('button', { name: 'New idea', exact: true }).tap();
-            const dialog = page.getByRole('dialog', { name: 'New idea' });
-            const details = await dialog.getByRole('textbox', { name: 'Details', exact: true }).boundingBox();
-            if (!details) throw new Error('Idea details field is missing.');
-            await dialog.getByRole('button', { name: 'Close', exact: true }).tap();
-            // Ideas use the shared Markdown editor, so their details match the global note editor.
-            await page.goto('/notes');
-            await page.getByRole('button', { name: 'Global note', exact: true }).tap();
-            const noteDialog = page.getByRole('dialog', { name: 'New global note' });
-            const note = await noteDialog.getByRole('textbox', { name: 'Details', exact: true }).boundingBox();
-            if (!note) throw new Error('Global note details field is missing.');
-            expect(details.height).toBeGreaterThanOrEqual(150);
-            expect(details.height).toBeCloseTo(note.height, 0);
-            await noteDialog.getByRole('button', { name: 'Close', exact: true }).tap();
+            for (const editor of editors) {
+                await page.goto(editor.path);
+                await page.getByRole('button', { name: editor.open, exact: true }).first().tap();
+                const dialog = page.getByRole('dialog');
+                const details = await dialog.getByRole('textbox', { name: 'Details', exact: true }).boundingBox();
+                if (!details) throw new Error(`${editor.open} details field is missing.`);
+                expect(details.height).toBeGreaterThanOrEqual(150);
+                // The opened dialog takes focus without drawing a focus ring around the whole modal.
+                expect(await dialog.evaluate((element) => getComputedStyle(element).outlineStyle)).toBe('none');
+                if (viewport.width > 390)
+                    expect(
+                        await dialog.evaluate((element) => element.scrollHeight - element.clientHeight)
+                    ).toBeLessThanOrEqual(1);
+                await dialog.getByRole('button', { name: 'Close', exact: true }).tap();
+            }
         }
     });
 

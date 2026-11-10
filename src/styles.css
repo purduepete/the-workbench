@@ -2194,6 +2194,7 @@ div.markdown-task-text {
 
     .dialog-backdrop.editor-dialog {
         width: min(1100px, calc(100vw - 40px));
+        height: min(92dvh, 960px);
         max-height: min(92dvh, 960px);
     }
 
@@ -2202,42 +2203,60 @@ div.markdown-task-text {
     }
 }
 
+/* Editors have a fixed height on every device; the details field takes the space the other fields leave,
+   so the dialog itself does not scroll. */
+@media (max-width: 1023px) {
+    .dialog-backdrop.editor-dialog {
+        height: min(90dvh, 760px);
+    }
+}
+
+.editor-dialog .idea-form {
+    display: flex;
+    min-height: 100%;
+    flex-direction: column;
+}
+
+.editor-dialog .editor-body {
+    flex: 1;
+    grid-template-rows: auto minmax(var(--editor-body-min), 1fr);
+}
+
+.editor-dialog .image-link-body {
+    grid-template-rows: auto minmax(var(--editor-body-min), 1fr) auto;
+}
+
+.editor-dialog .editor-body .journal-textarea {
+    min-height: var(--editor-body-min);
+}
+
+.editor-dialog .markdown-editor {
+    display: flex;
+    flex-direction: column;
+}
+
+.editor-dialog .markdown-editor-textarea,
+.editor-dialog .markdown-editor-preview {
+    flex: 1 0 var(--editor-body-min);
+}
+
+.editor-dialog .markdown-editor-preview {
+    overflow-y: auto;
+}
+
+.editor-dialog {
+    --editor-body-min: 150px;
+}
+
+/* Focus moves to the dialog when it opens; Safari otherwise rings the whole modal. */
+.dialog-backdrop:focus,
+.dialog-backdrop .idea-form:focus {
+    outline: none;
+}
+
 @media (min-width: 1024px) and (pointer: fine) {
     .dialog-backdrop.editor-dialog {
         height: min(92dvh, 960px);
-    }
-
-    .editor-dialog .idea-form {
-        display: flex;
-        min-height: 100%;
-        flex-direction: column;
-    }
-
-    .editor-dialog .editor-body {
-        flex: 1;
-        grid-template-rows: auto minmax(150px, 1fr);
-    }
-
-    .editor-dialog .image-link-body {
-        grid-template-rows: auto minmax(150px, 1fr) auto;
-    }
-
-    .editor-dialog .editor-body .journal-textarea {
-        min-height: 150px;
-    }
-
-    .editor-dialog .markdown-editor {
-        display: flex;
-        flex-direction: column;
-    }
-
-    .editor-dialog .markdown-editor-textarea,
-    .editor-dialog .markdown-editor-preview {
-        flex: 1 0 150px;
-    }
-
-    .editor-dialog .markdown-editor-preview {
-        overflow-y: auto;
     }
 
     /* Maximize fills the viewport, leaving a 16px margin so the backdrop stays visible. */

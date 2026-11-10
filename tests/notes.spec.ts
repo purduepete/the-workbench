@@ -571,6 +571,9 @@ test.describe('Markdown syntax help on touch', () => {
         await page.getByRole('button', { name: 'Global note', exact: true }).tap();
         const dialog = page.getByRole('dialog', { name: 'New global note' });
         const help = dialog.getByRole('button', { name: 'Markdown syntax help' });
+        // A late font swap changes the label width, so measure after fonts settle.
+        await page.evaluate(() => document.fonts.ready.then(() => undefined));
+        await page.waitForTimeout(300);
         const initialHelpPosition = await help.boundingBox();
         await help.tap();
         const tooltip = dialog.getByRole('tooltip');
