@@ -9,7 +9,7 @@ test('loads under the production CSP without violations in light and midnight', 
     page.on('console', (message) => {
         if (/Content Security Policy/i.test(message.text())) violations.push(message.text());
     });
-    const response = await page.goto('/');
+    const response = await page.goto('/ideas');
     const csp = response?.headers()['content-security-policy'] ?? '';
     expect(csp).toContain("frame-ancestors 'self' https://site-dock.jimlertech.com");
     expect(csp).toMatch(/script-src 'self' 'sha256-/);
@@ -22,7 +22,7 @@ test('loads under the production CSP without violations in light and midnight', 
 });
 
 test('restores the theme from the server cookie when localStorage is cleared', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/ideas');
     await page.getByRole('button', { name: /^Theme:/ }).click();
     const saved = page.waitForResponse('**/api/preferences');
     await page.getByRole('radio', { name: 'Light' }).click();
@@ -85,7 +85,7 @@ test('OneDrive runtime settings allow only the configured Microsoft endpoints an
 });
 
 test('reopens offline, keeps edits, and syncs them once on reconnect', async ({ page, context }) => {
-    await page.goto('/');
+    await page.goto('/ideas');
     await page.evaluate(() => navigator.serviceWorker.ready);
     await page.reload();
     await expect(page.getByRole('status')).toHaveText('Synced');

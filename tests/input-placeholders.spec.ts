@@ -2,7 +2,7 @@ import { expect, test, closeDialog } from './fixtures';
 
 test('only search fields show placeholders', async ({ page }) => {
     for (const [path, buttons] of [
-        ['/', ['New idea']],
+        ['/ideas', ['New idea']],
         ['/tasks', ['New task']],
         ['/notes', ['New note', 'Global note']],
     ] as const) {

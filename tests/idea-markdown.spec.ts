@@ -21,7 +21,7 @@ for (const theme of ['midnight', 'light']) {
     test(`idea Markdown saves, previews and expands fully on hover and focus in ${theme}`, async ({ page }) => {
         await page.addInitScript((theme) => localStorage.setItem('the-workbench.theme-preference', theme), theme);
         await page.setViewportSize({ width: 1280, height: 900 });
-        await page.goto('/');
+        await page.goto('/ideas');
         await page.getByRole('button', { name: 'New idea', exact: true }).click();
         const dialog = page.getByRole('dialog');
         await dialog.getByLabel('Idea title', { exact: true }).fill(`Markdown idea ${theme}`);
@@ -98,7 +98,7 @@ test.describe('touch idea details', () => {
     test.use({ hasTouch: true, isMobile: true, viewport: { width: 390, height: 844 } });
 
     test('tap expands and collapses the full formatted idea', async ({ page }) => {
-        await page.goto('/');
+        await page.goto('/ideas');
         await page.getByRole('button', { name: 'New idea', exact: true }).tap();
         const dialog = page.getByRole('dialog');
         await dialog.getByLabel('Idea title', { exact: true }).fill('Touch Markdown example');
@@ -118,7 +118,7 @@ test.describe('touch idea details', () => {
     });
 
     test('hides Show details when the whole idea already fits', async ({ page }) => {
-        await page.goto('/');
+        await page.goto('/ideas');
         await page.getByRole('button', { name: 'New idea', exact: true }).tap();
         const dialog = page.getByRole('dialog');
         await dialog.getByLabel('Idea title', { exact: true }).fill('Short touch idea');
@@ -132,7 +132,7 @@ test.describe('touch idea details', () => {
 
 test('shows no overflow indicator when idea details fit', async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 900 });
-    await page.goto('/');
+    await page.goto('/ideas');
     await page.getByRole('button', { name: 'New idea', exact: true }).click();
     const dialog = page.getByRole('dialog');
     await dialog.getByLabel('Idea title', { exact: true }).fill('Short idea');

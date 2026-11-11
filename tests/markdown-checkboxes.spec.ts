@@ -4,7 +4,7 @@ const body = ['Shopping', '', '- [ ] Buy milk', '- [x] Call Sam'].join('\n');
 
 test('ticking an idea checklist item saves it, survives reload and stays read-only in preview', async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 900 });
-    await page.goto('/');
+    await page.goto('/ideas');
     await page.getByRole('button', { name: 'New idea', exact: true }).click();
     const dialog = page.getByRole('dialog');
     await dialog.getByLabel('Idea title', { exact: true }).fill('Checklist idea');

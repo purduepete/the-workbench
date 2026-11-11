@@ -3,7 +3,7 @@ import { expect, test } from './fixtures';
 for (const kind of ['idea', 'task'] as const) {
     test(`${kind} details animate through intermediate heights in both directions`, async ({ page }) => {
         await page.emulateMedia({ reducedMotion: 'reduce' });
-        await page.goto(kind === 'idea' ? '/' : '/tasks');
+        await page.goto(kind === 'idea' ? '/ideas' : '/tasks');
         await page.getByRole('button', { name: `New ${kind}`, exact: true }).click();
         const dialog = page.getByRole('dialog');
         const title = `Smooth ${kind} example`;

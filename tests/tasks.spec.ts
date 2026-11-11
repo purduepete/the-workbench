@@ -84,7 +84,7 @@ test.beforeEach(async ({ request }) => {
 
 test('creates a task from an idea title without changing the idea', async ({ page, request }) => {
     const title = 'Turn this idea into work';
-    await page.goto('/');
+    await page.goto('/ideas');
     await page.getByRole('button', { name: 'New idea', exact: true }).click();
     const ideaDialog = page.getByRole('dialog', { name: 'New idea' });
     await ideaDialog.getByRole('textbox', { name: 'Idea title' }).fill(title);
@@ -139,7 +139,7 @@ test('creates an offline task from a maximum-length idea title', async ({ page, 
     const title = prefix + 'x'.repeat(taskLimits.title - prefix.length);
     await seedIdea(request, title);
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.goto('/');
+    await page.goto('/ideas');
     await expect(page.getByRole('status').first()).toHaveText('Synced');
     await page.waitForFunction(() => localStorage.getItem('the-workbench.tasks-sync') !== null);
     await page.evaluate(() => navigator.serviceWorker.ready.then(() => undefined));
@@ -187,7 +187,7 @@ for (const device of [
                 Object.defineProperty(navigator, 'maxTouchPoints', { value: 5 });
             }, device);
             await page.setViewportSize(device.mobile ? { width: 390, height: 844 } : { width: 1024, height: 768 });
-            await page.goto('/');
+            await page.goto('/ideas');
             await page.evaluate(() => {
                 document.addEventListener('focusin', (event) => {
                     if (
@@ -242,7 +242,7 @@ for (const theme of ['midnight', 'light']) {
     test(`tasks save, complete, move sections and fit phone/desktop in ${theme}`, async ({ page }) => {
         await page.addInitScript((value) => localStorage.setItem('the-workbench.theme-preference', value), theme);
         await page.setViewportSize({ width: 1280, height: 900 });
-        await page.goto('/');
+        await page.goto('/ideas');
         await page.getByRole('navigation', { name: 'Pages' }).getByRole('link', { name: 'Tasks' }).click();
         await expect(page).toHaveURL(/\/tasks$/);
         await add(page, `Home ${theme}`);
@@ -400,7 +400,7 @@ test('pointer and keyboard reorder persist and completion preserves order', asyn
 });
 
 test('task drafts require Cancel or Save and offline capture survives reload', async ({ page, context }) => {
-    await page.goto('/');
+    await page.goto('/ideas');
     await page.getByRole('navigation', { name: 'Pages' }).getByRole('link', { name: 'Tasks' }).click();
     await page.getByRole('button', { name: 'New task', exact: true }).first().click();
     const dialog = page.getByRole('dialog', { name: 'New task', exact: true });

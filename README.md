@@ -21,7 +21,7 @@ offline and changes upload when the connection returns.
 ## Offline use
 
 Open the app once while connected and let it finish loading. The service worker saves the complete app shell,
-both themed icons and, when available, the font. After that, you can reopen `/`, `/notes` or `/tasks` without
+both themed icons and, when available, the font. After that, you can reopen `/notes`, `/tasks` or `/ideas` without
 Internet, search cached records, create and edit ideas and notes, and edit, complete and reorder tasks.
 Saved changes stay in this browser's outboxes across reloads and upload automatically when the connection returns.
 Retry receipts prevent a repeated upload from applying twice; the conflict rules below still apply.
@@ -133,7 +133,7 @@ When a sign-in expires, sign in again before browsing. Real-account acceptance r
 selecting and reopening a private image after configuring the registration, including
 on the intended iPhone/iPad and both production access paths.
 
-The header's `Ideas | Notes | Tasks` control switches between pages. `/notes` is a personal journal with separate Home,
+The header's `Notes | Tasks | Ideas` control switches between pages. Notes is the home page: `/` opens `/notes`, and Ideas lives at `/ideas`. `/notes` is a personal journal with separate Home,
 Work and Unclassified entries per local day. Journal and global note bodies support Markdown, including headings, lists, tables and links. The info button
 beside the entry label shows syntax examples. Use the Edit / Preview control while writing. **Add section** inserts a
 collapsible `##` heading; new sections start expanded. Raw HTML is shown as text, and links are limited to `http`,

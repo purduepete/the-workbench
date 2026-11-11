@@ -1,7 +1,7 @@
 import { expect, test, closeDialog } from './fixtures';
 
 const editors = [
-    { path: '/', open: 'New idea' },
+    { path: '/ideas', open: 'New idea' },
     { path: '/tasks', open: 'New task' },
     { path: '/notes', open: 'New note' },
     { path: '/notes', open: 'Global note' },
@@ -72,7 +72,7 @@ test.describe('phone editors', () => {
     test.use({ hasTouch: true, isMobile: true, viewport: { width: 390, height: 844 } });
 
     test('do not offer the maximize control but keep the close button', async ({ page }) => {
-        await page.goto('/');
+        await page.goto('/ideas');
         await page.getByRole('button', { name: 'New idea', exact: true }).tap();
         const dialog = page.getByRole('dialog');
         await expect(dialog.locator('.editor-size-toggle')).toBeHidden();

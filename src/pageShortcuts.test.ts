@@ -17,7 +17,7 @@ const noDialog = { querySelector: () => null } as unknown as Document;
 
 describe('page shortcuts', () => {
     it('opens Ideas, Notes and Tasks with I, N and T in either case', () => {
-        expect(shortcutRoute(key('i'), noDialog)).toBe('/');
+        expect(shortcutRoute(key('i'), noDialog)).toBe('/ideas');
         expect(shortcutRoute(key('N'), noDialog)).toBe('/notes');
         expect(shortcutRoute(key('t'), noDialog)).toBe('/tasks');
         expect(shortcutRoute(key('x'), noDialog)).toBeNull();

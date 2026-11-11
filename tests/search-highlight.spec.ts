@@ -7,7 +7,7 @@ const highlighted = (page: Page) =>
 test('search highlights matching text in ideas, notes and tasks and clears with the search', async ({ page }) => {
     const word = `Zephyr${crypto.randomUUID().slice(0, 6)}`;
 
-    await page.goto('/');
+    await page.goto('/ideas');
     await page.getByRole('button', { name: 'New idea', exact: true }).click();
     let dialog = page.getByRole('dialog');
     await dialog.getByLabel('Idea title', { exact: true }).fill(`${word} idea`);

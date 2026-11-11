@@ -1,7 +1,7 @@
 import { expect, test, closeDialog } from './fixtures';
 
 test('uses The Workbench for the site and installed app', async ({ page, request }) => {
-    await page.goto('/');
+    await page.goto('/ideas');
     await expect(page).toHaveTitle('The Workbench');
     await expect(page.getByRole('heading', { name: 'The Workbench', exact: true })).toBeVisible();
     await expect(page.locator('meta[name="apple-mobile-web-app-title"]')).toHaveAttribute('content', 'The Workbench');
@@ -16,7 +16,7 @@ for (const theme of ['midnight', 'light']) {
         await page.addInitScript((value) => localStorage.setItem('the-workbench.theme-preference', value), theme);
         for (const width of [390, 1280]) {
             await page.setViewportSize({ width, height: 900 });
-            await page.goto('/');
+            await page.goto('/ideas');
             const mark = page.locator('.brand-mark');
             const icon = mark.locator('img');
             await expect(icon).toBeVisible();
@@ -34,7 +34,7 @@ for (const theme of ['midnight', 'light']) {
             page,
         }) => {
             await page.addInitScript((value) => localStorage.setItem('the-workbench.theme-preference', value), theme);
-            await page.goto('/');
+            await page.goto('/ideas');
             await expect(page.getByRole('status')).toHaveText('Synced');
             const refresh = page.getByRole('button', { name: 'Refresh ideas' });
             const themeButton = page.getByRole('button', { name: /^Theme:/ });
@@ -96,7 +96,7 @@ for (const theme of ['midnight', 'light']) {
         await page.addInitScript((value) => localStorage.setItem('the-workbench.theme-preference', value), theme);
         for (const width of [390, 1280]) {
             await page.setViewportSize({ width, height: 900 });
-            await page.goto('/');
+            await page.goto('/ideas');
             for (const opener of ['New idea', 'Manage solutions']) {
                 await page.getByRole('button', { name: opener, exact: true }).click();
                 const dialog = page.getByRole('dialog', { name: opener });
@@ -129,7 +129,7 @@ for (const theme of ['midnight', 'light']) {
 
 test('positions desktop dialogs near the top and keeps their controls usable', async ({ page }) => {
     await page.emulateMedia({ reducedMotion: 'reduce' });
-    await page.goto('/');
+    await page.goto('/ideas');
     await page.getByRole('button', { name: 'New idea' }).click();
     const newDialog = page.getByRole('dialog', { name: 'New idea' });
     await newDialog.getByLabel('Idea title').fill('Desktop dialog positioning');
@@ -179,7 +179,7 @@ test('positions desktop dialogs near the top and keeps their controls usable', a
 
 test('expands new and existing idea editors on desktop without hiding controls', async ({ page }) => {
     await page.emulateMedia({ reducedMotion: 'reduce' });
-    await page.goto('/');
+    await page.goto('/ideas');
     await page.getByRole('button', { name: 'New idea', exact: true }).click();
     const newDialog = page.getByRole('dialog', { name: 'New idea' });
     await newDialog.getByLabel('Idea title').fill('Desktop editor size');
@@ -223,7 +223,7 @@ test('expands new and existing idea editors on desktop without hiding controls',
 
 test('keeps a tall desktop dialog scrollable inside the viewport', async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 480 });
-    await page.goto('/');
+    await page.goto('/ideas');
     await page.getByRole('button', { name: 'New idea' }).click();
     const dialog = page.getByRole('dialog', { name: 'New idea' });
     await dialog.getByRole('textbox', { name: 'Details', exact: true }).evaluate((element) => {
@@ -253,7 +253,7 @@ test.describe('touch dialog placement', () => {
         // Opens 16 editors; allow for a loaded machine.
         test.setTimeout(90_000);
         const editors = [
-            { path: '/', open: 'New idea' },
+            { path: '/ideas', open: 'New idea' },
             { path: '/notes', open: 'New note' },
             { path: '/notes', open: 'Global note' },
             { path: '/tasks', open: 'New task' },
@@ -289,7 +289,7 @@ test.describe('touch dialog placement', () => {
             { width: 1280, height: 900 },
         ]) {
             await page.setViewportSize(viewport);
-            await page.goto('/');
+            await page.goto('/ideas');
             expect(await page.evaluate(() => matchMedia('(pointer: coarse)').matches)).toBe(true);
             for (const name of ['New idea', 'Manage solutions']) {
                 await page.getByRole('button', { name, exact: true }).click();
@@ -327,7 +327,7 @@ for (const device of [
             Object.defineProperty(navigator, 'userAgent', { value: userAgent });
             Object.defineProperty(navigator, 'maxTouchPoints', { value: maxTouchPoints });
         }, device);
-        await page.goto('/');
+        await page.goto('/ideas');
         await page.evaluate(() => {
             document.addEventListener('focusin', (event) => {
                 if (
@@ -389,7 +389,7 @@ test('keeps the initial loading state until a failed sync succeeds on retry', as
         await route.fulfill({ status: 200, contentType: 'application/json', body: '{"ideas":[]}' });
     });
 
-    await page.goto('/');
+    await page.goto('/ideas');
     await expect(page.getByRole('status')).toContainText('Loading ideas');
     await expect(page.locator('.page-loading-message')).toHaveText('Ideas could not sync. Retrying automatically.');
     await expect(page.getByRole('heading', { name: 'No ideas yet' })).toHaveCount(0);
@@ -401,7 +401,7 @@ test('keeps the initial loading state until a failed sync succeeds on retry', as
 });
 
 test('capture, search, pin, edit and archive an idea', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/ideas');
     await expect(page.getByRole('heading', { name: 'The Workbench' })).toBeVisible();
     await page.getByRole('button', { name: 'New idea' }).click();
 
@@ -448,7 +448,7 @@ test('capture, search, pin, edit and archive an idea', async ({ page }) => {
 test('switches themes and keeps the page inside a phone viewport', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.emulateMedia({ colorScheme: 'light' });
-    await page.goto('/');
+    await page.goto('/ideas');
     const brandHeading = page.getByRole('heading', { name: 'The Workbench', exact: true });
     await expect(page.locator('.stats')).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Capture an idea' })).toHaveCount(0);
@@ -479,7 +479,7 @@ test('switches themes and keeps the page inside a phone viewport', async ({ page
 
 test('keeps the desktop workspace compact', async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 900 });
-    await page.goto('/');
+    await page.goto('/ideas');
     await expect(page.locator('.workspace-tools')).toBeVisible();
     const measurements = await page.evaluate(() => {
         const main = document.querySelector('main.page-width');
@@ -498,7 +498,7 @@ test('keeps the desktop workspace compact', async ({ page }) => {
 });
 
 test('supports keyboard selection and dismissal in the theme menu', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/ideas');
     const trigger = page.locator('.theme-wrap > button');
     await trigger.click();
     const midnight = page.getByRole('radio', { name: 'Midnight' });
@@ -527,7 +527,7 @@ test('supports keyboard selection and dismissal in the theme menu', async ({ pag
 test('keeps content edges aligned across desktop widths and reserves the scrollbar gutter', async ({ page }) => {
     for (const width of [1280, 1440, 1920]) {
         await page.setViewportSize({ width, height: 400 });
-        await page.goto('/');
+        await page.goto('/ideas');
         // Measure after the first sync renders the workspace; the loading overlay alone does not scroll.
         await expect(page.locator('.workspace-tools')).toBeVisible();
         const layout = await page.evaluate(() => {

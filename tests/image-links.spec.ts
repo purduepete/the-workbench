@@ -50,7 +50,7 @@ test('unconfigured OneDrive explains setup without manual sharing controls', asy
 
 for (const theme of ['midnight', 'light']) {
     for (const editor of [
-        { path: '/', open: 'New idea', save: 'Save idea', title: true },
+        { path: '/ideas', open: 'New idea', save: 'Save idea', title: true },
         { path: '/notes', open: 'New note', save: 'Save entry', title: false },
         { path: '/notes', open: 'Global note', save: 'Save note', title: true },
         { path: '/tasks', open: 'New task', save: 'Save task', title: true },

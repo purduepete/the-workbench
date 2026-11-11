@@ -14,7 +14,7 @@ test('first visit prepares a new offline tab, all edit queues survive reload and
     const globalTitle = `Offline reference ${suffix}`;
     const taskTitle = `Offline task ${suffix}`;
     const journalBody = `Offline journal ${suffix}`;
-    await page.goto('/');
+    await page.goto('/ideas');
     await expect(page.getByRole('status').first()).toHaveText('Synced');
     await page.evaluate(() => navigator.serviceWorker.ready.then(() => undefined));
 
@@ -38,7 +38,7 @@ test('first visit prepares a new offline tab, all edit queues survive reload and
     await offline.getByRole('button', { name: 'Global notes', exact: true }).click();
     await expect(offline.getByRole('heading', { name: globalTitle })).toBeVisible();
 
-    await offline.goto('/');
+    await offline.goto('/ideas');
     await offline.getByRole('button', { name: 'New idea', exact: true }).click();
     dialog = offline.getByRole('dialog');
     await dialog.getByLabel('Idea title').fill(ideaTitle);
@@ -83,7 +83,7 @@ test('first visit prepares a new offline tab, all edit queues survive reload and
 });
 
 test('a cached shell without downloaded records still allows offline capture', async ({ page, context }) => {
-    await page.goto('/');
+    await page.goto('/ideas');
     await page.evaluate(() => navigator.serviceWorker.ready.then(() => undefined));
     await page.evaluate(() => localStorage.clear());
     await context.setOffline(true);
@@ -110,7 +110,7 @@ test('a cached shell without downloaded records still allows offline capture', a
 
 test('stalled API requests time out, preserve a queued edit and recover without an online event', async ({ page }) => {
     test.setTimeout(50_000);
-    await page.goto('/');
+    await page.goto('/ideas');
     await expect(page.getByRole('status').first()).toHaveText('Synced');
     await page.route('**/api/**', () => undefined);
     await page.getByRole('button', { name: 'Refresh ideas', exact: true }).click();

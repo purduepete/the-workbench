@@ -1,13 +1,24 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 
-export type Route = '/' | '/notes' | '/tasks';
+export type Route = '/notes' | '/tasks' | '/ideas';
 
+/** Notes is the home page: `/` and unknown paths open it. */
 const readRoute = (): Route =>
-    window.location.pathname === '/tasks' ? '/tasks' : window.location.pathname === '/notes' ? '/notes' : '/';
+    window.location.pathname === '/tasks' ? '/tasks' : window.location.pathname === '/ideas' ? '/ideas' : '/notes';
 
 /** Page links use pushState and back/forward use popstate, with a shared draft guard. */
 export function useRoute(canNavigate: () => boolean = () => true): [Route, (next: Route) => void] {
-    const [route, setRoute] = useState(readRoute);
+    const [route, setRoute] = useState(() => {
+        const initial = readRoute();
+        // Show the page's own address, so `/` and old links land on `/notes`.
+        if (window.location.pathname !== initial)
+            window.history.replaceState(
+                window.history.state,
+                '',
+                `${initial}${window.location.search}${window.location.hash}`
+            );
+        return initial;
+    });
     const routeRef = useRef(route);
     const guardRef = useRef(canNavigate);
 

@@ -1,6 +1,6 @@
 import type { Route } from './useRoute';
 
-const SHORTCUTS: Record<string, Route> = { i: '/', n: '/notes', t: '/tasks' };
+const SHORTCUTS: Record<string, Route> = { i: '/ideas', n: '/notes', t: '/tasks' };
 
 type ShortcutEvent = Pick<KeyboardEvent, 'key' | 'altKey' | 'ctrlKey' | 'metaKey' | 'repeat' | 'defaultPrevented'> & {
     target: EventTarget | null;

@@ -94,7 +94,7 @@ test('empty pages omit the long instructional copy', async ({ page }) => {
         'Write one entry a day. Notes are grouped by week, newest first.',
         'Add a task for today or choose a day from the calendar.',
     ];
-    for (const route of ['/', '/notes', '/tasks']) {
+    for (const route of ['/ideas', '/notes', '/tasks']) {
         await page.goto(route);
         for (const text of copy) await expect(page.getByText(text, { exact: true })).toHaveCount(0);
         await expect(page.locator('.empty-state button')).toHaveCount(0);
@@ -159,7 +159,7 @@ for (const theme of ['midnight', 'light']) {
     test(`notes page saves today's entry and keeps it after reload in ${theme}`, async ({ page }) => {
         await page.addInitScript((value) => localStorage.setItem('the-workbench.theme-preference', value), theme);
         await page.setViewportSize({ width: 390, height: 844 });
-        await page.goto('/');
+        await page.goto('/ideas');
         const nav = page.getByRole('navigation', { name: 'Pages' });
         await nav.getByRole('link', { name: 'Notes' }).click();
         await expect(page).toHaveURL(/\/notes$/);
@@ -185,10 +185,10 @@ for (const theme of ['midnight', 'light']) {
         expect(overflow).toBeLessThanOrEqual(0);
 
         await page.goBack().catch(() => undefined);
-        await page.goto('/');
+        await page.goto('/ideas');
         await page.getByRole('navigation', { name: 'Pages' }).getByRole('link', { name: 'Notes' }).click();
         await page.goBack();
-        await expect(page).toHaveURL(/\/$/);
+        await expect(page).toHaveURL(/\/ideas$/);
         await expect(page.getByRole('button', { name: 'New idea' })).toBeVisible();
     });
 }
@@ -266,7 +266,7 @@ test('calendar arrow keys move between days wherever focus is in the dialog', as
 
 test('editors keep text open through Escape, backdrop and browser Back', async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 900 });
-    await page.goto('/');
+    await page.goto('/ideas');
     await page.getByRole('navigation', { name: 'Pages' }).getByRole('link', { name: 'Notes' }).click();
     await page.getByRole('button', { name: 'New note', exact: true }).click();
     const dialog = page.getByRole('dialog');
@@ -292,7 +292,7 @@ test('editors keep text open through Escape, backdrop and browser Back', async (
     await dialog.getByRole('button', { name: 'Discard changes', exact: true }).click();
     await expect(dialog).toBeHidden();
     await page.goBack();
-    await expect(page).toHaveURL(/\/$/);
+    await expect(page).toHaveURL(/\/ideas$/);
 
     await page.getByRole('navigation', { name: 'Pages' }).getByRole('link', { name: 'Ideas' }).click();
     await page.getByRole('button', { name: 'New idea' }).click();
@@ -317,7 +317,7 @@ test('idea, note and task editors share the same desktop height', async ({ page 
     test.setTimeout(120_000);
     await page.emulateMedia({ reducedMotion: 'reduce' });
     const editors = [
-        { path: '/', open: 'New idea', save: 'Save idea', markdown: true },
+        { path: '/ideas', open: 'New idea', save: 'Save idea', markdown: true },
         { path: '/notes', open: 'New note', save: 'Save entry', markdown: true },
         { path: '/notes', open: 'Global note', save: 'Save note', markdown: true },
         { path: '/tasks', open: 'New task', save: 'Save task', markdown: true },

@@ -5,7 +5,7 @@ for (const theme of ['midnight', 'light']) {
         await page.emulateMedia({ reducedMotion: 'reduce' });
         await page.addInitScript((value) => localStorage.setItem('the-workbench.theme-preference', value), theme);
         await page.setViewportSize({ width: theme === 'light' ? 390 : 1280, height: 900 });
-        await page.goto('/');
+        await page.goto('/ideas');
         const title = `Original ${theme}`;
         const body = '**Copy these details**\n\n- First item\n- Second item';
         await page.getByRole('button', { name: 'New idea', exact: true }).click();

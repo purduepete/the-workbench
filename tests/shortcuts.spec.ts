@@ -1,26 +1,33 @@
 import { expect, test } from './fixtures';
 
-test('I, N and T switch pages, but not while typing or in a dialog', async ({ page }) => {
+test('the home page is Notes', async ({ page }) => {
     await page.goto('/');
+    await expect(page).toHaveURL(/\/notes$/);
+    await expect(page.getByRole('link', { name: 'Notes' })).toHaveAttribute('aria-current', 'page');
+    await expect(page.getByRole('button', { name: 'New note', exact: true })).toBeVisible();
+});
+
+test('I, N and T switch pages, but not while typing or in a dialog', async ({ page }) => {
+    await page.goto('/ideas');
     await expect(page.getByRole('link', { name: 'Ideas' })).toHaveAttribute('aria-current', 'page');
     await page.keyboard.press('n');
     await expect(page).toHaveURL(/\/notes$/);
     await page.keyboard.press('t');
     await expect(page).toHaveURL(/\/tasks$/);
     await page.keyboard.press('i');
-    await expect(page).toHaveURL(/\/$/);
+    await expect(page).toHaveURL(/\/ideas$/);
 
     const search = page.getByRole('searchbox', { name: 'Search ideas' });
     await search.fill('');
     await search.press('t');
     await expect(search).toHaveValue('t');
-    await expect(page).toHaveURL(/\/$/);
+    await expect(page).toHaveURL(/\/ideas$/);
 
     await page.getByRole('button', { name: 'New idea', exact: true }).click();
     await expect(page.getByRole('dialog')).toBeVisible();
     await page.getByRole('dialog').focus();
     await page.keyboard.press('n');
-    await expect(page).toHaveURL(/\/$/);
+    await expect(page).toHaveURL(/\/ideas$/);
 });
 
 test('page filters are remembered after a reload', async ({ page }) => {
@@ -28,7 +35,7 @@ test('page filters are remembered after a reload', async ({ page }) => {
     await page.getByRole('group', { name: 'Filter notes' }).getByRole('button', { name: 'Work', exact: true }).click();
     await page.goto('/tasks');
     await page.getByRole('group', { name: 'Task section', exact: true }).getByRole('button', { name: 'All' }).click();
-    await page.goto('/');
+    await page.goto('/ideas');
     await page
         .getByRole('group', { name: 'Idea view' })
         .getByRole('button', { name: /Archived/ })

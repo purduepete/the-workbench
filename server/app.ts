@@ -205,8 +205,7 @@ export function createApp(options: {
     if (options.staticDirectory) {
         const staticDirectory = options.staticDirectory;
         app.use(express.static(staticDirectory, { dotfiles: 'deny' }));
-        app.get('/notes', (_req, res) => res.sendFile(path.join(staticDirectory, 'index.html')));
-        app.get('/tasks', (_req, res) => res.sendFile(path.join(staticDirectory, 'index.html')));
+        app.get(['/notes', '/tasks', '/ideas'], (_req, res) => res.sendFile(path.join(staticDirectory, 'index.html')));
     }
     const handleError: ErrorRequestHandler = (error: unknown, _req, res, _next) => {
         if (error instanceof JournalSectionRequiredError) {

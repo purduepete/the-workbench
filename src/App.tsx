@@ -23,7 +23,7 @@ import { shortcutRoute } from './pageShortcuts';
 const pages: { route: Route; label: string; icon: typeof Lightbulb; shortcut: string }[] = [
     { route: '/notes', label: 'Notes', icon: NotebookPen, shortcut: 'N' },
     { route: '/tasks', label: 'Tasks', icon: ListTodo, shortcut: 'T' },
-    { route: '/', label: 'Ideas', icon: Lightbulb, shortcut: 'I' },
+    { route: '/ideas', label: 'Ideas', icon: Lightbulb, shortcut: 'I' },
 ];
 
 const LEAVE_MS = 250;

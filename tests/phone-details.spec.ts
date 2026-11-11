@@ -38,7 +38,7 @@ test('task Show details and Show less keep working after editing', async ({ page
 });
 
 test('idea Show details and Show less keep working after editing', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/ideas');
     await page.getByRole('button', { name: 'New idea', exact: true }).tap();
     const dialog = page.getByRole('dialog');
     await dialog.getByLabel('Idea title', { exact: true }).fill('Phone idea');

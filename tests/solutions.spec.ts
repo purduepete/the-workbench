@@ -3,7 +3,7 @@ import { expect, test, closeDialog } from './fixtures';
 for (const theme of ['midnight', 'light']) {
     test(`automatically selects N/A without a solution in ${theme}`, async ({ page }) => {
         await page.addInitScript((value) => localStorage.setItem('the-workbench.theme-preference', value), theme);
-        await page.goto('/');
+        await page.goto('/ideas');
         await expect(page.getByRole('status')).toHaveText('Synced');
         await page.getByRole('button', { name: 'New idea' }).click();
         const dialog = page.getByRole('dialog');
@@ -39,7 +39,7 @@ for (const theme of ['midnight', 'light']) {
 }
 
 test('links an idea to a solution with the keyboard, filters by it, and reads it from the API', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/ideas');
     await expect(page.getByRole('status')).toHaveText('Synced');
     expect(await page.locator('select, datalist').count()).toBe(0);
 
@@ -118,7 +118,7 @@ test('links an idea to a solution with the keyboard, filters by it, and reads it
 for (const theme of ['midnight', 'light']) {
     test(`disables a solution for every device in ${theme}`, async ({ page, baseURL }) => {
         await page.addInitScript((value) => localStorage.setItem('the-workbench.theme-preference', value), theme);
-        await page.goto('/');
+        await page.goto('/ideas');
         await expect(page.getByRole('status')).toHaveText('Synced');
 
         // An idea linked before the solution is disabled keeps its link.
@@ -173,7 +173,7 @@ for (const theme of ['midnight', 'light']) {
 
             // The setting comes from the server, so a fresh browser sees it too.
             const other = await page.context().browser()!.newPage();
-            await other.goto(`${baseURL}/`);
+            await other.goto(`${baseURL}/ideas`);
             await other.getByRole('button', { name: 'Manage solutions' }).click();
             await expect(other.getByRole('checkbox', { name: 'Work Log' })).not.toBeChecked();
             await other.close();
@@ -188,7 +188,7 @@ for (const theme of ['midnight', 'light']) {
 
 test('fits a phone screen with the solution filter and dialog fields', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.goto('/');
+    await page.goto('/ideas');
     await page.getByRole('button', { name: 'Manage solutions' }).click();
     await expect(page.getByRole('checkbox', { name: 'Ferry Tracker' })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
