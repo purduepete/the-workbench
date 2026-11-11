@@ -157,6 +157,8 @@ Only the current week starts expanded; older weeks and global notes start collap
 to the right of the maximize button when there is one, and open with an opacity-only fade.
 Each daily note also collapses independently from its date header. Today starts expanded; every other day starts
 collapsed. Collapsing a day hides its details, tags and Edit control while keeping its date and section visible.
+An open day whose note has two or more `##` sections shows a two-icon pill, just left of its section and Today labels,
+that expands or collapses every section at once; each section still opens and closes on its own.
 
 Notes sync offline the same way ideas do, keyed by date and section instead of an id:
 

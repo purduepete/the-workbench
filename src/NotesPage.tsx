@@ -1,10 +1,12 @@
 import { useLayoutEffect, useRef, useState } from 'react';
-import type { FormEvent, ReactNode } from 'react';
+import type { CSSProperties, FormEvent, ReactNode } from 'react';
 import {
     CalendarDays,
     Check,
     ChevronDown,
     ChevronRight,
+    ChevronsDownUp,
+    ChevronsUpDown,
     Clock3,
     NotebookPen,
     Plus,
@@ -25,7 +27,8 @@ import { CalendarDialog } from './CalendarDialog';
 import { NoteGroup } from './NoteGroup';
 import type { GlobalNote } from './globalNotesSync';
 import { PageLoading } from './Loading';
-import { MarkdownNoteBody, MarkdownNoteEditor } from './MarkdownNote';
+import { countNoteSections, MarkdownNoteBody, MarkdownNoteEditor } from './MarkdownNote';
+import type { SectionCommand } from './MarkdownNote';
 import { useTheme } from './ThemeContext';
 import type { useJournalSync } from './useJournalSync';
 import type { useGlobalNotesSync } from './useGlobalNotesSync';
@@ -490,6 +493,42 @@ export interface NotesPageProps {
     onDraftProtectionChange: (protectedDraft: boolean) => void;
 }
 
+/** Two-option square pill that expands or collapses every section of one daily note. */
+function SectionsPill({
+    label,
+    expanded,
+    onChange,
+}: {
+    label: string;
+    expanded: boolean;
+    onChange: (expanded: boolean) => void;
+}) {
+    const style = { '--segment-index': expanded ? 0 : 1, '--segment-count': 2 } as CSSProperties;
+    return (
+        <div className="segmented sections-pill" role="group" aria-label={label} style={style}>
+            <span className="segment-fill" aria-hidden="true" />
+            <button
+                type="button"
+                className="segment-button"
+                aria-label="Expand all sections"
+                aria-pressed={expanded}
+                onClick={() => onChange(true)}
+            >
+                <ChevronsUpDown size={10} aria-hidden="true" />
+            </button>
+            <button
+                type="button"
+                className="segment-button"
+                aria-label="Collapse all sections"
+                aria-pressed={!expanded}
+                onClick={() => onChange(false)}
+            >
+                <ChevronsDownUp size={10} aria-hidden="true" />
+            </button>
+        </div>
+    );
+}
+
 export function NotesPage({
     journal,
     globalNotes,
@@ -520,6 +559,7 @@ export function NotesPage({
     const [editingGlobalId, setEditingGlobalId] = useState<string | undefined>();
     const [editingCategory, setEditingCategory] = useState<NoteCategory | undefined>();
     const [expandedDays, setExpandedDays] = useState<Record<string, boolean>>({});
+    const [sectionCommands, setSectionCommands] = useState<Record<string, SectionCommand>>({});
     const { entries } = journal;
     const matchesCategory = (category: NoteCategory | undefined) =>
         categoryFilter === 'all' ||
@@ -711,44 +751,61 @@ export function NotesPage({
                                     {week.entries.map((entry) => {
                                         const key = journalEntryKey(entry.entryDate, entry.category);
                                         const expanded = expandedDays[key] ?? entry.entryDate === today;
+                                        const sectionCommand = sectionCommands[key] ?? null;
+                                        const sectionsExpanded = sectionCommand?.expanded ?? true;
+                                        const dateLabel = formatEntryDate(entry.entryDate);
                                         return (
                                             <article key={key} className="idea-card journal-card">
-                                                <h4 className="journal-date">
-                                                    <button
-                                                        type="button"
-                                                        className="journal-day-toggle idea-card-top"
-                                                        aria-label={`Daily note for ${formatEntryDate(entry.entryDate)}`}
-                                                        aria-expanded={expanded}
-                                                        aria-controls={`day-${key}-details`}
-                                                        onClick={() =>
-                                                            setExpandedDays((days) => ({
-                                                                ...days,
-                                                                [key]: !expanded,
-                                                            }))
-                                                        }
-                                                    >
-                                                        <span className="note-group-label">
-                                                            {expanded ? (
-                                                                <ChevronDown size={16} aria-hidden="true" />
-                                                            ) : (
-                                                                <ChevronRight size={16} aria-hidden="true" />
-                                                            )}
-                                                            <time dateTime={entry.entryDate}>
-                                                                {formatEntryDate(entry.entryDate)}
-                                                            </time>
-                                                        </span>
-                                                        <span className="card-label">
-                                                            {categoryLabel(entry.category)}
-                                                        </span>
-                                                        {entry.entryDate === today && (
-                                                            <span className="card-label">Today</span>
-                                                        )}
-                                                    </button>
-                                                </h4>
+                                                <div className="journal-card-head">
+                                                    <h4 className="journal-date">
+                                                        <button
+                                                            type="button"
+                                                            className="journal-day-toggle idea-card-top"
+                                                            aria-label={`Daily note for ${dateLabel}`}
+                                                            aria-expanded={expanded}
+                                                            aria-controls={`day-${key}-details`}
+                                                            onClick={() =>
+                                                                setExpandedDays((days) => ({
+                                                                    ...days,
+                                                                    [key]: !expanded,
+                                                                }))
+                                                            }
+                                                        >
+                                                            <span className="note-group-label">
+                                                                {expanded ? (
+                                                                    <ChevronDown size={16} aria-hidden="true" />
+                                                                ) : (
+                                                                    <ChevronRight size={16} aria-hidden="true" />
+                                                                )}
+                                                                <time dateTime={entry.entryDate}>{dateLabel}</time>
+                                                            </span>
+                                                        </button>
+                                                    </h4>
+                                                    {expanded && countNoteSections(entry.body) > 1 && (
+                                                        <SectionsPill
+                                                            label={`Sections for ${dateLabel}`}
+                                                            expanded={sectionsExpanded}
+                                                            onChange={(next) =>
+                                                                setSectionCommands((commands) => ({
+                                                                    ...commands,
+                                                                    [key]: {
+                                                                        expanded: next,
+                                                                        seq: (commands[key]?.seq ?? 0) + 1,
+                                                                    },
+                                                                }))
+                                                            }
+                                                        />
+                                                    )}
+                                                    <span className="card-label">{categoryLabel(entry.category)}</span>
+                                                    {entry.entryDate === today && (
+                                                        <span className="card-label">Today</span>
+                                                    )}
+                                                </div>
                                                 <div id={`day-${key}-details`} hidden={!expanded}>
                                                     <MarkdownNoteBody
                                                         body={entry.body}
                                                         className="idea-body journal-body markdown-body"
+                                                        sectionCommand={sectionCommand}
                                                         onBodyChange={(body) =>
                                                             journal.save(
                                                                 entry.entryDate,

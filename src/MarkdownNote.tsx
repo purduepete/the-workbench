@@ -1,4 +1,15 @@
-import { Children, isValidElement, useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
+import {
+    Children,
+    createContext,
+    isValidElement,
+    useCallback,
+    useContext,
+    useEffect,
+    useId,
+    useLayoutEffect,
+    useRef,
+    useState,
+} from 'react';
 import type { ChangeEvent, CSSProperties, PointerEvent as ReactPointerEvent, ReactNode, RefObject } from 'react';
 import { createPortal } from 'react-dom';
 import ReactMarkdown from 'react-markdown';
@@ -67,8 +78,27 @@ function allowedMarkdownUrl(url: string, key: string): string {
     return allowed.includes(protocol) ? url : '';
 }
 
+/** A request from outside the note to expand or collapse every section; `seq` changes on each request. */
+export interface SectionCommand {
+    expanded: boolean;
+    seq: number;
+}
+
+const SectionCommandContext = createContext<SectionCommand | null>(null);
+
+/** Counts the `## ` headings that become collapsible sections. */
+export function countNoteSections(body: string): number {
+    return body.match(/^## \S/gm)?.length ?? 0;
+}
+
 function CollapsibleSection({ children }: { children?: ReactNode }) {
-    const [expanded, setExpanded] = useState(true);
+    const command = useContext(SectionCommandContext);
+    const [expanded, setExpanded] = useState(command?.expanded ?? true);
+    const [appliedSeq, setAppliedSeq] = useState(command?.seq ?? 0);
+    if (command && command.seq !== appliedSeq) {
+        setAppliedSeq(command.seq);
+        setExpanded(command.expanded);
+    }
     const headingId = `note-section-heading-${useId()}`;
     const regionId = `note-section-body-${useId()}`;
     const items = Children.toArray(children);
@@ -167,49 +197,56 @@ export function MarkdownNoteBody({
     body,
     className = 'markdown-body',
     onBodyChange,
+    sectionCommand = null,
 }: {
     body: string;
     className?: string;
     /** When given, task-list checkboxes are clickable and report the updated Markdown. */
     onBodyChange?: (body: string) => void;
+    /** Expands or collapses every section when its `seq` changes. */
+    sectionCommand?: SectionCommand | null;
 }) {
     return (
-        <div className={className}>
-            <ReactMarkdown
-                remarkPlugins={[remarkGfm, remarkBreaks, remarkNoteSections]}
-                urlTransform={allowedMarkdownUrl}
-                components={{
-                    li: ({ node, className: itemClass, children }) => (
-                        <MarkdownListItem node={node} className={itemClass} body={body} onBodyChange={onBodyChange}>
-                            {children}
-                        </MarkdownListItem>
-                    ),
-                    a: ({ href, children }) => {
-                        const safeHref = allowedMarkdownUrl(href ?? '', 'href');
-                        if (oneDriveImageUrl(safeHref)) {
-                            return (
-                                <OneDriveThumbnail
-                                    href={safeHref}
-                                    label={
-                                        typeof children === 'string' ? children : Children.toArray(children).join('')
-                                    }
-                                />
-                            );
-                        }
-                        return safeHref ? (
-                            <a href={safeHref} target="_blank" rel="noopener noreferrer">
+        <SectionCommandContext.Provider value={sectionCommand}>
+            <div className={className}>
+                <ReactMarkdown
+                    remarkPlugins={[remarkGfm, remarkBreaks, remarkNoteSections]}
+                    urlTransform={allowedMarkdownUrl}
+                    components={{
+                        li: ({ node, className: itemClass, children }) => (
+                            <MarkdownListItem node={node} className={itemClass} body={body} onBodyChange={onBodyChange}>
                                 {children}
-                            </a>
-                        ) : (
-                            <span>{children}</span>
-                        );
-                    },
-                    section: CollapsibleSection,
-                }}
-            >
-                {body}
-            </ReactMarkdown>
-        </div>
+                            </MarkdownListItem>
+                        ),
+                        a: ({ href, children }) => {
+                            const safeHref = allowedMarkdownUrl(href ?? '', 'href');
+                            if (oneDriveImageUrl(safeHref)) {
+                                return (
+                                    <OneDriveThumbnail
+                                        href={safeHref}
+                                        label={
+                                            typeof children === 'string'
+                                                ? children
+                                                : Children.toArray(children).join('')
+                                        }
+                                    />
+                                );
+                            }
+                            return safeHref ? (
+                                <a href={safeHref} target="_blank" rel="noopener noreferrer">
+                                    {children}
+                                </a>
+                            ) : (
+                                <span>{children}</span>
+                            );
+                        },
+                        section: CollapsibleSection,
+                    }}
+                >
+                    {body}
+                </ReactMarkdown>
+            </div>
+        </SectionCommandContext.Provider>
     );
 }
 

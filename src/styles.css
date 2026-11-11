@@ -1488,6 +1488,47 @@ form.idea-form > .editor-title-row:first-child > .field-group {
     font-weight: 650;
 }
 
+/* Date toggle fills the left; the sections pill and labels sit together on the right. */
+.journal-card-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.journal-card-head > .journal-date {
+    flex: 1;
+    min-width: 0;
+}
+
+.journal-card-head > .card-label {
+    flex: 0 0 auto;
+}
+
+/* Matches the 14px section labels beside it: 12px track plus 1px padding and border.
+   Rounded by request; the app's other controls stay square. */
+.journal-card-head > .sections-pill {
+    width: max-content;
+    flex: 0 0 auto;
+    grid-template-columns: repeat(2, 20px);
+    padding: 1px;
+    border-radius: 999px;
+}
+
+.sections-pill .segment-fill {
+    top: 1px;
+    bottom: 1px;
+    left: 1px;
+    width: calc((100% - 2px) / 2);
+    border-radius: 999px;
+}
+
+.sections-pill .segment-button {
+    width: 20px;
+    height: 12px;
+    padding: 0;
+    border-radius: 999px;
+}
+
 .journal-day-toggle {
     width: 100%;
     padding: 0;

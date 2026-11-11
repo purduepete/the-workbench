@@ -381,6 +381,40 @@ test('idea, note and task editors share the same desktop height', async ({ page 
     }
 });
 
+test('daily note sections expand and collapse together from the date header', async ({ page }) => {
+    await page.goto('/notes');
+    await page.getByRole('button', { name: 'New note', exact: true }).click();
+    const editor = page.getByRole('dialog');
+    await editor
+        .locator('textarea[name="body"]')
+        .fill('## Standup\nNotes one\n\n## Planning\nNotes two\n\n## Follow-up\nNotes three');
+    await editor.getByRole('button', { name: 'Save entry', exact: true }).click();
+    await expect(editor).toHaveCount(0);
+    const card = page.locator('.journal-card').first();
+    const sections = card.locator('.markdown-section-heading button');
+    await expect(sections).toHaveCount(3);
+    const pill = card.getByRole('group', { name: /^Sections for / });
+    const expand = pill.getByRole('button', { name: 'Expand all sections', exact: true });
+    const collapse = pill.getByRole('button', { name: 'Collapse all sections', exact: true });
+    await expect(expand).toHaveAttribute('aria-pressed', 'true');
+    // The pill sits just left of the section label.
+    const pillBox = await pill.boundingBox();
+    const labelBox = await card.locator('.journal-card-head > .card-label').first().boundingBox();
+    if (!pillBox || !labelBox) throw new Error('Pill or label is missing.');
+    expect(labelBox.x - (pillBox.x + pillBox.width)).toBeLessThanOrEqual(12);
+    await collapse.click();
+    await expect(collapse).toHaveAttribute('aria-pressed', 'true');
+    for (const section of await sections.all()) await expect(section).toHaveAttribute('aria-expanded', 'false');
+    await expect(card.getByText('Notes two', { exact: true })).toBeHidden();
+    // A single section still opens on its own.
+    await sections.nth(1).click();
+    await expect(card.getByText('Notes two', { exact: true })).toBeVisible();
+    await expect(sections.nth(0)).toHaveAttribute('aria-expanded', 'false');
+    await expand.click();
+    for (const section of await sections.all()) await expect(section).toHaveAttribute('aria-expanded', 'true');
+    await expect(expand).toHaveAttribute('aria-pressed', 'true');
+});
+
 test('journal notes preview Markdown safely and preserve edits when saved', async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 900 });
     await page.goto('/notes');
