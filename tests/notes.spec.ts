@@ -396,23 +396,25 @@ test('daily note sections expand and collapse together from the date header', as
     const pill = card.getByRole('group', { name: /^Sections for / });
     const expand = pill.getByRole('button', { name: 'Expand all sections', exact: true });
     const collapse = pill.getByRole('button', { name: 'Collapse all sections', exact: true });
-    await expect(expand).toHaveAttribute('aria-pressed', 'true');
+    // Daily note sections start collapsed.
+    await expect(collapse).toHaveAttribute('aria-pressed', 'true');
+    for (const section of await sections.all()) await expect(section).toHaveAttribute('aria-expanded', 'false');
+    await expect(card.getByText('Notes two', { exact: true })).toBeHidden();
     // The pill sits just left of the section label.
     const pillBox = await pill.boundingBox();
     const labelBox = await card.locator('.journal-card-head > .card-label').first().boundingBox();
     if (!pillBox || !labelBox) throw new Error('Pill or label is missing.');
     expect(labelBox.x - (pillBox.x + pillBox.width)).toBeLessThanOrEqual(12);
+    await expand.click();
+    await expect(expand).toHaveAttribute('aria-pressed', 'true');
+    for (const section of await sections.all()) await expect(section).toHaveAttribute('aria-expanded', 'true');
+    await expect(card.getByText('Notes two', { exact: true })).toBeVisible();
     await collapse.click();
-    await expect(collapse).toHaveAttribute('aria-pressed', 'true');
     for (const section of await sections.all()) await expect(section).toHaveAttribute('aria-expanded', 'false');
-    await expect(card.getByText('Notes two', { exact: true })).toBeHidden();
     // A single section still opens on its own.
     await sections.nth(1).click();
     await expect(card.getByText('Notes two', { exact: true })).toBeVisible();
     await expect(sections.nth(0)).toHaveAttribute('aria-expanded', 'false');
-    await expand.click();
-    for (const section of await sections.all()) await expect(section).toHaveAttribute('aria-expanded', 'true');
-    await expect(expand).toHaveAttribute('aria-pressed', 'true');
 });
 
 test('journal notes preview Markdown safely and preserve edits when saved', async ({ page }) => {
@@ -476,6 +478,10 @@ test('journal notes preview Markdown safely and preserve edits when saved', asyn
     await expect(body).toHaveValue(markdown);
     await dialog.getByRole('button', { name: 'Save entry' }).click();
     await expect(dialog).toBeHidden();
+    // Saved daily notes start with their sections collapsed.
+    const savedSection = page.locator('.journal-card').getByRole('button', { name: 'First section' });
+    await expect(savedSection).toHaveAttribute('aria-expanded', 'false');
+    await savedSection.click();
     await expect(page.getByRole('link', { name: 'Cross-section' })).toHaveAttribute(
         'href',
         'https://example.com/reference'

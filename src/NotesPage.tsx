@@ -493,7 +493,10 @@ export interface NotesPageProps {
     onDraftProtectionChange: (protectedDraft: boolean) => void;
 }
 
-/** Two-option square pill that expands or collapses every section of one daily note. */
+/** Daily note sections start collapsed until the pill or a section heading opens them. */
+const SECTIONS_COLLAPSED: SectionCommand = { expanded: false, seq: 0 };
+
+/** Two-option rounded pill that expands or collapses every section of one daily note. */
 function SectionsPill({
     label,
     expanded,
@@ -751,8 +754,8 @@ export function NotesPage({
                                     {week.entries.map((entry) => {
                                         const key = journalEntryKey(entry.entryDate, entry.category);
                                         const expanded = expandedDays[key] ?? entry.entryDate === today;
-                                        const sectionCommand = sectionCommands[key] ?? null;
-                                        const sectionsExpanded = sectionCommand?.expanded ?? true;
+                                        const sectionCommand = sectionCommands[key] ?? SECTIONS_COLLAPSED;
+                                        const sectionsExpanded = sectionCommand.expanded;
                                         const dateLabel = formatEntryDate(entry.entryDate);
                                         return (
                                             <article key={key} className="idea-card journal-card">
