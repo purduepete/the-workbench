@@ -52,9 +52,22 @@ for (const editor of [
         );
         await page.route('https://api.onedrive.com/**', (route) => {
             expect(route.request().headers().authorization).toBe('Bearer synthetic-test-token');
-            if (new URL(route.request().url()).searchParams.get('select') === 'c2560x2560')
+            const select = new URL(route.request().url()).searchParams.get('select');
+            // The original is 180px; OneDrive reports a scaled-up 2560px copy, which the viewer must not enlarge to.
+            if (select === 'image') return route.fulfill({ json: { image: { width: 180, height: 180 } } });
+            if (select === 'c2560x2560')
                 return route.fulfill({
-                    json: { value: [{ c2560x2560: { url: 'https://southcentralus1-medias.svc.ms/full' } }] },
+                    json: {
+                        value: [
+                            {
+                                c2560x2560: {
+                                    url: 'https://southcentralus1-medias.svc.ms/full',
+                                    width: 2560,
+                                    height: 2560,
+                                },
+                            },
+                        ],
+                    },
                 });
             return route.fulfill({
                 json: { value: [{ medium: { url: 'https://southcentralus1-medias.svc.ms/thumbnail' } }] },
@@ -101,6 +114,7 @@ for (const editor of [
         await expect.poll(() => full.evaluate((element: HTMLImageElement) => element.naturalWidth)).toBeGreaterThan(0);
         const box = await full.boundingBox();
         if (!box) throw new Error('Full image is not visible.');
+        expect(box.width).toBeLessThanOrEqual(180);
         expect(box.x).toBeGreaterThanOrEqual(0);
         expect(box.x + box.width).toBeLessThanOrEqual(390);
         await page.keyboard.press('Escape');

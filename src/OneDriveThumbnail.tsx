@@ -46,64 +46,100 @@ export function safeThumbnailUrl(value: string): string {
     return url.href;
 }
 
-const thumbnailUrlSchema = z.object({ url: z.string() });
+const thumbnailSchema = z.object({ url: z.string(), width: z.number().optional(), height: z.number().optional() });
 const thumbnailsSchema = z.object({ value: z.array(z.record(z.string(), z.unknown())) });
+const imageFacetSchema = z.object({
+    image: z.object({ width: z.number().optional(), height: z.number().optional() }).optional(),
+});
 
-/** Fetches a short-lived OneDrive thumbnail URL; sizes are tried in order (for example `c2560x2560`, `large`). */
-export async function fetchThumbnailUrl(
-    href: string,
-    session: OneDriveSession,
-    sizes: string[],
-    signal: AbortSignal
-): Promise<string> {
+export interface OneDriveImage {
+    url: string;
+    width?: number;
+    height?: number;
+}
+
+async function oneDriveGet(url: string, session: OneDriveSession, signal: AbortSignal): Promise<unknown> {
     const token = await session.token();
     if (!navigator.onLine) throw new Error('Offline. Open the image when connected.');
-    const custom = sizes.find((size) => /^c\d+x\d+$/.test(size));
-    const endpoint = thumbnailEndpoint(href, session);
-    const response = await fetch(custom ? `${endpoint}?select=${custom}` : endpoint, {
+    const response = await fetch(url, {
         headers: { Authorization: `Bearer ${token}` },
         credentials: 'omit',
         redirect: 'error',
         signal: AbortSignal.any([signal, AbortSignal.timeout(10_000)]),
     });
     if (!response.ok) throw new Error(`Thumbnail unavailable (HTTP ${response.status}). Sign in to OneDrive again.`);
-    const set = thumbnailsSchema.parse(await response.json()).value[0] ?? {};
+    return response.json();
+}
+
+/** Fetches a short-lived OneDrive thumbnail; sizes are tried in order (for example `c2560x2560`, `large`). */
+export async function fetchThumbnail(
+    href: string,
+    session: OneDriveSession,
+    sizes: string[],
+    signal: AbortSignal
+): Promise<OneDriveImage> {
+    const custom = sizes.find((size) => /^c\d+x\d+$/.test(size));
+    const endpoint = thumbnailEndpoint(href, session);
+    const set =
+        thumbnailsSchema.parse(await oneDriveGet(custom ? `${endpoint}?select=${custom}` : endpoint, session, signal))
+            .value[0] ?? {};
     for (const size of sizes) {
-        const parsed = thumbnailUrlSchema.safeParse(set[size]);
-        if (parsed.success) return safeThumbnailUrl(parsed.data.url);
+        const parsed = thumbnailSchema.safeParse(set[size]);
+        if (parsed.success) return { ...parsed.data, url: safeThumbnailUrl(parsed.data.url) };
     }
     throw new Error('OneDrive has no thumbnail for this image.');
 }
 
-async function fetchFullImageUrl(href: string, session: OneDriveSession, signal: AbortSignal): Promise<string> {
+/** The viewer's image: up to 2560px on the long side, with the size it will be shown at, never above the original. */
+export async function fetchFullImage(
+    href: string,
+    session: OneDriveSession,
+    signal: AbortSignal
+): Promise<OneDriveImage> {
+    const endpoint = thumbnailEndpoint(href, session).replace(/\/thumbnails$/, '');
+    const original = oneDriveGet(`${endpoint}?select=image`, session, signal).then(
+        (value) => imageFacetSchema.parse(value).image ?? null,
+        () => null
+    );
+    let image: OneDriveImage;
     try {
-        return await fetchThumbnailUrl(href, session, ['c2560x2560'], signal);
+        image = await fetchThumbnail(href, session, ['c2560x2560'], signal);
     } catch (error) {
         if (signal.aborted) throw error;
-        return fetchThumbnailUrl(href, session, ['large', 'medium'], signal);
+        image = await fetchThumbnail(href, session, ['large', 'medium'], signal);
     }
+    const facet = await original;
+    // The served copy can be scaled up from a small original, so the smaller known size wins.
+    const known = [image, facet].filter((size): size is { width: number; height: number } =>
+        Boolean(size?.width && size.height)
+    );
+    const smallest = known.sort((a, b) => a.width - b.width)[0];
+    return smallest ? { url: image.url, width: smallest.width, height: smallest.height } : { url: image.url };
 }
-
 function ImageViewer({
     href,
     label,
     ratio,
-    session,
+    image,
+    failure,
     onClose,
 }: {
     href: string;
     label: string;
     ratio: number;
-    session: OneDriveSession;
+    image?: OneDriveImage;
+    failure?: string;
     onClose: () => void;
 }) {
     const dialogRef = useRef<HTMLDialogElement>(null);
     const [full, setFull] = useState('');
-    const [error, setError] = useState('');
+    const [error, setError] = useState(failure ?? '');
 
     useLayoutEffect(() => {
         const dialog = dialogRef.current;
         const returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+        const topbar = document.querySelector('.topbar')?.getBoundingClientRect().bottom ?? 0;
+        dialog?.style.setProperty('--viewer-top', `${Math.max(0, Math.round(topbar)) + 10}px`);
         if (dialog && !dialog.open) dialog.showModal();
         dialog?.focus({ preventScroll: true });
         return () => {
@@ -113,28 +149,29 @@ function ImageViewer({
     }, []);
 
     useEffect(() => {
-        const abort = new AbortController();
-        void (async () => {
-            try {
-                const url = await fetchFullImageUrl(href, session, abort.signal);
-                // Download and decode before showing, so the viewer never shows a partial or low-resolution image.
-                const image = new Image();
-                image.referrerPolicy = 'no-referrer';
-                image.src = url;
-                await image.decode();
-                if (!abort.signal.aborted) setFull(url);
-            } catch (reason) {
-                if (!abort.signal.aborted)
-                    setError(
-                        reason instanceof Error && reason.name !== 'EncodingError'
-                            ? reason.message
-                            : 'The full image could not load.'
-                    );
+        if (!image) return;
+        let current = true;
+        // Download and decode before showing, so the viewer never shows a partial or low-resolution image.
+        const loader = new Image();
+        loader.referrerPolicy = 'no-referrer';
+        loader.src = image.url;
+        loader.decode().then(
+            () => {
+                if (current) setFull(image.url);
+            },
+            () => {
+                if (current) setError('The full image could not load.');
             }
-        })();
-        return () => abort.abort();
-    }, [href, session]);
+        );
+        return () => {
+            current = false;
+        };
+    }, [image]);
     const showSpinner = useDelayedLoading(!full && !error);
+    const frameStyle = {
+        '--image-ratio': image?.width && image.height ? image.width / image.height : ratio,
+        ...(image?.width ? { '--image-width': `${image.width}px` } : {}),
+    } as CSSProperties;
 
     return createPortal(
         <dialog
@@ -162,8 +199,8 @@ function ImageViewer({
                 <div className="dialog-corner-actions">
                     <DialogCloseButton onClose={onClose} />
                 </div>
-                {/* The frame takes the thumbnail's shape, so the window opens at its final size. */}
-                <div className="image-viewer-frame" style={{ '--image-ratio': ratio } as CSSProperties}>
+                {/* The frame has the image's final size from the start: its shape, and never above the original. */}
+                <div className="image-viewer-frame" style={frameStyle}>
                     {full ? (
                         <img src={full} alt={label} referrerPolicy="no-referrer" />
                     ) : (
@@ -196,9 +233,21 @@ export function OneDriveThumbnail({ href, label }: { href: string; label: string
     const [src, setSrc] = useState('');
     const [error, setError] = useState('');
     const [busy, setBusy] = useState(false);
-    const [viewing, setViewing] = useState(0);
+    const [viewing, setViewing] = useState<{ ratio: number; image?: OneDriveImage; failure?: string } | null>(null);
     const controller = useRef<AbortController | null>(null);
+    const fullImage = useRef<{ href: string; at: number; promise: Promise<OneDriveImage> } | null>(null);
     useEffect(() => () => controller.current?.abort(), []);
+    // Starts fetching the full image's address and size on hover, focus or touch, so a click opens at once.
+    const prefetchFullImage = () => {
+        if (!session || !src) return null;
+        const cached = fullImage.current;
+        // OneDrive image addresses are temporary, so a cached one is reused only briefly.
+        if (cached && cached.href === href && Date.now() - cached.at < 5 * 60_000) return cached.promise;
+        const promise = fetchFullImage(href, session, new AbortController().signal);
+        promise.catch(() => undefined);
+        fullImage.current = { href, at: Date.now(), promise };
+        return promise;
+    };
     useEffect(() => {
         let current = true;
         if (!session) {
@@ -217,7 +266,7 @@ export function OneDriveThumbnail({ href, label }: { href: string; label: string
         const abort = new AbortController();
         void (async () => {
             try {
-                const url = await fetchThumbnailUrl(href, session, ['medium', 'small'], abort.signal);
+                const url = (await fetchThumbnail(href, session, ['medium', 'small'], abort.signal)).url;
                 if (current) {
                     setSrc(url);
                     setError('');
@@ -242,6 +291,9 @@ export function OneDriveThumbnail({ href, label }: { href: string; label: string
                 aria-label={label}
                 target="_blank"
                 rel="noopener noreferrer"
+                onPointerEnter={() => void prefetchFullImage()}
+                onFocus={() => void prefetchFullImage()}
+                onTouchStart={() => void prefetchFullImage()}
                 onClick={(event) => {
                     // A loaded thumbnail opens in the app; without one, or with a modifier key, the link opens OneDrive.
                     if (!src || !session || event.ctrlKey || event.metaKey || event.shiftKey || event.button !== 0)
@@ -249,11 +301,17 @@ export function OneDriveThumbnail({ href, label }: { href: string; label: string
                     event.preventDefault();
                     event.stopPropagation();
                     const thumbnail = event.currentTarget.querySelector('img');
-                    // Viewing holds the image's width-to-height ratio; 0 means closed.
-                    setViewing(
+                    const ratio =
                         thumbnail?.naturalWidth && thumbnail.naturalHeight
                             ? thumbnail.naturalWidth / thumbnail.naturalHeight
-                            : 4 / 3
+                            : 4 / 3;
+                    prefetchFullImage()?.then(
+                        (image) => setViewing({ ratio, image }),
+                        (reason: unknown) =>
+                            setViewing({
+                                ratio,
+                                failure: reason instanceof Error ? reason.message : 'The full image is unavailable.',
+                            })
                     );
                 }}
             >
@@ -302,13 +360,14 @@ export function OneDriveThumbnail({ href, label }: { href: string; label: string
                     {error}
                 </span>
             )}
-            {viewing > 0 && session && src && (
+            {viewing && (
                 <ImageViewer
                     href={href}
                     label={label}
-                    ratio={viewing}
-                    session={session}
-                    onClose={() => setViewing(0)}
+                    ratio={viewing.ratio}
+                    image={viewing.image}
+                    failure={viewing.failure}
+                    onClose={() => setViewing(null)}
                 />
             )}
         </span>

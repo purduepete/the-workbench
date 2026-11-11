@@ -1655,12 +1655,13 @@ div.markdown-task-text {
 }
 
 /* Full image viewer: the picture fits the viewport without scrolling. */
+/* Sits 10px below the sticky top bar (--viewer-top is measured on open) and fits the rest of the viewport. */
 .dialog-backdrop.image-viewer {
-    inset: 0;
-    margin: auto;
+    inset: var(--viewer-top, 16px) 0 auto;
+    margin: 0 auto;
     width: fit-content;
     max-width: calc(100vw - 32px);
-    max-height: calc(100dvh - 32px);
+    max-height: calc(100dvh - var(--viewer-top, 16px) - 10px);
     overflow: hidden;
     background: var(--input);
 }
@@ -1680,12 +1681,16 @@ div.markdown-task-text {
     animation: image-viewer-reveal 0.45s ease-out both;
 }
 
-/* Fits the image's shape inside the viewport, leaving room for the close button. */
+/* Fits the image's shape inside the viewport, leaving room for the close button, and never above its original width. */
 .image-viewer-frame {
     position: relative;
     display: grid;
     place-items: center;
-    width: min(calc(100vw - 66px), calc((100dvh - 106px) * var(--image-ratio)));
+    width: min(
+        var(--image-width, 100vw),
+        calc(100vw - 66px),
+        calc((100dvh - var(--viewer-top, 16px) - 84px) * var(--image-ratio))
+    );
     aspect-ratio: var(--image-ratio);
 }
 
