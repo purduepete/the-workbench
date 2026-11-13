@@ -25,7 +25,7 @@ test('task Show details and Show less keep working after editing', async ({ page
     await page.goto('/tasks');
     await page.getByRole('button', { name: 'New task', exact: true }).tap();
     const dialog = page.getByRole('dialog');
-    await dialog.getByLabel('Task title', { exact: true }).fill('Phone task');
+    await dialog.getByLabel('Title', { exact: true }).fill('Phone task');
     await dialog.getByRole('textbox', { name: 'Details', exact: true }).fill(body);
     await dialog.getByRole('button', { name: 'Save task', exact: true }).tap();
     const row = page.getByRole('listitem', { name: 'Phone task', exact: true });
@@ -41,7 +41,7 @@ test('idea Show details and Show less keep working after editing', async ({ page
     await page.goto('/ideas');
     await page.getByRole('button', { name: 'New idea', exact: true }).tap();
     const dialog = page.getByRole('dialog');
-    await dialog.getByLabel('Idea title', { exact: true }).fill('Phone idea');
+    await dialog.getByLabel('Title', { exact: true }).fill('Phone idea');
     await dialog.getByRole('textbox', { name: 'Details', exact: true }).fill(body);
     await dialog.getByRole('button', { name: 'Save idea', exact: true }).tap();
     const card = page.getByRole('article', { name: 'Phone idea', exact: true });

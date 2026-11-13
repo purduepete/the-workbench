@@ -7,7 +7,7 @@ test('ticking an idea checklist item saves it, survives reload and stays read-on
     await page.goto('/ideas');
     await page.getByRole('button', { name: 'New idea', exact: true }).click();
     const dialog = page.getByRole('dialog');
-    await dialog.getByLabel('Idea title', { exact: true }).fill('Checklist idea');
+    await dialog.getByLabel('Title', { exact: true }).fill('Checklist idea');
     await dialog.getByRole('textbox', { name: 'Details', exact: true }).fill(body);
     await dialog.getByRole('button', { name: 'Preview', exact: true }).click();
     await expect(dialog.getByRole('checkbox', { name: 'Buy milk', exact: true })).toBeDisabled();
@@ -45,7 +45,7 @@ test('ticking a task checklist item saves the task details', async ({ page }) =>
     await page.goto('/tasks');
     await page.getByRole('button', { name: 'New task', exact: true }).click();
     const dialog = page.getByRole('dialog');
-    await dialog.getByLabel('Task title', { exact: true }).fill('Checklist task');
+    await dialog.getByLabel('Title', { exact: true }).fill('Checklist task');
     await dialog.getByRole('textbox', { name: 'Details', exact: true }).fill(body);
     await dialog.getByRole('button', { name: 'Save task', exact: true }).click();
     const row = page.getByRole('listitem', { name: 'Checklist task', exact: true });
@@ -64,7 +64,7 @@ test('clicking task checkboxes neither expands the details nor focuses the row o
     await page.goto('/tasks');
     await page.getByRole('button', { name: 'New task', exact: true }).click();
     const dialog = page.getByRole('dialog');
-    await dialog.getByLabel('Task title', { exact: true }).fill('Long checklist task');
+    await dialog.getByLabel('Title', { exact: true }).fill('Long checklist task');
     const items = ['Gutters', 'Furnace filter', 'Smoke alarms', 'Paint fence', 'Rake leaves'];
     await dialog
         .getByRole('textbox', { name: 'Details', exact: true })

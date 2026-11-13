@@ -1,4 +1,4 @@
-import { expect, test, closeDialog } from './fixtures';
+import { chooseChip, expect, test, closeDialog } from './fixtures';
 
 for (const theme of ['midnight', 'light']) {
     test(`duplicate opens an independent idea draft in ${theme}`, async ({ page }) => {
@@ -10,12 +10,12 @@ for (const theme of ['midnight', 'light']) {
         const body = '**Copy these details**\n\n- First item\n- Second item';
         await page.getByRole('button', { name: 'New idea', exact: true }).click();
         const dialog = page.getByRole('dialog');
-        await dialog.getByLabel('Idea title', { exact: true }).fill(title);
+        await dialog.getByLabel('Title', { exact: true }).fill(title);
         await dialog.getByRole('textbox', { name: 'Details', exact: true }).fill(body);
         await dialog.locator('input[name="tags"]').fill('copy, example');
         await dialog.getByRole('button', { name: 'Solution: No solution', exact: true }).click();
         await page.getByRole('option', { name: 'Ferry Tracker', exact: true }).click();
-        await dialog.getByRole('button', { name: 'In progress', exact: true }).click();
+        await chooseChip(dialog, 'Status', 'In progress');
         await dialog.getByRole('button', { name: 'Save idea', exact: true }).click();
         const original = page.getByRole('article', { name: title, exact: true });
         const footerActions = original.locator('.idea-card-bottom .card-action');
@@ -29,20 +29,18 @@ for (const theme of ['midnight', 'light']) {
         }
         await original.getByRole('button', { name: `Pin ${title}`, exact: true }).click();
         await original.getByRole('button', { name: `Duplicate ${title}`, exact: true }).click();
-        await expect(dialog).toHaveAttribute('aria-label', 'New idea');
-        await expect(dialog.getByLabel('Idea title', { exact: true })).toHaveValue(title);
+        await expect(dialog).toHaveAccessibleName('New idea');
+        await expect(dialog.getByLabel('Title', { exact: true })).toHaveValue(title);
         await expect(dialog.getByRole('textbox', { name: 'Details', exact: true })).toHaveValue(body);
         await expect(dialog.locator('input[name="tags"]')).toHaveValue('copy, example');
         await expect(dialog.getByRole('button', { name: 'Solution: Ferry Tracker', exact: true })).toBeVisible();
-        await expect(dialog.getByRole('button', { name: 'In progress', exact: true })).toHaveAttribute(
-            'aria-pressed',
-            'true'
-        );
+        await expect(dialog.getByRole('button', { name: 'Status: In progress', exact: true })).toBeVisible();
+
         await expect(dialog.getByRole('button', { name: 'Delete idea' })).toHaveCount(0);
         await closeDialog(dialog);
         await expect(page.getByRole('article', { name: title, exact: true })).toHaveCount(1);
         await original.getByRole('button', { name: `Duplicate ${title}`, exact: true }).click();
-        await dialog.getByLabel('Idea title', { exact: true }).fill(`Copied ${theme}`);
+        await dialog.getByLabel('Title', { exact: true }).fill(`Copied ${theme}`);
         await dialog.getByRole('button', { name: 'Save idea', exact: true }).click();
         const copy = page.getByRole('article', { name: `Copied ${theme}`, exact: true });
         await expect(copy).toBeVisible();
@@ -60,7 +58,7 @@ for (const theme of ['midnight', 'light']) {
         await expect(dialog.getByRole('textbox', { name: 'Details', exact: true })).toHaveValue(body);
         await closeDialog(dialog);
         await page.getByRole('button', { name: 'New idea', exact: true }).click();
-        await expect(dialog.getByLabel('Idea title', { exact: true })).toHaveValue('');
+        await expect(dialog.getByLabel('Title', { exact: true })).toHaveValue('');
         await closeDialog(dialog);
         expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(0);
     });

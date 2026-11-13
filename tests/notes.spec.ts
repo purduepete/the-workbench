@@ -1,5 +1,6 @@
-import { expect, test, closeDialog, openEditor } from './fixtures';
+import { chip, expect, test, closeDialog, openEditor } from './fixtures';
 import type { Locator } from './fixtures';
+import { formatEntryDate, localDateKey, weekStart } from '../src/journal';
 
 async function expectMarkerPainted(item: Locator) {
     await item.scrollIntoViewIfNeeded();
@@ -68,22 +69,28 @@ async function expectMarkdownListMarkers(container: Locator) {
     await expectMarkerPainted(numbered.locator(':scope > li').first());
 }
 
-test('the calendar sits in the notes toolbar and hides under Global, which has no dates', async ({ page }) => {
+test('new Home and Work notes show a Date chip, and Global notes have no date', async ({ page }) => {
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await page.goto('/notes');
     const filter = page.getByRole('group', { name: 'Filter notes', exact: true });
     await expect(filter.getByRole('button')).toHaveText(['Global', 'Home', 'Work']);
     await expect(filter.getByRole('button', { name: 'Work', exact: true })).toHaveAttribute('aria-pressed', 'true');
-    await expect(page.locator('.notes-actions > button')).toHaveText(['Calendar']);
-    await expect(page.getByRole('button', { name: 'Global note', exact: true })).toHaveCount(0);
-    await filter.getByRole('button', { name: 'Global', exact: true }).click();
     await expect(page.getByRole('button', { name: 'Calendar', exact: true })).toHaveCount(0);
-    await page.getByRole('button', { name: 'New note', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Global note', exact: true })).toHaveCount(0);
     const dialog = page.getByRole('dialog');
+    for (const section of ['Work', 'Home']) {
+        await filter.getByRole('button', { name: section, exact: true }).click();
+        await page.getByRole('button', { name: 'New note', exact: true }).click();
+        await expect(dialog.getByRole('heading', { name: 'New note', exact: true })).toBeVisible();
+        await expect(chip(dialog, 'Section')).toHaveAccessibleName(`Section: ${section}`);
+        await expect(chip(dialog, 'Date')).toHaveAccessibleName(/^Date: \d{2}\/\d{2}\/\d{4}$/);
+        await closeDialog(dialog);
+    }
+    await filter.getByRole('button', { name: 'Global', exact: true }).click();
+    await page.getByRole('button', { name: 'New note', exact: true }).click();
     await expect(dialog.getByRole('heading', { name: 'New note', exact: true })).toBeVisible();
-    await expect(
-        dialog.getByRole('group', { name: 'Note category' }).getByRole('button', { name: 'Global', exact: true })
-    ).toHaveAttribute('aria-pressed', 'true');
+    await expect(chip(dialog, 'Section')).toHaveAccessibleName('Section: Global');
+    await expect(chip(dialog, 'Date')).toHaveCount(0);
 });
 test('empty pages omit the long instructional copy', async ({ page }) => {
     const copy = [
@@ -170,7 +177,7 @@ for (const theme of ['midnight', 'light']) {
         await expect(dialog).toBeHidden();
         await expect(page.getByRole('paragraph').filter({ hasText: body })).toBeVisible();
         await expect(page.getByText(/^Week of \d{2}\/\d{2}\/\d{4}$/)).toBeVisible();
-        await expect(page.getByRole('status').first()).toHaveText('Synced');
+        await expect(page.locator('.local-badge')).toHaveText('Synced');
 
         await page.reload();
         await expect(page).toHaveURL(/\/notes$/);
@@ -187,58 +194,67 @@ for (const theme of ['midnight', 'light']) {
     });
 }
 
-test('calendar scrolls to a day with notes and opens a new note for an empty day', async ({ page }) => {
+test('the Date chip picks the day for a new note and a saved note keeps its date', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto('/notes');
+    // Pick another day in the current week, which starts open: yesterday, or tomorrow when today starts the week.
     const now = new Date();
-    const todayLabel = `${String(now.getMonth() + 1).padStart(2, '0')}/${String(now.getDate()).padStart(2, '0')}/${now.getFullYear()}`;
-    const yesterday = new Date(now);
-    yesterday.setDate(yesterday.getDate() - 1);
-    const yesterdayLabel = `${String(yesterday.getMonth() + 1).padStart(2, '0')}/${String(yesterday.getDate()).padStart(2, '0')}/${yesterday.getFullYear()}`;
+    const todayKey = localDateKey(now);
+    const todayLabel = formatEntryDate(todayKey);
+    const step = weekStart(todayKey) === todayKey ? 1 : -1;
+    const other = new Date(now);
+    other.setDate(other.getDate() + step);
+    const otherLabel = formatEntryDate(localDateKey(other));
 
     await page.getByRole('button', { name: 'New note', exact: true }).click();
-    const todayEntry = page.getByRole('dialog');
-    await todayEntry.locator('textarea[name="body"]').fill('Calendar existing-day entry');
-    await todayEntry.getByRole('button', { name: 'Save note' }).click();
-    await expect(page.getByRole('paragraph').filter({ hasText: 'Calendar existing-day entry' })).toBeVisible();
-
-    await page.getByRole('button', { name: 'Calendar', exact: true }).click();
-    const calendar = page.getByRole('dialog', { name: 'Choose a day' });
+    const dialog = page.getByRole('dialog', { name: 'New note' });
+    const dateChip = dialog.getByRole('button', { name: `Date: ${todayLabel}`, exact: true });
+    await dateChip.click();
+    const calendar = page.getByRole('dialog', { name: 'Choose a date' });
     await expect(calendar.getByRole('button', { name: 'Close', exact: true })).toBeVisible();
-    await expect(calendar.getByRole('button', { name: /^Open / })).toHaveCount(0);
     const todayButton = calendar.getByRole('button', { name: todayLabel, exact: true });
-    await expect(todayButton).toHaveAttribute('data-has-entry', 'true');
-    await todayButton.press('ArrowLeft');
-    await expect(calendar.getByRole('button', { name: yesterdayLabel, exact: true })).toBeFocused();
-    await expect(calendar.getByRole('button', { name: yesterdayLabel, exact: true })).toHaveAttribute(
+    await expect(todayButton).toHaveAttribute('aria-pressed', 'true');
+    await expect(todayButton).toBeFocused();
+    await todayButton.press(step > 0 ? 'ArrowRight' : 'ArrowLeft');
+    await expect(calendar.getByRole('button', { name: otherLabel, exact: true })).toBeFocused();
+    await expect(calendar.getByRole('button', { name: otherLabel, exact: true })).toHaveAttribute(
         'aria-pressed',
         'true'
     );
     await calendar.getByRole('button', { name: 'Today', exact: true }).click();
     await expect(calendar).toBeVisible();
-    await expect(calendar.getByRole('button', { name: todayLabel, exact: true })).toHaveAttribute(
-        'aria-pressed',
-        'true'
-    );
-    await expect(page.getByRole('dialog', { name: /^New note for / })).toHaveCount(0);
-    // A day that has notes scrolls to them instead of opening an editor.
-    await calendar.getByRole('button', { name: todayLabel, exact: true }).click();
-    await expect(page.getByRole('dialog')).toHaveCount(0);
-    await expect(page.getByRole('region', { name: `Notes for ${todayLabel}` })).toBeInViewport();
+    await expect(todayButton).toHaveAttribute('aria-pressed', 'true');
+    await calendar.getByRole('button', { name: otherLabel, exact: true }).click();
+    await expect(calendar).toHaveCount(0);
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByRole('button', { name: `Date: ${otherLabel}`, exact: true })).toBeFocused();
+    await dialog.locator('textarea[name="body"]').fill('Date chip entry');
+    await dialog.getByRole('button', { name: 'Save note' }).click();
+    await expect(dialog).toHaveCount(0);
+    const day = page.getByRole('region', { name: `Notes for ${otherLabel}` });
+    // Only today's notes start open, so open this one to reach its text and Edit button.
+    await day.getByRole('button', { name: 'Date chip entry', exact: true }).click();
+    await expect(day.getByRole('paragraph').filter({ hasText: 'Date chip entry' })).toBeVisible();
 
-    await page.getByRole('button', { name: 'Calendar', exact: true }).click();
-    const secondCalendar = page.getByRole('dialog', { name: 'Choose a day' });
-    const emptyDay = secondCalendar.getByRole('button', { name: yesterdayLabel, exact: true });
-    await expect(emptyDay).toHaveAttribute('data-has-entry', 'false');
-    await emptyDay.click();
-    await expect(page.getByRole('dialog', { name: `New note for ${yesterdayLabel}` })).toBeVisible();
-    await expect(page.getByRole('dialog').locator('textarea[name="body"]')).toHaveValue('');
+    // A saved daily note shows its date without letting it change.
+    await day.getByRole('button', { name: 'Edit Date chip entry', exact: true }).click();
+    const edit = page.getByRole('dialog', { name: 'Edit note' });
+    await expect(edit.locator('.chip-static')).toHaveText(`Date: ${otherLabel}`);
+    await expect(chip(edit, 'Date')).toHaveCount(0);
+    await closeDialog(edit);
+
+    // The day's own add button opens a new note for that day.
+    await day.getByRole('button', { name: `Add a note for ${otherLabel}`, exact: true }).click();
+    await expect(dialog.getByRole('button', { name: `Date: ${otherLabel}`, exact: true })).toBeVisible();
+    await expect(dialog.locator('textarea[name="body"]')).toHaveValue('');
 });
 
 test('calendar arrow keys move between days wherever focus is in the dialog', async ({ page }) => {
     await page.goto('/notes');
-    await page.getByRole('button', { name: 'Calendar', exact: true }).click();
-    const calendar = page.getByRole('dialog', { name: 'Choose a day' });
+    await page.getByRole('button', { name: 'New note', exact: true }).click();
+    const dateChip = chip(page.getByRole('dialog', { name: 'New note' }), 'Date');
+    await dateChip.click();
+    const calendar = page.getByRole('dialog', { name: 'Choose a date' });
     const previous = calendar.getByRole('button', { name: 'Previous month', exact: true });
     await previous.click();
     await previous.click();
@@ -253,11 +269,12 @@ test('calendar arrow keys move between days wherever focus is in the dialog', as
     await page.keyboard.press('ArrowDown');
     await expect(calendar.getByRole('button', { name: `${month}/08/${year}`, exact: true })).toBeFocused();
     expect(await page.evaluate(() => String(getSelection()))).toBe('');
+    // Escape closes only the calendar and returns focus to the chip.
     await page.keyboard.press('Escape');
     await expect(calendar).toHaveCount(0);
-    await expect(page.getByRole('button', { name: 'Calendar', exact: true })).toBeFocused();
+    await expect(page.getByRole('dialog', { name: 'New note' })).toBeVisible();
+    await expect(dateChip).toBeFocused();
 });
-
 test('editors keep text open through Escape, backdrop and browser Back', async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 900 });
     await page.goto('/ideas');
@@ -394,11 +411,12 @@ test('daily note sections expand and collapse together from the date header', as
     await expect(collapse).toHaveAttribute('aria-pressed', 'true');
     for (const section of await sections.all()) await expect(section).toHaveAttribute('aria-expanded', 'false');
     await expect(card.getByText('Notes two', { exact: true })).toBeHidden();
-    // The pill sits just left of the section label.
+    // Daily note cards no longer repeat their section label; the pill sits at the right end of the heading row.
+    await expect(card.locator('.journal-card-head .card-label')).toHaveCount(0);
     const pillBox = await pill.boundingBox();
-    const labelBox = await card.locator('.journal-card-head > .card-label').first().boundingBox();
-    if (!pillBox || !labelBox) throw new Error('Pill or label is missing.');
-    expect(labelBox.x - (pillBox.x + pillBox.width)).toBeLessThanOrEqual(12);
+    const headBox = await card.locator('.journal-card-head').boundingBox();
+    if (!pillBox || !headBox) throw new Error('Pill or card heading is missing.');
+    expect(headBox.x + headBox.width - (pillBox.x + pillBox.width)).toBeLessThanOrEqual(12);
     await expand.click();
     await expect(expand).toHaveAttribute('aria-pressed', 'true');
     for (const section of await sections.all()) await expect(section).toHaveAttribute('aria-expanded', 'true');
@@ -712,12 +730,12 @@ test('global note editor previews Markdown and submits its hidden textarea value
     await expect(editDialog.locator('textarea[name="body"]')).toHaveValue('A **global** note.');
 });
 
-test('modal opening fades without moving the page and calendar swaps keep the backdrop', async ({ page }) => {
+test('modal opening fades without moving the page', async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 900 });
     await page.goto('/notes');
     await expect(page.getByRole('button', { name: 'New note', exact: true })).toBeVisible();
     await expect(page.getByRole('group', { name: 'Filter notes', exact: true })).toBeVisible();
-    await expect(page.getByRole('status')).toHaveText('Synced');
+    await expect(page.locator('.local-badge')).toHaveText('Synced');
     await page.evaluate(async () => {
         await Promise.all(
             document
@@ -757,12 +775,6 @@ test('modal opening fades without moving the page and calendar swaps keep the ba
     ).toBeLessThanOrEqual(1);
     expect(frames.scrollAfter).toBe(frames.scrollBefore);
     await closeDialog(page.getByRole('dialog'));
-    await page.getByRole('button', { name: 'Calendar', exact: true }).click();
-    await page.getByRole('dialog').locator('.calendar-day[data-has-entry="false"]').first().click();
-    const entry = page.getByRole('dialog');
-    await expect(entry).toHaveAttribute('data-replacing', 'true');
-    expect(await entry.evaluate((element) => getComputedStyle(element, '::backdrop').animationName)).toBe('none');
-    await closeDialog(entry);
 });
 
 for (const { theme, width } of [
@@ -991,7 +1003,7 @@ test('section commentary opens from a rail in each section, and from one rail on
     await plainInput.press('Escape');
     await expect(plain.getByRole('complementary').getByText('Written offline')).toBeVisible();
     await context.setOffline(false);
-    await expect(page.getByRole('status').first()).toHaveText('Synced', { timeout: 45_000 });
+    await expect(page.locator('.local-badge')).toHaveText('Synced', { timeout: 45_000 });
 
     await page.reload();
     const reloaded = page.locator('.journal-card').filter({ hasText: prep });
@@ -1003,7 +1015,7 @@ test('section commentary opens from a rail in each section, and from one rail on
     await reloaded.getByRole('textbox', { name: 'Commentary for Questions', exact: true }).fill('');
     await reloaded.getByRole('button', { name: 'View commentary', exact: true }).click();
     await expect(reloaded.getByText('No commentary yet.')).toBeVisible();
-    await expect(page.getByRole('status').first()).toHaveText('Synced');
+    await expect(page.locator('.local-badge')).toHaveText('Synced');
     const { comments } = await (await page.request.get('/api/journal/comments')).json();
     expect(comments.map((comment: { body: string }) => comment.body)).toContain('Written offline');
     expect(comments.map((comment: { body: string }) => comment.body)).not.toContain('Ask about **reporting** first');

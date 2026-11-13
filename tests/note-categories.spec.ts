@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { openEditor } from './fixtures';
+import { chip, chooseChip, openEditor } from './fixtures';
 import { spawn } from 'node:child_process';
 import type { ChildProcess } from 'node:child_process';
 
@@ -53,10 +53,11 @@ test('global notes show under All and Global, and a note moves between Global an
 
     // Switching a global note to Work dates it today; switching back removes the date.
     await global.getByRole('button', { name: 'Edit Reference list', exact: true }).click();
-    const category = dialog.getByRole('group', { name: 'Note category', exact: true });
-    await expect(category.getByRole('button', { name: 'Global', exact: true })).toHaveAttribute('aria-pressed', 'true');
-    await category.getByRole('button', { name: 'Work', exact: true }).click();
-    await expect(dialog.getByRole('heading', { name: 'Edit note for 11/06/2026', exact: true })).toBeVisible();
+    await expect(chip(dialog, 'Section')).toHaveAccessibleName('Section: Global');
+    await expect(chip(dialog, 'Date')).toHaveCount(0);
+    await chooseChip(dialog, 'Section', 'Work');
+    await expect(dialog.getByRole('heading', { name: 'Edit note', exact: true })).toBeVisible();
+    await expect(dialog.getByRole('button', { name: 'Date: 11/06/2026', exact: true })).toBeVisible();
     await dialog.locator('textarea[name="body"]').fill('Now a work note');
     await dialog.getByRole('button', { name: 'Save note', exact: true }).click();
     await expect(global).toHaveCount(0);
@@ -64,12 +65,12 @@ test('global notes show under All and Global, and a note moves between Global an
     const daily = page.getByRole('region', { name: 'Notes for 11/06/2026' }).locator('.journal-card');
     await expect(daily.filter({ hasText: 'Now a work note' })).toBeVisible();
     await daily.getByRole('button', { name: 'Edit Reference list', exact: true }).click();
-    await category.getByRole('button', { name: 'Global', exact: true }).click();
+    await chooseChip(dialog, 'Section', 'Global');
     await dialog.getByRole('button', { name: 'Save note', exact: true }).click();
     await expect(daily).toHaveCount(0);
     await filter.getByRole('button', { name: 'Global', exact: true }).click();
     await expect(global).toContainText('Now a work note');
-    await expect(page.getByRole('status')).toHaveText('Synced');
+    await expect(page.locator('.local-badge')).toHaveText('Synced');
     const [{ notes }, { entries }] = await Promise.all([
         (await page.request.get('/api/global-notes')).json(),
         (await page.request.get('/api/journal')).json(),
@@ -84,13 +85,13 @@ test('a day holds several titled notes that move between sections and delete one
     await page.goto('/notes');
     const filter = page.getByRole('group', { name: 'Filter notes', exact: true });
     const dialog = page.getByRole('dialog');
-    const category = dialog.getByRole('group', { name: 'Note category', exact: true });
     const title = dialog.locator('input[name="title"]');
     const body = dialog.locator('textarea[name="body"]');
     const create = async (section: string, heading: string, details: string) => {
         await page.getByRole('button', { name: 'New note', exact: true }).click();
-        await expect(dialog.getByRole('heading', { name: 'New note for 11/06/2026' })).toBeVisible();
-        await category.getByRole('button', { name: section, exact: true }).click();
+        await expect(dialog.getByRole('heading', { name: 'New note', exact: true })).toBeVisible();
+        await expect(dialog.getByRole('button', { name: 'Date: 11/06/2026', exact: true })).toBeVisible();
+        await chooseChip(dialog, 'Section', section);
         await title.fill(heading);
         await body.fill(details);
         await dialog.getByRole('button', { name: 'Save note', exact: true }).click();
@@ -118,7 +119,7 @@ test('a day holds several titled notes that move between sections and delete one
     await day.getByRole('button', { name: 'Edit Retro', exact: true }).click();
     await expect(title).toHaveValue('Retro');
     await expect(body).toHaveValue('Retro details');
-    await category.getByRole('button', { name: 'Home', exact: true }).click();
+    await chooseChip(dialog, 'Section', 'Home');
     await title.fill('Retro at home');
     await dialog.getByRole('button', { name: 'Save note', exact: true }).click();
     await expect.poll(headings).toEqual(['Standup']);
@@ -135,13 +136,14 @@ test('a day holds several titled notes that move between sections and delete one
     // The day's own add button opens a new note for that day in the filtered section.
     await filter.getByRole('button', { name: 'Home', exact: true }).click();
     await day.getByRole('button', { name: 'Add a note for 11/06/2026', exact: true }).click();
-    await expect(dialog.getByRole('heading', { name: 'New note for 11/06/2026' })).toBeVisible();
-    await expect(category.getByRole('button', { name: 'Home', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    await expect(dialog.getByRole('heading', { name: 'New note', exact: true })).toBeVisible();
+    await expect(dialog.getByRole('button', { name: 'Date: 11/06/2026', exact: true })).toBeVisible();
+    await expect(chip(dialog, 'Section')).toHaveAccessibleName('Section: Home');
     await expect(body).toHaveValue('');
     await body.fill('Evening walk');
     await dialog.getByRole('button', { name: 'Save note', exact: true }).click();
     await expect.poll(headings).toEqual(['Retro at home', 'Groceries to buy', 'Evening walk']);
-    await expect(page.getByRole('status')).toHaveText('Synced');
+    await expect(page.locator('.local-badge')).toHaveText('Synced');
     const journal = await (await page.request.get('/api/journal')).json();
     const live = journal.entries.filter(
         (entry: { entryDate: string; deleted: boolean }) => entry.entryDate === '2026-11-06' && !entry.deleted
@@ -168,43 +170,40 @@ for (const theme of ['midnight', 'light']) {
         const filter = page.getByRole('group', { name: 'Filter notes', exact: true });
         await expect(filter).toBeVisible();
         await page.evaluate(() => document.fonts.ready);
-        const actions = page.locator('.notes-actions');
-        // Calendar sits to the left of the Global/Home/Work control; on a phone it takes the row above.
-        expect(await filter.evaluate((node) => node.previousElementSibling?.classList.contains('notes-actions'))).toBe(
-            true
-        );
-        const filterBox = await filter.boundingBox();
-        const actionsBox = await actions.boundingBox();
-        if (!filterBox || !actionsBox) throw new Error('Notes toolbar controls are missing.');
-        if (theme === 'midnight') {
-            expect(filterBox.x).toBeGreaterThanOrEqual(actionsBox.x + actionsBox.width);
-            expect(filterBox.x - actionsBox.x - actionsBox.width).toBeCloseTo(12, 0);
-            expect(Math.abs(actionsBox.y - filterBox.y)).toBeLessThanOrEqual(2);
-        } else {
-            expect(filterBox.y).toBeGreaterThanOrEqual(actionsBox.y + actionsBox.height);
-        }
-        await expect(actions.getByRole('button')).toHaveText(['Calendar']);
+        // The page toolbar has no calendar; new notes pick their day from the editor's Date chip.
+        await expect(page.locator('.notes-actions')).toHaveCount(0);
+        await expect(page.getByRole('button', { name: 'Calendar', exact: true })).toHaveCount(0);
         expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);
 
         await filter.getByRole('button', { name: 'Work', exact: true }).click();
         await page.getByRole('button', { name: 'New note', exact: true }).click();
         const dialog = page.getByRole('dialog');
-        const category = dialog.getByRole('group', { name: 'Note category', exact: true });
         await expect(dialog.getByRole('textbox', { name: 'Details', exact: true })).toBeFocused();
-        const section = dialog.locator('.field-label').filter({ hasText: /^Section$/ });
+        const today = theme === 'midnight' ? '11/04/2026' : '11/05/2026';
+        const section = chip(dialog, 'Section');
+        const date = chip(dialog, 'Date');
+        await expect(section).toHaveAccessibleName('Section: Work');
+        await expect(date).toHaveAccessibleName(`Date: ${today}`);
+        const titleBox = await dialog.getByLabel('Title', { exact: true }).boundingBox();
         const sectionBox = await section.boundingBox();
-        const categoryBox = await category.boundingBox();
-        if (!sectionBox || !categoryBox) throw new Error('Daily note section controls are missing.');
-        expect(sectionBox.y + sectionBox.height).toBeLessThanOrEqual(categoryBox.y);
-        await expect(category.getByRole('button', { name: 'Work', exact: true })).toHaveAttribute(
-            'aria-pressed',
-            'true'
-        );
+        const dateBox = await date.boundingBox();
+        if (!titleBox || !sectionBox || !dateBox) throw new Error('Daily note section controls are missing.');
+        // The chips share one row below the title.
+        expect(titleBox.y + titleBox.height).toBeLessThanOrEqual(sectionBox.y);
+        expect(Math.abs(dateBox.y - sectionBox.y)).toBeLessThanOrEqual(2);
+        for (const [name, dated] of [
+            ['Home', true],
+            ['Global', false],
+            ['Work', true],
+        ] as const) {
+            await chooseChip(dialog, 'Section', name);
+            await expect(date).toHaveCount(dated ? 1 : 0);
+        }
         const title = dialog.locator('input[name="title"]');
         const body = dialog.locator('textarea[name="body"]');
         const tags = dialog.locator('input[name="tags"]');
         const save = () => dialog.getByRole('button', { name: 'Save note', exact: true }).click();
-        const select = async (name: string) => category.getByRole('button', { name, exact: true }).click();
+        const select = async (name: string) => chooseChip(dialog, 'Section', name);
 
         await title.fill(`Work plan ${theme}`);
         await tags.fill('work-tag');
@@ -241,7 +240,7 @@ for (const theme of ['midnight', 'light']) {
         await filter.getByRole('button', { name: 'Work', exact: true }).click();
         const ids = await page.locator('.journal-week [id]').evaluateAll((nodes) => nodes.map((node) => node.id));
         expect(new Set(ids).size).toBe(ids.length);
-        await expect(page.getByRole('status')).toHaveText('Synced');
+        await expect(page.locator('.local-badge')).toHaveText('Synced');
 
         await context.setOffline(true);
         await daily.getByRole('button', { name: `Edit Work plan ${theme}`, exact: true }).click();
@@ -257,7 +256,7 @@ for (const theme of ['midnight', 'light']) {
         await save();
         await expect(page.locator('.journal-card').filter({ hasText: `Offline extra ${theme}` })).toBeVisible();
         await context.setOffline(false);
-        await expect(page.getByRole('status')).toHaveText('Synced');
+        await expect(page.locator('.local-badge')).toHaveText('Synced');
         await page.reload();
 
         // Emptying the details of a saved note deletes it after a confirmation.
@@ -268,7 +267,7 @@ for (const theme of ['midnight', 'light']) {
         await expect(dialog.getByRole('alert')).toHaveText('This note has no details. Save again to delete it.');
         await save();
         await expect(home).toHaveCount(0);
-        await expect(page.getByRole('status')).toHaveText('Synced');
+        await expect(page.locator('.local-badge')).toHaveText('Synced');
 
         const journal = await (await page.request.get('/api/journal')).json();
         const find = (body: string) => journal.entries.find((entry: { body: string }) => entry.body === body);

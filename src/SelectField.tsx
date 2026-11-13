@@ -7,6 +7,10 @@ import type { LucideIcon } from 'lucide-react';
 export interface SelectFieldOption {
     value: string;
     label: string;
+    /** A small colored dot beside the label, such as a priority level. */
+    dot?: string;
+    /** Draws a rule above the option, for an action set apart from the choices. */
+    divider?: boolean;
 }
 
 interface SelectFieldProps {
@@ -16,6 +20,8 @@ interface SelectFieldProps {
     ariaLabel: string;
     icon?: LucideIcon;
     className?: string;
+    /** Quiet text before the value, such as "Status", for chips that have no visible label. */
+    prefix?: string;
 }
 
 const PANEL_MAX_HEIGHT = 288;
@@ -27,7 +33,15 @@ const UNPLACED: CSSProperties = { position: 'fixed', top: 0, left: 0, visibility
  * into the nearest open dialog (modal dialogs sit in the top layer) or the body.
  * Focus stays on the trigger; the highlighted option is exposed via aria-activedescendant.
  */
-export function SelectField({ value, options, onChange, ariaLabel, icon: Icon, className = '' }: SelectFieldProps) {
+export function SelectField({
+    value,
+    options,
+    onChange,
+    ariaLabel,
+    icon: Icon,
+    className = '',
+    prefix,
+}: SelectFieldProps) {
     const [open, setOpen] = useState(false);
     const [highlight, setHighlight] = useState(-1);
     const [position, setPosition] = useState<CSSProperties>(UNPLACED);
@@ -156,6 +170,10 @@ export function SelectField({ value, options, onChange, ariaLabel, icon: Icon, c
                 aria-activedescendant={open && highlight >= 0 ? `${listboxId}-${highlight}` : undefined}
             >
                 {Icon && <Icon size={15} aria-hidden="true" />}
+                {selected?.dot && (
+                    <span className="select-dot" style={{ background: selected.dot }} aria-hidden="true" />
+                )}
+                {prefix && <span className="select-prefix">{prefix}</span>}
                 <span className="select-label">{selected?.label ?? ariaLabel}</span>
                 <ChevronDown size={14} aria-hidden="true" className={open ? 'select-chevron open' : 'select-chevron'} />
             </button>
@@ -178,7 +196,7 @@ export function SelectField({ value, options, onChange, ariaLabel, icon: Icon, c
                                     id={`${listboxId}-${index}`}
                                     role="option"
                                     aria-selected={active}
-                                    className={`select-option${index === highlight ? ' highlighted' : ''}${active ? ' active' : ''}`}
+                                    className={`select-option${index === highlight ? ' highlighted' : ''}${active ? ' active' : ''}${option.divider ? ' divided' : ''}`}
                                     onPointerDown={(event) => event.preventDefault()}
                                     onPointerEnter={() => setHighlight(index)}
                                     onClick={() => choose(index)}
@@ -186,6 +204,13 @@ export function SelectField({ value, options, onChange, ariaLabel, icon: Icon, c
                                     <span className="select-check">
                                         {active && <Check size={14} aria-hidden="true" />}
                                     </span>
+                                    {option.dot && (
+                                        <span
+                                            className="select-dot"
+                                            style={{ background: option.dot }}
+                                            aria-hidden="true"
+                                        />
+                                    )}
                                     <span>{option.label}</span>
                                 </div>
                             );

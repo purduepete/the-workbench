@@ -355,14 +355,6 @@ main.page-width {
     padding-bottom: calc(40px + var(--safe-area-bottom));
 }
 
-.intro {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 16px;
-    padding: 0 0 16px;
-}
-
 .eyebrow {
     display: inline-flex;
     align-items: center;
@@ -380,13 +372,6 @@ main.page-width {
     height: 1px;
     background: var(--accent);
     content: '';
-}
-
-.intro-aside {
-    display: flex;
-    min-width: 0;
-    align-items: flex-end;
-    padding-bottom: 0;
 }
 
 .local-badge {
@@ -520,14 +505,6 @@ main.page-width {
     overflow-x: auto;
     border-bottom: 1px solid var(--border);
     scrollbar-width: thin;
-}
-
-.tag-filter-label {
-    flex: 0 0 auto;
-    margin-right: 2px;
-    color: var(--quiet);
-    font-size: 11px;
-    font-weight: 650;
 }
 
 .tag-chip,
@@ -778,7 +755,7 @@ main.page-width {
     }
 }
 
-.task-row > .edit-button {
+.task-row > .card-action {
     align-self: flex-end;
 }
 
@@ -814,19 +791,6 @@ main.page-width {
 
 .idea-date svg {
     flex: 0 0 auto;
-}
-
-.edit-button {
-    flex: 0 0 auto;
-    border: 0;
-    color: var(--muted);
-    background: transparent;
-    cursor: pointer;
-    font-size: 11px;
-}
-
-.edit-button:hover {
-    color: var(--accent);
 }
 
 .empty-state {
@@ -1001,23 +965,6 @@ main.page-width {
     flex: 0 0 auto;
 }
 
-/* Editors without a heading put maximize and close on the title row. */
-.editor-title-row {
-    display: flex;
-    align-items: flex-end;
-    gap: 6px;
-}
-
-.editor-title-row > .field-group {
-    flex: 1 1 auto;
-    min-width: 0;
-}
-
-.editor-title-row > .icon-button {
-    width: 42px;
-    height: 42px;
-}
-
 .dialog-close[data-confirming='true'] {
     width: auto;
     gap: 6px;
@@ -1055,8 +1002,7 @@ main.page-width {
     margin-top: 16px;
 }
 
-form.idea-form > .field-group:first-child,
-form.idea-form > .editor-title-row:first-child > .field-group {
+form.idea-form > .field-group:first-child {
     margin-top: 0;
 }
 
@@ -1240,14 +1186,9 @@ form.idea-form > .editor-title-row:first-child > .field-group {
 }
 
 .filter-select {
-    width: 210px;
+    width: auto;
     flex: 0 1 auto;
     min-width: 0;
-}
-
-.manage-solutions {
-    height: 40px;
-    width: 40px;
 }
 
 .solution-settings {
@@ -1297,33 +1238,6 @@ form.idea-form > .editor-title-row:first-child > .field-group {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-}
-
-.field-select {
-    width: 100%;
-}
-
-.field-row {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    gap: 14px;
-}
-
-/* Solution, Status and Priority share one row on wider screens so the details editor keeps its height. */
-@media (min-width: 761px) {
-    .field-row.idea-meta-row {
-        grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr) minmax(0, 1fr);
-    }
-}
-
-.status-segmented {
-    width: 100%;
-}
-
-.status-segmented .segment-button:disabled {
-    grid-column: 1 / -1;
-    background: var(--accent);
-    cursor: default;
 }
 
 .idea-meta {
@@ -1382,12 +1296,6 @@ form.idea-form > .editor-title-row:first-child > .field-group {
     color: var(--muted);
     font-size: 11px;
     font-weight: 600;
-}
-
-.priority-chip[data-priority='high'] {
-    border-color: var(--accent);
-    color: var(--accent-contrast);
-    background: var(--accent);
 }
 
 .priority-chip[data-priority='low'] {
@@ -2036,15 +1944,6 @@ div.markdown-task-text {
     scroll-margin-top: calc(90px + var(--safe-area-top));
 }
 
-.task-day-heading {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    padding: 8px 0;
-}
-
-.task-day-heading h4,
 .task-title {
     margin: 0;
     font-size: 14px;
@@ -2372,11 +2271,11 @@ div.markdown-task-text {
         height: min(92dvh, 960px);
     }
 
-    /* Maximize fills the viewport, leaving a 16px margin so the backdrop stays visible. */
+    /* Maximize fills the viewport up to 1750px wide, leaving a 16px margin so the backdrop stays visible. */
     .dialog-backdrop.editor-dialog[data-maximized='true'] {
         --dialog-top: 16px;
         width: calc(100% - 32px);
-        max-width: none;
+        max-width: 1750px;
         height: calc(100dvh - 32px);
         max-height: none;
     }
@@ -2406,15 +2305,6 @@ div.markdown-task-text {
 @media (max-width: 760px) {
     main.page-width {
         padding-top: 20px;
-    }
-
-    .intro {
-        align-items: flex-start;
-        padding-bottom: 12px;
-    }
-
-    .intro-aside {
-        align-items: center;
     }
 
     .idea-grid {
@@ -2467,15 +2357,6 @@ div.markdown-task-text {
         padding-top: 16px;
     }
 
-    .intro {
-        display: block;
-        padding: 0 0 10px;
-    }
-
-    .intro-aside {
-        align-items: flex-start;
-    }
-
     .workspace-tools {
         flex-direction: column;
         align-items: stretch;
@@ -2495,10 +2376,6 @@ div.markdown-task-text {
     }
 
     .solution-settings {
-        grid-template-columns: minmax(0, 1fr);
-    }
-
-    .field-row {
         grid-template-columns: minmax(0, 1fr);
     }
 
@@ -2553,26 +2430,6 @@ div.markdown-task-text {
 ::highlight(search-match) {
     background-color: var(--accent);
     color: var(--accent-contrast);
-}
-
-.journal-meta-row {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: end;
-    gap: 12px 16px;
-}
-
-.journal-meta-row > .field-group {
-    margin: 0;
-}
-
-.journal-title-field {
-    flex: 1 1 240px;
-    min-width: 0;
-}
-
-.journal-meta-row {
-    margin-top: 16px;
 }
 
 /* Several notes can share a day: the date heads the group and each note is its own card. */
@@ -3240,4 +3097,151 @@ div.markdown-task-text {
 /* A folding comment clips its contents rather than showing a scrollbar. */
 .commentary-pane[data-closing] {
     overflow: hidden;
+}
+
+/* Editors: a borderless title line, then each choice as a compact chip that opens a themed menu. */
+.editor-title-input {
+    width: 100%;
+    padding: 2px 0 6px;
+    border: 0;
+    border-bottom: 1px solid transparent;
+    color: var(--text);
+    background: none;
+    font: inherit;
+    font-size: 18px;
+    font-weight: 560;
+}
+
+.editor-title-input::placeholder {
+    color: var(--quiet);
+}
+
+.editor-title-input:hover {
+    border-bottom-color: var(--border);
+}
+
+.editor-title-input:focus {
+    outline: none;
+    border-bottom-color: var(--accent);
+}
+
+.editor-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 10px;
+}
+
+.select-trigger.chip-select {
+    flex: none;
+    width: auto;
+    height: 28px;
+    gap: 6px;
+    padding: 0 8px 0 9px;
+    background: transparent;
+    font-size: 12.5px;
+}
+
+.select-trigger.chip-select > svg:first-child {
+    color: var(--quiet);
+}
+
+.chip-select .select-label {
+    flex: none;
+}
+
+.select-prefix {
+    color: var(--quiet);
+}
+
+.select-dot {
+    flex: none;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+}
+
+/* The Details toolbar matches the 28px editor chips. */
+.markdown-editor-toolbar > .markdown-mode {
+    width: 128px;
+    padding: 2px;
+}
+
+.markdown-editor-toolbar > .markdown-mode .segment-button {
+    height: 22px;
+    font-size: 12px;
+}
+
+.markdown-editor-toolbar > .markdown-mode .segment-fill {
+    top: 2px;
+    bottom: 2px;
+    left: 2px;
+    width: calc((100% - 4px) / 2);
+}
+
+.markdown-editor-toolbar > .markdown-add-section,
+.markdown-editor-toolbar > .image-link-editor > .secondary-button {
+    height: 28px;
+    min-height: 28px;
+    gap: 6px;
+    padding: 0 9px;
+    background: transparent;
+    font-size: 12.5px;
+}
+
+/* Page filter pills (Notes, Tasks, Ideas) share one look: equal segments sized to the widest label, the same padding,
+   and an icon on every option. */
+.segmented.page-pill {
+    width: max-content;
+    max-width: 100%;
+    grid-template-columns: repeat(var(--segment-count), 1fr);
+}
+
+.page-pill .segment-button {
+    gap: 6px;
+    padding: 0 12px;
+}
+
+.page-pill .segment-fill {
+    width: calc((100% - 6px) / var(--segment-count));
+}
+
+/* An action at the end of a menu sits under a rule, apart from the choices. */
+.select-option.divided {
+    margin-top: 4px;
+    border-top: 1px solid var(--border);
+}
+
+/* The sync state sits in the header beside refresh. */
+.top-actions > .local-badge {
+    padding: 0 4px;
+}
+
+/* Phones have no room for the healthy-sync cloud; any sync problem still shows. */
+@media (max-width: 540px) {
+    .top-actions > .local-badge[data-sync-status='synced'] {
+        display: none;
+    }
+}
+
+/* A read-only chip, such as a saved entry's date, looks like the others but does not react. */
+.select-trigger.chip-static {
+    color: var(--muted);
+    cursor: default;
+}
+
+.select-trigger.chip-static:hover {
+    border-color: var(--border);
+}
+
+/* Phones show any sync problem as its icon only; the full text stays available to screen readers. */
+@media (max-width: 540px) {
+    .top-actions > .local-badge > span {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip-path: inset(50%);
+        white-space: nowrap;
+    }
 }

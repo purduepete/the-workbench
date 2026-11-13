@@ -34,7 +34,10 @@ test('page filters are remembered after a reload', async ({ page }) => {
     await page.goto('/notes');
     await page.getByRole('group', { name: 'Filter notes' }).getByRole('button', { name: 'Work', exact: true }).click();
     await page.goto('/tasks');
-    await page.getByRole('group', { name: 'Task section', exact: true }).getByRole('button', { name: 'All' }).click();
+    await page
+        .getByRole('group', { name: 'Task section', exact: true })
+        .getByRole('button', { name: 'Work', exact: true })
+        .click();
     await page.goto('/ideas');
     await page
         .getByRole('group', { name: 'Idea view' })
@@ -54,6 +57,8 @@ test('page filters are remembered after a reload', async ({ page }) => {
     ).toHaveAttribute('aria-pressed', 'true');
     await page.goto('/tasks');
     await expect(
-        page.getByRole('group', { name: 'Task section', exact: true }).getByRole('button', { name: 'All' })
+        page
+            .getByRole('group', { name: 'Task section', exact: true })
+            .getByRole('button', { name: 'Work', exact: true })
     ).toHaveAttribute('aria-pressed', 'true');
 });

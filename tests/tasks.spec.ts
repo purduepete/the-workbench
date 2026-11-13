@@ -1,4 +1,4 @@
-import { expect, test, workerOrigin, closeDialog } from './fixtures';
+import { chip, chooseChip, expect, test, workerOrigin, closeDialog } from './fixtures';
 import type { APIRequestContext, Page } from './fixtures';
 import { taskLimits } from '../shared/tasks';
 import type { ServerTask } from '../shared/tasks';
@@ -52,7 +52,7 @@ async function seedIdea(request: APIRequestContext, title: string) {
 async function add(page: Page, title: string) {
     await page.getByRole('button', { name: 'New task', exact: true }).first().click();
     const dialog = page.getByRole('dialog', { name: 'New task', exact: true });
-    await dialog.getByRole('textbox', { name: 'Task title' }).fill(title);
+    await dialog.getByRole('textbox', { name: 'Title', exact: true }).fill(title);
     await dialog.getByRole('button', { name: 'Save task' }).click();
     await expect(dialog).toBeHidden();
     await expect(page.getByRole('heading', { name: title, exact: true })).toBeVisible();
@@ -87,16 +87,16 @@ test('creates a task from an idea title without changing the idea', async ({ pag
     await page.goto('/ideas');
     await page.getByRole('button', { name: 'New idea', exact: true }).click();
     const ideaDialog = page.getByRole('dialog', { name: 'New idea' });
-    await ideaDialog.getByRole('textbox', { name: 'Idea title' }).fill(title);
+    await ideaDialog.getByRole('textbox', { name: 'Title', exact: true }).fill(title);
     await ideaDialog.getByRole('textbox', { name: 'Details' }).fill('Keep this idea detail.');
     await ideaDialog.getByRole('button', { name: 'Save idea' }).click();
-    await expect(page.getByRole('status').first()).toHaveText('Synced');
+    await expect(page.locator('.local-badge')).toHaveText('Synced');
 
     const card = page.locator('.idea-card').filter({ has: page.getByRole('heading', { name: title, exact: true }) });
     await card.getByRole('button', { name: `Create task from ${title}` }).click();
     await expect(page).toHaveURL(/\/tasks$/);
     const dialog = page.getByRole('dialog', { name: 'New task', exact: true });
-    await expect(dialog.getByRole('textbox', { name: 'Task title' })).toHaveValue(title);
+    await expect(dialog.getByRole('textbox', { name: 'Title', exact: true })).toHaveValue(title);
     await expect(dialog.getByRole('textbox', { name: 'Details' })).toHaveValue('Keep this idea detail.');
     await expect(dialog.getByText(formatEntryDate(today()), { exact: true })).toBeVisible();
     await page.keyboard.press('Escape');
@@ -113,16 +113,16 @@ test('creates a task from an idea title without changing the idea', async ({ pag
     await page.getByRole('navigation', { name: 'Pages' }).getByRole('link', { name: 'Ideas' }).click();
     await expect(card).toBeVisible();
     await card.getByRole('button', { name: `Create task from ${title}` }).click();
-    await expect(dialog.getByRole('textbox', { name: 'Task title' })).toHaveValue(title);
+    await expect(dialog.getByRole('textbox', { name: 'Title', exact: true })).toHaveValue(title);
     const taskTitle = `${title} follow-up`;
-    await dialog.getByRole('textbox', { name: 'Task title' }).fill(taskTitle);
-    await dialog.getByRole('group', { name: 'Task category' }).getByRole('button', { name: 'Work' }).click();
+    await dialog.getByRole('textbox', { name: 'Title', exact: true }).fill(taskTitle);
+    await chooseChip(dialog, 'Section', 'Work');
     await dialog.getByRole('button', { name: 'Save task' }).click();
     await expect(
         page.getByRole('group', { name: 'Task section' }).getByRole('button', { name: 'Work' })
     ).toHaveAttribute('aria-pressed', 'true');
     await expect(page.getByRole('heading', { name: taskTitle, exact: true })).toBeVisible();
-    await expect(page.getByRole('status').first()).toHaveText('Synced');
+    await expect(page.locator('.local-badge')).toHaveText('Synced');
     await page.reload();
     await expect(page.getByRole('heading', { name: taskTitle, exact: true })).toBeVisible();
     const afterSave = (await (await request.get('/api/tasks')).json()) as { tasks: ServerTask[] };
@@ -140,7 +140,7 @@ test('creates an offline task from a maximum-length idea title', async ({ page, 
     await seedIdea(request, title);
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto('/ideas');
-    await expect(page.getByRole('status').first()).toHaveText('Synced');
+    await expect(page.locator('.local-badge')).toHaveText('Synced');
     await page.waitForFunction(() => localStorage.getItem('the-workbench.tasks-sync') !== null);
     await page.evaluate(() => navigator.serviceWorker.ready.then(() => undefined));
     await page.reload();
@@ -151,7 +151,7 @@ test('creates an offline task from a maximum-length idea title', async ({ page, 
     await context.setOffline(true);
     await card.getByRole('button', { name: `Create task from ${title}` }).click();
     const dialog = page.getByRole('dialog', { name: 'New task', exact: true });
-    await expect(dialog.getByRole('textbox', { name: 'Task title' })).toHaveValue(title);
+    await expect(dialog.getByRole('textbox', { name: 'Title', exact: true })).toHaveValue(title);
     await expect(dialog.getByRole('textbox', { name: 'Details' })).toHaveValue('Idea details remain on the idea.');
     await dialog.getByRole('button', { name: 'Save task' }).click();
     await expect(page.getByRole('heading', { name: title, exact: true })).toBeVisible();
@@ -159,7 +159,7 @@ test('creates an offline task from a maximum-length idea title', async ({ page, 
     await expect(page.getByRole('heading', { name: title, exact: true })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
     await context.setOffline(false);
-    await expect(page.getByRole('status').first()).toHaveText('Synced');
+    await expect(page.locator('.local-badge')).toHaveText('Synced');
     const synced = (await (await request.get('/api/tasks')).json()) as { tasks: ServerTask[] };
     expect(synced.tasks.filter((task) => !task.deleted)).toMatchObject([
         { title, taskDate: today(), category: 'home', body: 'Idea details remain on the idea.' },
@@ -204,7 +204,7 @@ for (const device of [
             await card.getByRole('button', { name: `Create task from ${title}` }).click();
             const dialog = page.getByRole('dialog', { name: 'New task', exact: true });
             await expect(dialog).toBeFocused();
-            await expect(dialog.getByRole('textbox', { name: 'Task title' })).toHaveValue(title);
+            await expect(dialog.getByRole('textbox', { name: 'Title', exact: true })).toHaveValue(title);
             await expect(page.locator('html')).not.toHaveAttribute('data-task-input-focused', 'true');
             await closeDialog(dialog);
             await expect(page.getByRole('button', { name: 'New task', exact: true })).toBeFocused();
@@ -212,32 +212,42 @@ for (const device of [
     });
 }
 
-test('sync status matches Notes placement on phone and desktop', async ({ page }) => {
-    const positions = async (panelName: string) => {
-        const status = page.getByRole('region', { name: 'Sync status' }).getByRole('status');
-        const panel = page.getByRole('region', { name: panelName });
+test('sync status sits in the header before New on Notes and Tasks, and hides on phones when synced', async ({
+    page,
+}) => {
+    const positions = async (newLabel: string) => {
+        const status = page.locator('.top-actions > .local-badge');
+        const opener = page.locator('.top-actions').getByRole('button', { name: newLabel, exact: true });
         await expect(status).toHaveText('Synced');
-        await expect(panel).toBeVisible();
+        await expect(page.locator('.intro')).toHaveCount(0);
+        // The badge comes right before the New button.
+        expect(await opener.evaluate((node) => node.previousElementSibling?.classList.contains('local-badge'))).toBe(
+            true
+        );
         const badge = await status.boundingBox();
-        const workspace = await panel.boundingBox();
-        if (!badge || !workspace) throw new Error('Sync status or workspace is not visible');
-        expect(badge.y + badge.height).toBeLessThanOrEqual(workspace.y);
-        return { badge, workspace };
+        const button = await opener.boundingBox();
+        if (!badge || !button) throw new Error('Sync status or New button is not visible');
+        expect(badge.x + badge.width).toBeLessThanOrEqual(button.x);
+        expect(Math.abs(badge.y + badge.height / 2 - (button.y + button.height / 2))).toBeLessThanOrEqual(2);
+        return badge;
     };
 
-    for (const width of [390, 1280, 1920]) {
+    for (const width of [1280, 1920]) {
         await page.setViewportSize({ width, height: 900 });
         await page.goto('/notes');
-        const notes = await positions('Your notes');
+        const notes = await positions('New note');
         await page.goto('/tasks');
-        const tasks = await positions('Your tasks');
-        expect(tasks.badge.x).toBeCloseTo(notes.badge.x, 0);
-        expect(tasks.badge.y).toBeCloseTo(notes.badge.y, 0);
-        expect(tasks.workspace.x).toBeCloseTo(notes.workspace.x, 0);
-        expect(tasks.workspace.y).toBeCloseTo(notes.workspace.y, 0);
+        const tasks = await positions('New task');
+        expect(tasks.y).toBeCloseTo(notes.y, 0);
+    }
+    await page.setViewportSize({ width: 390, height: 900 });
+    for (const path of ['/notes', '/tasks']) {
+        await page.goto(path);
+        const status = page.locator('.local-badge');
+        await expect(status).toHaveText('Synced');
+        await expect(status).toBeHidden();
     }
 });
-
 for (const theme of ['midnight', 'light']) {
     test(`tasks save, complete, move sections and fit phone/desktop in ${theme}`, async ({ page }) => {
         await page.addInitScript((value) => localStorage.setItem('the-workbench.theme-preference', value), theme);
@@ -256,7 +266,7 @@ for (const theme of ['midnight', 'light']) {
         const dialog = page.getByRole('dialog', { name: 'Edit task', exact: true });
         expect((await dialog.boundingBox())?.height).toBeCloseTo(828, 0);
         await dialog.getByRole('textbox', { name: 'Details' }).fill('Moved to my work list');
-        await dialog.getByRole('group', { name: 'Task category' }).getByRole('button', { name: 'Work' }).click();
+        await chooseChip(dialog, 'Section', 'Work');
         await dialog.getByRole('button', { name: 'Save task' }).click();
         const sections = page.getByRole('group', { name: 'Task section' });
         await expect(sections.getByRole('button', { name: 'Work' })).toHaveAttribute('aria-pressed', 'true');
@@ -286,7 +296,7 @@ for (const theme of ['midnight', 'light']) {
     });
 }
 
-test('current week defaults, calendar jumps and empty-day editor', async ({ page, request }) => {
+test('current week defaults, day add buttons and the Date chip pick a day', async ({ page, request }) => {
     await seed(request, 'Current');
     await seed(request, 'Older', dayOffset(-14));
     await seed(request, 'Future', dayOffset(14));
@@ -304,41 +314,61 @@ test('current week defaults, calendar jumps and empty-day editor', async ({ page
     await expect(current).toHaveAttribute('aria-expanded', 'true');
     await expect(older).toHaveAttribute('aria-expanded', 'false');
     await expect(future).toHaveAttribute('aria-expanded', 'false');
+    await expect(page.getByRole('button', { name: 'Calendar', exact: true })).toHaveCount(0);
+
+    // Today's heading is labelled and has its own add button.
+    const todayGroup = page.getByRole('region', { name: `Tasks for ${formatEntryDate(today())}`, exact: true });
+    await expect(todayGroup.locator('.task-day-heading .card-label')).toHaveText('Today');
+    await todayGroup.getByRole('button', { name: `Add a task for ${formatEntryDate(today())}`, exact: true }).click();
+    const editor = page.getByRole('dialog', { name: 'New task', exact: true });
+    await expect(editor.getByRole('button', { name: `Date: ${formatEntryDate(today())}`, exact: true })).toBeVisible();
+    await closeDialog(editor);
+
+    // An older day's add button opens the editor on that day.
+    await older.click();
+    await expect(page.getByRole('heading', { name: 'Older', exact: true })).toBeVisible();
+    const olderGroup = page.getByRole('region', { name: `Tasks for ${formatEntryDate(dayOffset(-14))}`, exact: true });
+    await expect(olderGroup.locator('.card-label')).toHaveCount(0);
+    await olderGroup
+        .getByRole('button', { name: `Add a task for ${formatEntryDate(dayOffset(-14))}`, exact: true })
+        .click();
+    await expect(
+        editor.getByRole('button', { name: `Date: ${formatEntryDate(dayOffset(-14))}`, exact: true })
+    ).toBeVisible();
+    await closeDialog(editor);
+
+    // A day with no tasks comes from the editor's Date chip.
     await current.click();
     await expect(page.getByRole('heading', { name: 'Current', exact: true })).toBeHidden();
-    await page.getByRole('button', { name: 'Calendar', exact: true }).click();
-    const calendar = page.getByRole('dialog', { name: 'Choose a day' });
-    await expect(calendar.getByRole('button', { name: formatEntryDate(today()), exact: true })).toHaveAttribute(
-        'data-has-entry',
-        'true'
-    );
-    await calendar.getByRole('button', { name: formatEntryDate(today()), exact: true }).press('ArrowLeft');
-    for (let step = 1; step < 14; step++) await page.keyboard.press('ArrowLeft');
-    // Enter on the focused day opens it, the same as a click.
-    await expect(calendar.getByRole('button', { name: formatEntryDate(dayOffset(-14)), exact: true })).toBeFocused();
-    await page.keyboard.press('Enter');
-    await expect(older).toHaveAttribute('aria-expanded', 'true');
-    await expect(page.getByRole('heading', { name: 'Older', exact: true })).toBeVisible();
-    await expect(page.getByRole('dialog')).toHaveCount(0);
-    await page.getByRole('button', { name: 'Calendar', exact: true }).click();
+    await page.getByRole('button', { name: 'New task', exact: true }).first().click();
+    await chip(editor, 'Date').click();
+    const calendar = page.getByRole('dialog', { name: 'Choose a date' });
     await calendar.getByRole('button', { name: formatEntryDate(today()), exact: true }).press('ArrowRight');
-    await expect(calendar.getByRole('button', { name: formatEntryDate(dayOffset(1)), exact: true })).toHaveAttribute(
-        'data-has-entry',
-        'false'
-    );
-    await calendar.getByRole('button', { name: formatEntryDate(dayOffset(1)), exact: true }).click();
-    const editor = page.getByRole('dialog', { name: 'New task', exact: true });
-    await expect(editor).toBeVisible();
-    await expect(editor.getByText(formatEntryDate(dayOffset(1)), { exact: true })).toBeVisible();
-    await editor.getByRole('textbox', { name: 'Task title' }).fill('Tomorrow');
+    // Enter on the focused day chooses it, the same as a click.
+    await expect(calendar.getByRole('button', { name: formatEntryDate(dayOffset(1)), exact: true })).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect(calendar).toHaveCount(0);
+    await expect(
+        editor.getByRole('button', { name: `Date: ${formatEntryDate(dayOffset(1))}`, exact: true })
+    ).toBeVisible();
+    await editor.getByRole('textbox', { name: 'Title', exact: true }).fill('Tomorrow');
     await editor.getByRole('button', { name: 'Save task' }).click();
     await expect(page.getByRole('heading', { name: 'Tomorrow', exact: true })).toBeVisible();
+
+    // A saved task shows its date without letting it change.
+    await page.getByRole('button', { name: 'Edit Tomorrow', exact: true }).click();
+    const edit = page.getByRole('dialog', { name: 'Edit task', exact: true });
+    await expect(edit.locator('.chip-static')).toHaveText(`Date: ${formatEntryDate(dayOffset(1))}`);
+    await expect(chip(edit, 'Date')).toHaveCount(0);
+    await closeDialog(edit);
 });
 
-test('calendar Today selects the current day without opening an editor', async ({ page }) => {
+test('calendar Today selects the current day without closing the editor', async ({ page }) => {
     await page.goto('/tasks');
-    await page.getByRole('button', { name: 'Calendar', exact: true }).click();
-    const calendar = page.getByRole('dialog', { name: 'Choose a day' });
+    await page.getByRole('button', { name: 'New task', exact: true }).first().click();
+    const editor = page.getByRole('dialog', { name: 'New task', exact: true });
+    await chip(editor, 'Date').click();
+    const calendar = page.getByRole('dialog', { name: 'Choose a date' });
     const yesterday = formatEntryDate(dayOffset(-1));
     const currentDay = formatEntryDate(today());
     await calendar.getByRole('button', { name: currentDay, exact: true }).press('ArrowLeft');
@@ -352,11 +382,13 @@ test('calendar Today selects the current day without opening an editor', async (
         'aria-pressed',
         'true'
     );
-    await expect(page.getByRole('dialog')).toHaveCount(1);
     await closeDialog(calendar);
+    await expect(calendar).toHaveCount(0);
+    await expect(editor).toBeVisible();
+    await expect(chip(editor, 'Date')).toHaveAccessibleName(`Date: ${currentDay}`);
+    await closeDialog(editor);
     await expect(page.getByRole('dialog')).toHaveCount(0);
 });
-
 test('pointer and keyboard reorder persist and completion preserves order', async ({ page, request }) => {
     for (const title of ['First', 'Second', 'Third']) await seed(request, title);
     await page.goto('/tasks');
@@ -370,7 +402,7 @@ test('pointer and keyboard reorder persist and completion preserves order', asyn
     await page.mouse.up();
     await expect(taskOrder(page)).toHaveText(['Second', 'Third', 'First']);
     // Let the drop animation and its sync finish before starting a keyboard sort on the same handle.
-    await expect(page.getByRole('status').first()).toHaveText('Synced');
+    await expect(page.locator('.local-badge')).toHaveText('Synced');
     const handle = page.getByRole('button', { name: 'Move First', exact: true });
     const firstRow = page.getByRole('listitem', { name: 'First', exact: true });
     // Each key waits for the visible drag state, so no keystroke lands before the library is ready.
@@ -391,7 +423,7 @@ test('pointer and keyboard reorder persist and completion preserves order', asyn
     await expect(taskOrder(page)).toHaveText(['Second', 'First', 'Third']);
     await page.getByRole('checkbox', { name: 'Complete First', exact: true }).check();
     await expect(taskOrder(page)).toHaveText(['Second', 'First', 'Third']);
-    await expect(page.getByRole('status').first()).toHaveText('Synced');
+    await expect(page.locator('.local-badge')).toHaveText('Synced');
     await page.reload();
     await expect(taskOrder(page)).toHaveText(['Second', 'First', 'Third']);
     await expect(page.getByRole('checkbox', { name: 'Reopen First', exact: true })).toBeChecked();
@@ -425,7 +457,7 @@ test('task drafts require Cancel or Save and offline capture survives reload', a
     await page.reload();
     await expect(page.getByRole('heading', { name: 'Offline task', exact: true })).toBeVisible();
     await context.setOffline(false);
-    await expect(page.getByRole('status').first()).toHaveText('Synced');
+    await expect(page.locator('.local-badge')).toHaveText('Synced');
     await page.reload();
     await expect(page.getByRole('heading', { name: 'Offline task', exact: true })).toBeVisible();
 });

@@ -19,7 +19,8 @@ export function SyncBadge({ status, waiting }: { status: SyncStatus; waiting: nu
     return (
         <span className="local-badge" data-sync-status={status} role="status">
             <Icon size={14} aria-hidden="true" />
-            {label}
+            {/* In the header, a healthy sync is just the cloud; anything needing attention spells itself out. */}
+            <span className={status === 'synced' ? 'sr-only' : undefined}>{label}</span>
         </span>
     );
 }

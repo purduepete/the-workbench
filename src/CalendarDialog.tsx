@@ -26,23 +26,28 @@ function shiftDay(day: string, amount: number): string {
 export function CalendarDialog({
     entries,
     today,
+    selected: initialSelected = today,
     onSelect,
     onClose,
     label = 'Daily notes',
+    title = 'Choose a day',
 }: {
     entries: string[];
     today: string;
+    /** The day shown as chosen when the calendar opens; defaults to today. */
+    selected?: string;
     onSelect: (date: string) => void;
     onClose: () => void;
     label?: string;
+    title?: string;
 }) {
     const dialogRef = useRef<HTMLDialogElement>(null);
     const returnFocusRef = useRef(document.activeElement instanceof HTMLElement ? document.activeElement : null);
     const dayRefs = useRef(new Map<string, HTMLButtonElement>());
-    const initial = today.split('-').map(Number);
+    const initial = initialSelected.split('-').map(Number);
     const [month, setMonth] = useState(() => new Date(initial[0], initial[1] - 1, 1, 12));
-    const [selected, setSelected] = useState(today);
-    const [focusDate, setFocusDate] = useState(today);
+    const [selected, setSelected] = useState(initialSelected);
+    const [focusDate, setFocusDate] = useState(initialSelected);
     const days = useMemo(() => monthDays(month), [month]);
     const entryDays = useMemo(() => new Set(entries), [entries]);
 
@@ -112,7 +117,7 @@ export function CalendarDialog({
                 <div className="dialog-heading">
                     <div>
                         <p className="eyebrow">{label}</p>
-                        <h2 id="calendar-title">Choose a day</h2>
+                        <h2 id="calendar-title">{title}</h2>
                     </div>
                 </div>
                 <div className="calendar-month">
@@ -179,5 +184,56 @@ export function CalendarDialog({
                 </div>
             </div>
         </dialog>
+    );
+}
+
+/** A date chip showing mm/dd/yyyy; clicking it opens the themed calendar to pick another day. */
+export function DateField({
+    label,
+    value,
+    onChange,
+}: {
+    label: string;
+    value: string;
+    /** Without a handler the date is shown but cannot be changed, as on a saved note or task. */
+    onChange?: (date: string) => void;
+}) {
+    const [open, setOpen] = useState(false);
+    if (!onChange) {
+        return (
+            <span className="select-trigger chip-select chip-static">
+                <CalendarDays size={14} aria-hidden="true" />
+                <span className="sr-only">{label}: </span>
+                <span className="select-label">{formatEntryDate(value)}</span>
+            </span>
+        );
+    }
+    return (
+        <>
+            <button
+                type="button"
+                className="select-trigger chip-select"
+                aria-label={`${label}: ${formatEntryDate(value)}`}
+                aria-haspopup="dialog"
+                onClick={() => setOpen(true)}
+            >
+                <CalendarDays size={14} aria-hidden="true" />
+                <span className="select-label">{formatEntryDate(value)}</span>
+            </button>
+            {open && (
+                <CalendarDialog
+                    entries={[]}
+                    today={localDateKey(new Date())}
+                    selected={value}
+                    label={label}
+                    title="Choose a date"
+                    onClose={() => setOpen(false)}
+                    onSelect={(date) => {
+                        onChange(date);
+                        setOpen(false);
+                    }}
+                />
+            )}
+        </>
     );
 }

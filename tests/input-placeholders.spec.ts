@@ -1,6 +1,6 @@
 import { expect, test, closeDialog, openEditor } from './fixtures';
 
-test('only search fields show placeholders', async ({ page }) => {
+test('only search fields and the editor title show placeholders', async ({ page }) => {
     for (const [path, buttons] of [
         ['/ideas', ['New idea']],
         ['/tasks', ['New task']],
@@ -12,7 +12,9 @@ test('only search fields show placeholders', async ({ page }) => {
             await openEditor(page, name);
             const dialog = page.getByRole('dialog');
             await expect(dialog).toBeVisible();
-            await expect(dialog.locator('input[placeholder], textarea[placeholder]')).toHaveCount(0);
+            // The borderless title input is the one editor field that names itself with a placeholder.
+            await expect(dialog.locator('input[placeholder], textarea[placeholder]')).toHaveCount(1);
+            await expect(dialog.getByLabel('Title', { exact: true })).toHaveAttribute('placeholder', 'Title');
             await closeDialog(dialog);
         }
     }

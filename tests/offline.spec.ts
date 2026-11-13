@@ -15,14 +15,14 @@ test('first visit prepares a new offline tab, all edit queues survive reload and
     const taskTitle = `Offline task ${suffix}`;
     const journalBody = `Offline journal ${suffix}`;
     await page.goto('/ideas');
-    await expect(page.getByRole('status').first()).toHaveText('Synced');
+    await expect(page.locator('.local-badge')).toHaveText('Synced');
     await page.evaluate(() => navigator.serviceWorker.ready.then(() => undefined));
 
     await context.setOffline(true);
     const offline = await context.newPage();
     await offline.goto('/notes');
     await expect(offline.getByRole('heading', { name: 'The Workbench' })).toBeVisible();
-    await expect(offline.getByRole('status').first()).toHaveText('Offline');
+    await expect(offline.locator('.local-badge')).toHaveText('Offline');
 
     await offline.getByRole('button', { name: 'New note', exact: true }).click();
     let dialog = offline.getByRole('dialog');
@@ -44,7 +44,7 @@ test('first visit prepares a new offline tab, all edit queues survive reload and
     await offline.goto('/ideas');
     await offline.getByRole('button', { name: 'New idea', exact: true }).click();
     dialog = offline.getByRole('dialog');
-    await dialog.getByLabel('Idea title').fill(ideaTitle);
+    await dialog.getByLabel('Title', { exact: true }).fill(ideaTitle);
     await dialog.getByRole('button', { name: 'Save idea' }).click();
     await offline.reload();
     await expect(offline.getByRole('heading', { name: ideaTitle })).toBeVisible();
@@ -52,12 +52,12 @@ test('first visit prepares a new offline tab, all edit queues survive reload and
     await offline.goto('/tasks');
     await offline.getByRole('button', { name: 'New task', exact: true }).click();
     dialog = offline.getByRole('dialog');
-    await dialog.getByLabel('Task title').fill(taskTitle);
+    await dialog.getByLabel('Title', { exact: true }).fill(taskTitle);
     await dialog.getByRole('button', { name: 'Save task' }).click();
     await offline.getByRole('checkbox', { name: `Complete ${taskTitle}`, exact: true }).check();
     await offline.reload();
     await expect(offline.getByRole('checkbox', { name: `Reopen ${taskTitle}`, exact: true })).toBeChecked();
-    await expect(offline.getByRole('status').first()).toHaveText(/Offline, \d+ changes? waiting/);
+    await expect(offline.locator('.local-badge')).toHaveText(/Offline, \d+ changes? waiting/);
 
     for (const theme of ['Light', 'Midnight']) {
         await offline.getByRole('button', { name: /^Theme:/ }).click();
@@ -73,7 +73,7 @@ test('first visit prepares a new offline tab, all edit queues survive reload and
     await page.close();
     await context.setOffline(false);
     // The first sync after reconnecting can fail while the network comes back; the app retries every 30 seconds.
-    await expect(offline.getByRole('status').first()).toHaveText('Synced', { timeout: 45_000 });
+    await expect(offline.locator('.local-badge')).toHaveText('Synced', { timeout: 45_000 });
     const { ideas } = (await (await request.get('/api/ideas')).json()) as { ideas: ServerIdea[] };
     const { entries } = (await (await request.get('/api/journal')).json()) as { entries: ServerJournalEntry[] };
     const { notes } = (await (await request.get('/api/global-notes')).json()) as { notes: ServerGlobalNote[] };
@@ -93,7 +93,7 @@ test('a cached shell without downloaded records still allows offline capture', a
     await page.reload();
     await page.getByRole('button', { name: 'New idea', exact: true }).click();
     const dialog = page.getByRole('dialog');
-    await dialog.getByLabel('Idea title').fill('First local offline idea');
+    await dialog.getByLabel('Title', { exact: true }).fill('First local offline idea');
     await dialog.getByRole('button', { name: 'Save idea' }).click();
     await expect(page.getByRole('heading', { name: 'First local offline idea' })).toBeVisible();
     await page.reload();
@@ -105,7 +105,7 @@ test('a cached shell without downloaded records still allows offline capture', a
     await expect(page.getByRole('paragraph').filter({ hasText: 'First local offline journal' })).toBeVisible();
     await page.goto('/tasks');
     await page.getByRole('button', { name: 'New task', exact: true }).click();
-    await page.getByRole('dialog').getByLabel('Task title').fill('First local offline task');
+    await page.getByRole('dialog').getByLabel('Title', { exact: true }).fill('First local offline task');
     await page.getByRole('dialog').getByRole('button', { name: 'Save task' }).click();
     await page.reload();
     await expect(page.getByRole('heading', { name: 'First local offline task' })).toBeVisible();
@@ -114,7 +114,7 @@ test('a cached shell without downloaded records still allows offline capture', a
 test('stalled API requests time out, preserve a queued edit and recover without an online event', async ({ page }) => {
     test.setTimeout(50_000);
     await page.goto('/ideas');
-    await expect(page.getByRole('status').first()).toHaveText('Synced');
+    await expect(page.locator('.local-badge')).toHaveText('Synced');
     await page.route('**/api/**', () => undefined);
     await page.getByRole('button', { name: 'Refresh ideas', exact: true }).click();
     await expect(page.getByRole('button', { name: 'Refresh ideas', exact: true })).toHaveAttribute(
@@ -122,16 +122,16 @@ test('stalled API requests time out, preserve a queued edit and recover without 
         'false',
         { timeout: 13_000 }
     );
-    await expect(page.getByRole('status').first()).toHaveText('Sync paused');
+    await expect(page.locator('.local-badge')).toHaveText('Sync paused');
     expect(await page.evaluate(() => navigator.onLine)).toBe(true);
     await page.getByRole('button', { name: 'New idea', exact: true }).click();
     const dialog = page.getByRole('dialog');
-    await dialog.getByLabel('Idea title').fill('Saved during Internet outage');
+    await dialog.getByLabel('Title', { exact: true }).fill('Saved during Internet outage');
     await dialog.getByRole('button', { name: 'Save idea' }).click();
     await expect(page.getByRole('heading', { name: 'Saved during Internet outage' })).toBeVisible();
-    await expect(page.getByRole('status').first()).toHaveText('Sync paused, 1 change waiting', { timeout: 13_000 });
+    await expect(page.locator('.local-badge')).toHaveText('Sync paused, 1 change waiting', { timeout: 13_000 });
     await page.unroute('**/api/**');
-    await expect(page.getByRole('status').first()).toHaveText('Synced', { timeout: 35_000 });
+    await expect(page.locator('.local-badge')).toHaveText('Synced', { timeout: 35_000 });
     const { ideas } = (await (await page.request.get('/api/ideas')).json()) as { ideas: { title: string }[] };
     expect(ideas.filter((idea) => idea.title === 'Saved during Internet outage')).toHaveLength(1);
 });

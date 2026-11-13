@@ -156,6 +156,7 @@ export function App() {
                         ))}
                     </nav>
                     <div className="top-actions">
+                        {syncBadge}
                         {route === '/tasks' ? (
                             <button
                                 type="button"
@@ -219,7 +220,6 @@ export function App() {
                             today={localDateKey()}
                             editingTask={editingTask}
                             setEditingTask={setEditingTask}
-                            syncBadge={syncBadge}
                             onDraftProtectionChange={setProtectedDraft}
                         />
                     ) : onNotes ? (
@@ -228,7 +228,6 @@ export function App() {
                             globalNotes={globalNotes}
                             comments={comments}
                             ready={journal.ready}
-                            syncBadge={syncBadge}
                             today={localDateKey()}
                             editingNote={editingNote}
                             setEditingNote={setEditingNote}
@@ -239,7 +238,6 @@ export function App() {
                             sync={sync}
                             solutionsState={solutionsState}
                             ready={ideasReady}
-                            syncBadge={syncBadge}
                             editingIdea={editingIdea}
                             setEditingIdea={setEditingIdea}
                             onCreateTask={(title, body) => {

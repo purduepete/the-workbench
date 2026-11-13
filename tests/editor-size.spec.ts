@@ -26,19 +26,21 @@ test('desktop editors maximize to the viewport, remember the choice and restore'
                 return element.getBoundingClientRect().toJSON() as DOMRect;
             };
             return {
-                title: node.querySelector('.editor-title-row') ? box('input[name="title"]') : null,
-                toggle: box('.editor-size-toggle'),
-                close: box('.dialog-close'),
+                title: box('.editor-title-input'),
+                heading: box('.dialog-heading'),
+                toggle: box('.dialog-corner-actions .editor-size-toggle'),
+                close: box('.dialog-corner-actions .dialog-close'),
             };
         });
-        // Close sits immediately right of the maximize button, on the same row.
+        // Close sits immediately right of the maximize button, on the same row in the upper right corner.
         expect(boxes.close.y).toBeCloseTo(boxes.toggle.y, 0);
         expect(boxes.close.x - (boxes.toggle.x + boxes.toggle.width)).toBeCloseTo(6, 0);
-        if (editor.open === 'New idea') {
-            if (!boxes.title) throw new Error(`${editor.open} title row is missing.`);
-            expect(boxes.toggle.y).toBeCloseTo(boxes.title.y, 0);
-            expect(boxes.toggle.x - (boxes.title.x + boxes.title.width)).toBeCloseTo(6, 0);
-        }
+        // 16px inset inside the dialog's 1px border.
+        expect(normal.x + normal.width - (boxes.close.x + boxes.close.width)).toBeCloseTo(17, 0);
+        // The corner buttons share the heading row, and the title starts below the heading.
+        expect(boxes.toggle.y + boxes.toggle.height).toBeGreaterThan(boxes.heading.y);
+        expect(boxes.toggle.y).toBeLessThan(boxes.heading.y + boxes.heading.height);
+        expect(boxes.title.y).toBeGreaterThanOrEqual(boxes.heading.y + boxes.heading.height - 1);
 
         await dialog.getByRole('button', { name: 'Maximize editor', exact: true }).click();
         const restore = dialog.getByRole('button', { name: 'Restore editor size', exact: true });
@@ -56,6 +58,15 @@ test('desktop editors maximize to the viewport, remember the choice and restore'
         expect(maximized.width).toBeLessThanOrEqual(viewport.width - 32);
         expect(maximized.height).toBeCloseTo(viewport.height - 32, 0);
         expect(await dialog.evaluate((element) => element.scrollHeight - element.clientHeight)).toBeLessThanOrEqual(1);
+
+        // On a very wide screen the maximized editor stops at 1750px and stays centered.
+        await page.setViewportSize({ width: 2400, height: 900 });
+        const wide = await dialog.boundingBox();
+        const wideWidth = await page.evaluate(() => document.documentElement.clientWidth);
+        if (!wide) throw new Error(`${editor.open} editor is missing.`);
+        expect(wide.width).toBeCloseTo(1750, 0);
+        expect(Math.abs(wide.x + wide.width / 2 - wideWidth / 2)).toBeLessThanOrEqual(9);
+        await page.setViewportSize({ width: 1440, height: 900 });
 
         // The choice is remembered for the next editor.
         await closeDialog(dialog);

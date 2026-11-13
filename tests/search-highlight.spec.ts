@@ -10,7 +10,7 @@ test('search highlights matching text in ideas, notes and tasks and clears with 
     await page.goto('/ideas');
     await page.getByRole('button', { name: 'New idea', exact: true }).click();
     let dialog = page.getByRole('dialog');
-    await dialog.getByLabel('Idea title', { exact: true }).fill(`${word} idea`);
+    await dialog.getByLabel('Title', { exact: true }).fill(`${word} idea`);
     await dialog.getByRole('textbox', { name: 'Details', exact: true }).fill(`Has **${word.toLowerCase()}** in bold.`);
     await dialog.getByRole('button', { name: 'Save idea', exact: true }).click();
     const ideaSearch = page.getByRole('searchbox', { name: 'Search ideas' });
@@ -22,7 +22,7 @@ test('search highlights matching text in ideas, notes and tasks and clears with 
     await page.goto('/notes');
     await openEditor(page, 'Global note');
     dialog = page.getByRole('dialog');
-    await dialog.getByLabel('Title (optional)', { exact: true }).fill(`Note about ${word}`);
+    await dialog.getByLabel('Title', { exact: true }).fill(`Note about ${word}`);
     await dialog.getByRole('button', { name: 'Save note', exact: true }).click();
     await page
         .getByRole('group', { name: 'Filter notes', exact: true })
@@ -34,7 +34,7 @@ test('search highlights matching text in ideas, notes and tasks and clears with 
     await page.goto('/tasks');
     await page.getByRole('button', { name: 'New task', exact: true }).first().click();
     dialog = page.getByRole('dialog');
-    await dialog.getByRole('textbox', { name: 'Task title' }).fill(`Task ${word}`);
+    await dialog.getByRole('textbox', { name: 'Title', exact: true }).fill(`Task ${word}`);
     await dialog.getByRole('button', { name: 'Save task', exact: true }).click();
     await page.getByRole('searchbox', { name: 'Search tasks' }).fill(word);
     await expect.poll(() => highlighted(page)).toEqual([word]);

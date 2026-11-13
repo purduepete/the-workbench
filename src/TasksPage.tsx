@@ -1,6 +1,6 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
-import type { CSSProperties, FormEvent, ReactNode } from 'react';
-import { CalendarDays, Check, GripVertical, ListTodo, Search, Trash2, X } from 'lucide-react';
+import type { CSSProperties, FormEvent } from 'react';
+import { Briefcase, Check, GripVertical, House, Layers, ListTodo, Pencil, Plus, Search, Trash2, X } from 'lucide-react';
 import { closestCenter, DndContext, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import {
     arrayMove,
@@ -12,13 +12,14 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { taskCategories, taskLimits } from '../shared/tasks';
 import type { ServerTask, TaskCategory } from '../shared/tasks';
-import { CalendarDialog } from './CalendarDialog';
+import { DateField } from './CalendarDialog';
+import { SelectField } from './SelectField';
 import { formatEntryDate, weekStart } from './journal';
 import { PageLoading } from './Loading';
 import { NoteGroup } from './NoteGroup';
 import { readTaskCategory, writeTaskCategory } from './tasksSync';
 import type { TaskSection } from './tasksSync';
-import { useEditorDismissal } from './useEditorDismissal';
+import { formEdited, useEditorDismissal } from './useEditorDismissal';
 import { EditorSizeToggle, useEditorSize } from './EditorSize';
 import { DialogCloseButton } from './DialogClose';
 import { useSearchHighlight } from './searchHighlight';
@@ -30,7 +31,6 @@ import { useDetailsHover } from './useDetailsHover';
 export interface TaskEditorTarget {
     id: string;
     taskDate: string;
-    fromCalendar?: boolean;
     initialTitle?: string;
     initialBody?: string;
 }
@@ -52,19 +52,23 @@ function TaskCategories<T extends TaskSection>({
         '--segment-count': options.length,
     } as CSSProperties;
     return (
-        <div className="segmented task-categories" role="group" aria-label={label} style={style}>
+        <div className="segmented task-categories page-pill" role="group" aria-label={label} style={style}>
             <span className="segment-fill" style={style} aria-hidden="true" />
-            {options.map((category) => (
-                <button
-                    key={category}
-                    type="button"
-                    className="segment-button"
-                    aria-pressed={value === category}
-                    onClick={() => onChange(category)}
-                >
-                    {category === 'home' ? 'Home' : category === 'work' ? 'Work' : 'All'}
-                </button>
-            ))}
+            {options.map((category) => {
+                const Icon = category === 'work' ? Briefcase : House;
+                return (
+                    <button
+                        key={category}
+                        type="button"
+                        className="segment-button"
+                        aria-pressed={value === category}
+                        onClick={() => onChange(category)}
+                    >
+                        <Icon size={13} aria-hidden="true" />
+                        {category === 'work' ? 'Work' : 'Home'}
+                    </button>
+                );
+            })}
         </div>
     );
 }
@@ -102,15 +106,15 @@ function TaskDialog({
         /iPhone|iPad|iPod/i.test(navigator.userAgent) ||
         (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
     const [section, setSection] = useState(task?.category ?? category);
+    // A new task can be filed under any day; a saved task keeps its date.
+    const [taskDate, setTaskDate] = useState(task?.taskDate ?? target.taskDate);
     const [error, setError] = useState<string | null>(null);
     const [confirmingDelete, setConfirmingDelete] = useState(false);
     const initialTitle = task?.title ?? target.initialTitle ?? '';
     const initialBody = task?.body ?? target.initialBody ?? '';
-    const dismissal = useEditorDismissal(
-        dialogRef,
-        Boolean(initialTitle.trim() || initialBody.trim()),
-        onDraftProtectionChange
-    );
+    // A new task prefilled from elsewhere is unsaved work; a saved task is only protected once it changes.
+    const prefilled = !task && Boolean(initialTitle.trim() || initialBody.trim());
+    const dismissal = useEditorDismissal(dialogRef, prefilled, onDraftProtectionChange);
     useLayoutEffect(() => {
         const dialog = dialogRef.current;
         const returnFocus = returnFocusRef.current;
@@ -134,7 +138,7 @@ function TaskDialog({
         }
         const result = onSave({
             id: target.id,
-            taskDate: target.taskDate,
+            taskDate,
             category: section,
             title,
             body: String(data.get('body') ?? ''),
@@ -149,7 +153,6 @@ function TaskDialog({
             data-maximized={editorSize.maximized}
             aria-labelledby="task-dialog-title"
             tabIndex={-1}
-            data-replacing={target.fromCalendar ?? false}
             onKeyDown={(event) => {
                 if (event.key !== 'Escape') return;
                 event.preventDefault();
@@ -171,10 +174,7 @@ function TaskDialog({
                 onSubmit={submit}
                 onChange={() => {
                     if (!formRef.current) return;
-                    const data = new FormData(formRef.current);
-                    dismissal.setProtectedDraft(
-                        Boolean(String(data.get('title') ?? '').trim() || String(data.get('body') ?? '').trim())
-                    );
+                    dismissal.setProtectedDraft(prefilled || formEdited(formRef.current));
                 }}
             >
                 <div className="dialog-corner-actions">
@@ -183,31 +183,38 @@ function TaskDialog({
                 </div>
                 <div className="dialog-heading">
                     <div>
-                        <p className="eyebrow">{formatEntryDate(target.taskDate)}</p>
+                        <p className="eyebrow">Task</p>
                         <h2 id="task-dialog-title">{task ? 'Edit task' : 'New task'}</h2>
                     </div>
                 </div>
-                <div className="field-group">
-                    <span className="field-label">Section</span>
-                    <TaskCategories
-                        label="Task category"
-                        value={section}
-                        onChange={setSection}
-                        options={taskCategories}
-                    />
-                </div>
-                <label className="field-group">
-                    <span className="field-label">Task title</span>
-                    <input
-                        ref={titleRef}
-                        className="field-input"
-                        name="title"
-                        type="text"
-                        required
-                        maxLength={taskLimits.title}
-                        defaultValue={initialTitle}
-                    />
+                <label className="sr-only" htmlFor="task-title-input">
+                    Title
                 </label>
+                <input
+                    id="task-title-input"
+                    ref={titleRef}
+                    className="editor-title-input"
+                    name="title"
+                    type="text"
+                    placeholder="Title"
+                    required
+                    maxLength={taskLimits.title}
+                    defaultValue={initialTitle}
+                />
+                <div className="editor-chips">
+                    <SelectField
+                        ariaLabel="Section"
+                        icon={Layers}
+                        className="chip-select"
+                        value={section}
+                        options={[
+                            { value: 'home', label: 'Home' },
+                            { value: 'work', label: 'Work' },
+                        ]}
+                        onChange={(value) => setSection(value as TaskCategory)}
+                    />
+                    <DateField label="Date" value={taskDate} onChange={task ? undefined : setTaskDate} />
+                </div>
                 <MarkdownNoteEditor
                     label="Details"
                     bodyRef={bodyRef}
@@ -327,11 +334,11 @@ function TaskRow({
             </div>
             <button
                 type="button"
-                className="edit-button"
+                className="card-action"
                 aria-label={`Edit ${task.title}`}
                 onClick={() => onEdit(task)}
             >
-                Edit
+                <Pencil size={15} aria-hidden="true" />
             </button>
         </li>
     );
@@ -391,14 +398,12 @@ export function TasksPage({
     today,
     editingTask,
     setEditingTask,
-    syncBadge,
     onDraftProtectionChange,
 }: {
     tasks: ReturnType<typeof useTasksSync>;
     today: string;
     editingTask: TaskEditorTarget | undefined;
     setEditingTask: (target: TaskEditorTarget | undefined) => void;
-    syncBadge: ReactNode;
     onDraftProtectionChange: (value: boolean) => void;
 }) {
     const [initialCategory] = useState(readTaskCategory);
@@ -425,16 +430,13 @@ export function TasksPage({
     const [query, setQuery] = useState('');
     const workspaceRef = useRef<HTMLElement>(null);
     useSearchHighlight(workspaceRef, query, '.task-row');
-    const [calendarOpen, setCalendarOpen] = useState(false);
     const [expandedWeeks, setExpandedWeeks] = useState<Record<string, boolean>>({});
-    const dayRefs = useRef(new Map<string, HTMLElement>());
     const { storageWarning } = useTheme();
     const notice = tasks.notice ?? categoryNotice ?? storageWarning;
     const selectCategory = (value: TaskSection) => {
         setCategory(value);
         setCategoryNotice(writeTaskCategory(value));
     };
-    const inCategory = tasks.tasks.filter((task) => category === 'all' || task.category === category);
     const needle = query.trim().toLocaleLowerCase();
     const visible = tasks.tasks.filter(
         (task) =>
@@ -454,8 +456,6 @@ export function TasksPage({
         days.set(task.taskDate, list);
     }
     const currentTask = tasks.tasks.find((task) => task.id === editingTask?.id);
-    const addTask = (date: string, fromCalendar = false) =>
-        setEditingTask({ id: crypto.randomUUID(), taskDate: date, fromCalendar });
     const editTask = (task: ServerTask) => setEditingTask({ id: task.id, taskDate: task.taskDate });
     return (
         <>
@@ -487,10 +487,6 @@ export function TasksPage({
                 />
             ) : (
                 <div className="data-enter">
-                    <section className="intro" aria-label="Sync status">
-                        <div className="intro-aside">{syncBadge}</div>
-                    </section>
-
                     <section ref={workspaceRef} className="workspace" aria-label="Your tasks">
                         <div className="workspace-tools">
                             <label className="search-wrap">
@@ -502,7 +498,7 @@ export function TasksPage({
                                     aria-label="Search tasks"
                                     value={query}
                                     onChange={(event) => setQuery(event.target.value)}
-                                    placeholder="Search tasks or details..."
+                                    placeholder="Search tasks..."
                                 />
                             </label>
                             <div className="task-toolbar-actions">
@@ -510,16 +506,8 @@ export function TasksPage({
                                     label="Task section"
                                     value={category}
                                     onChange={selectCategory}
-                                    options={['all', ...taskCategories]}
+                                    options={taskCategories}
                                 />
-                                <button
-                                    type="button"
-                                    className="secondary-button"
-                                    onClick={() => setCalendarOpen(true)}
-                                >
-                                    <CalendarDays size={15} aria-hidden="true" />
-                                    Calendar
-                                </button>
                             </div>
                         </div>
                         {needle && <p className="task-search-hint field-hint">Clear search to reorder tasks.</p>}
@@ -541,17 +529,24 @@ export function TasksPage({
                                         {[...days].map(([date, daily]) => (
                                             <section
                                                 key={date}
-                                                className="task-day"
+                                                className="task-day journal-day"
                                                 aria-label={`Tasks for ${formatEntryDate(date)}`}
-                                                ref={(element) => {
-                                                    if (element) dayRefs.current.set(date, element);
-                                                    else dayRefs.current.delete(date);
-                                                }}
                                             >
-                                                <div className="task-day-heading">
+                                                <div className="task-day-heading journal-day-heading">
                                                     <h4>
                                                         <time dateTime={date}>{formatEntryDate(date)}</time>
                                                     </h4>
+                                                    {date === today && <span className="card-label">Today</span>}
+                                                    <button
+                                                        type="button"
+                                                        className="icon-button journal-day-add"
+                                                        aria-label={`Add a task for ${formatEntryDate(date)}`}
+                                                        onClick={() =>
+                                                            setEditingTask({ id: crypto.randomUUID(), taskDate: date })
+                                                        }
+                                                    >
+                                                        <Plus size={12} aria-hidden="true" />
+                                                    </button>
                                                 </div>
                                                 <TaskDay
                                                     tasks={daily}
@@ -618,29 +613,6 @@ export function TasksPage({
                         return error;
                     }}
                     onDelete={() => (currentTask ? tasks.remove(currentTask) : 'This task is no longer available.')}
-                />
-            )}
-            {calendarOpen && (
-                <CalendarDialog
-                    label="Daily tasks"
-                    today={today}
-                    entries={inCategory.map((task) => task.taskDate)}
-                    onClose={() => setCalendarOpen(false)}
-                    onSelect={(date) => {
-                        setCalendarOpen(false);
-                        if (!inCategory.some((task) => task.taskDate === date)) {
-                            addTask(date, true);
-                            return;
-                        }
-                        setQuery('');
-                        setExpandedWeeks((current) => ({ ...current, [`${category}-${weekStart(date)}`]: true }));
-                        requestAnimationFrame(() =>
-                            dayRefs.current.get(date)?.scrollIntoView({
-                                block: 'start',
-                                behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth',
-                            })
-                        );
-                    }}
                 />
             )}
         </>

@@ -178,8 +178,9 @@ export type TaskSection = TaskCategory | 'all';
 export function readTaskCategory(): { category: TaskSection; error: string | null } {
     try {
         const value = window.localStorage.getItem(CATEGORY_KEY);
+        // The All section was removed; an old saved All opens Home.
         if (value === null || value === 'home' || value === 'work' || value === 'all')
-            return { category: value ?? 'home', error: null };
+            return { category: value === 'work' ? 'work' : 'home', error: null };
         return { category: 'home', error: 'The saved task section is invalid. Home is selected.' };
     } catch {
         return { category: 'home', error: 'The task section could not be read from browser storage.' };

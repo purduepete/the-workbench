@@ -24,7 +24,7 @@ for (const theme of ['midnight', 'light']) {
         await page.goto('/ideas');
         await page.getByRole('button', { name: 'New idea', exact: true }).click();
         const dialog = page.getByRole('dialog');
-        await dialog.getByLabel('Idea title', { exact: true }).fill(`Markdown idea ${theme}`);
+        await dialog.getByLabel('Title', { exact: true }).fill(`Markdown idea ${theme}`);
         await dialog.getByRole('textbox', { name: 'Details', exact: true }).fill(body);
         await expect(dialog.getByRole('button', { name: 'Markdown syntax help', exact: true })).toBeVisible();
         await dialog
@@ -101,7 +101,7 @@ test.describe('touch idea details', () => {
         await page.goto('/ideas');
         await page.getByRole('button', { name: 'New idea', exact: true }).tap();
         const dialog = page.getByRole('dialog');
-        await dialog.getByLabel('Idea title', { exact: true }).fill('Touch Markdown example');
+        await dialog.getByLabel('Title', { exact: true }).fill('Touch Markdown example');
         await dialog.getByRole('textbox', { name: 'Details', exact: true }).fill(body);
         await dialog.getByRole('button', { name: 'Save idea', exact: true }).tap();
         const card = page.getByRole('article', { name: 'Touch Markdown example', exact: true });
@@ -121,7 +121,7 @@ test.describe('touch idea details', () => {
         await page.goto('/ideas');
         await page.getByRole('button', { name: 'New idea', exact: true }).tap();
         const dialog = page.getByRole('dialog');
-        await dialog.getByLabel('Idea title', { exact: true }).fill('Short touch idea');
+        await dialog.getByLabel('Title', { exact: true }).fill('Short touch idea');
         await dialog.getByRole('textbox', { name: 'Details', exact: true }).fill('One short line.');
         await dialog.getByRole('button', { name: 'Save idea', exact: true }).tap();
         const card = page.getByRole('article', { name: 'Short touch idea', exact: true });
@@ -135,7 +135,7 @@ test('shows no overflow indicator when idea details fit', async ({ page }) => {
     await page.goto('/ideas');
     await page.getByRole('button', { name: 'New idea', exact: true }).click();
     const dialog = page.getByRole('dialog');
-    await dialog.getByLabel('Idea title', { exact: true }).fill('Short idea');
+    await dialog.getByLabel('Title', { exact: true }).fill('Short idea');
     await dialog.getByRole('textbox', { name: 'Details', exact: true }).fill('One short line.');
     await dialog.getByRole('button', { name: 'Save idea', exact: true }).click();
     const card = page.getByRole('article', { name: 'Short idea', exact: true });

@@ -1,51 +1,46 @@
-import { expect, test, closeDialog } from './fixtures';
+import { chip, chooseChip, expect, openManageSolutions, test, closeDialog } from './fixtures';
 
 for (const theme of ['midnight', 'light']) {
-    test(`automatically selects N/A without a solution in ${theme}`, async ({ page }) => {
+    test(`shows Status only when an idea has a solution in ${theme}`, async ({ page }) => {
         await page.addInitScript((value) => localStorage.setItem('the-workbench.theme-preference', value), theme);
         await page.goto('/ideas');
-        await expect(page.getByRole('status')).toHaveText('Synced');
+        await expect(page.locator('.local-badge')).toHaveText('Synced');
         await page.getByRole('button', { name: 'New idea' }).click();
         const dialog = page.getByRole('dialog');
-        const status = dialog.getByRole('group', { name: 'Status', exact: true });
-        await expect(status.getByRole('button', { name: 'N/A', exact: true })).toBeDisabled();
-        await expect(status.getByRole('button', { name: 'N/A', exact: true })).toHaveAttribute('aria-pressed', 'true');
-        await expect(status.getByRole('button', { name: 'Open', exact: true })).toHaveCount(0);
+        const status = chip(dialog, 'Status');
+        await expect(status).toHaveCount(0);
 
-        await dialog.getByRole('button', { name: 'Solution: No solution' }).click();
-        await page.getByRole('option', { name: 'Ferry Tracker' }).click();
-        await expect(status.getByRole('button', { name: 'Open', exact: true })).toHaveAttribute('aria-pressed', 'true');
-        await status.getByRole('button', { name: 'Done', exact: true }).click();
-        await dialog.getByRole('button', { name: 'Solution: Ferry Tracker' }).click();
-        await page.getByRole('option', { name: 'No solution', exact: true }).click();
-        await expect(status.getByRole('button', { name: 'N/A', exact: true })).toBeDisabled();
-        await expect(status.getByRole('button', { name: 'N/A', exact: true })).toHaveAttribute('aria-pressed', 'true');
+        await chooseChip(dialog, 'Solution', 'Ferry Tracker');
+        await expect(status).toHaveAccessibleName('Status: Open');
+        await chooseChip(dialog, 'Status', 'Done');
+        await expect(status).toHaveAccessibleName('Status: Done');
+        await chooseChip(dialog, 'Solution', 'No solution');
+        await expect(status).toHaveCount(0);
 
-        const title = `Unlinked N/A ${theme}`;
-        await dialog.getByLabel('Idea title').fill(title);
+        const title = `Unlinked idea ${theme}`;
+        await dialog.getByLabel('Title', { exact: true }).fill(title);
         const saved = page.waitForResponse('**/api/mutations');
         await dialog.getByRole('button', { name: 'Save idea' }).click();
         expect((await (await saved).json()).idea).toMatchObject({ title, solution: null, status: 'n/a' });
         const card = page.locator('.idea-card', { hasText: title });
-        await expect(card.locator('.status-chip')).toHaveText('N/A');
+        await expect(card.locator('.idea-title')).toHaveText(title);
+        await expect(card.locator('.status-chip')).toHaveCount(0);
         await page.reload();
         await card.getByRole('button', { name: 'Edit', exact: true }).click();
-        await expect(dialog.getByRole('button', { name: 'N/A', exact: true })).toBeDisabled();
-        await dialog.getByRole('button', { name: 'Solution: No solution' }).click();
-        await page.getByRole('option', { name: 'Ferry Tracker' }).click();
-        await expect(status.getByRole('button', { name: 'Open', exact: true })).toHaveAttribute('aria-pressed', 'true');
+        await expect(status).toHaveCount(0);
+        await chooseChip(dialog, 'Solution', 'Ferry Tracker');
+        await expect(status).toHaveAccessibleName('Status: Open');
         await closeDialog(dialog);
     });
 }
-
 test('links an idea to a solution with the keyboard, filters by it, and reads it from the API', async ({ page }) => {
     await page.goto('/ideas');
-    await expect(page.getByRole('status')).toHaveText('Synced');
+    await expect(page.locator('.local-badge')).toHaveText('Synced');
     expect(await page.locator('select, datalist').count()).toBe(0);
 
     await page.getByRole('button', { name: 'New idea' }).click();
     const dialog = page.getByRole('dialog');
-    await dialog.getByLabel('Idea title').fill('Tide-aware arrival alerts');
+    await dialog.getByLabel('Title', { exact: true }).fill('Tide-aware arrival alerts');
 
     // Keyboard: open, move to the second solution in name order (Ferry Tracker, Solution Directory, Work Log), choose.
     const trigger = dialog.getByRole('button', { name: 'Solution: No solution' });
@@ -75,8 +70,8 @@ test('links an idea to a solution with the keyboard, filters by it, and reads it
     await expect(listbox).toBeHidden();
     await expect(dialog).toBeVisible();
 
-    await dialog.getByRole('button', { name: 'In progress' }).click();
-    await expect(dialog.getByRole('button', { name: 'In progress' })).toHaveAttribute('aria-pressed', 'true');
+    await chooseChip(dialog, 'Status', 'In progress');
+    await expect(chip(dialog, 'Status')).toHaveAccessibleName('Status: In progress');
     const saved = page.waitForResponse('**/api/mutations');
     await dialog.getByRole('button', { name: 'Save idea' }).click();
     await saved;
@@ -91,7 +86,7 @@ test('links an idea to a solution with the keyboard, filters by it, and reads it
 
     // Mouse: an unlinked idea, then filter from the toolbar and from the card chip.
     await page.getByRole('button', { name: 'New idea' }).click();
-    await page.getByRole('dialog').getByLabel('Idea title').fill('Unlinked shower thought');
+    await page.getByRole('dialog').getByLabel('Title', { exact: true }).fill('Unlinked shower thought');
     await page.getByRole('dialog').getByRole('button', { name: 'Save idea' }).click();
 
     const filter = page.getByRole('button', { name: /^Filter by solution:/ });
@@ -119,19 +114,19 @@ for (const theme of ['midnight', 'light']) {
     test(`disables a solution for every device in ${theme}`, async ({ page, baseURL }) => {
         await page.addInitScript((value) => localStorage.setItem('the-workbench.theme-preference', value), theme);
         await page.goto('/ideas');
-        await expect(page.getByRole('status')).toHaveText('Synced');
+        await expect(page.locator('.local-badge')).toHaveText('Synced');
 
         // An idea linked before the solution is disabled keeps its link.
         const title = `Linked before disable ${theme}`;
         await page.getByRole('button', { name: 'New idea' }).click();
         const dialog = page.getByRole('dialog');
-        await dialog.getByLabel('Idea title').fill(title);
+        await dialog.getByLabel('Title', { exact: true }).fill(title);
         await dialog.getByRole('button', { name: 'Solution: No solution' }).click();
         await page.getByRole('option', { name: 'Work Log' }).click();
         await dialog.getByRole('button', { name: 'Save idea' }).click();
 
         try {
-            await page.getByRole('button', { name: 'Manage solutions' }).click();
+            await openManageSolutions(page);
             const manage = page.getByRole('dialog', { name: 'Manage solutions' });
             const workLog = manage.getByRole('checkbox', { name: 'Work Log' });
             await expect(workLog).toBeChecked();
@@ -151,6 +146,7 @@ for (const theme of ['midnight', 'light']) {
                 'No solution',
                 'Ferry Tracker',
                 'Solution Directory',
+                'Manage solutions…',
             ]);
             await page.keyboard.press('Escape');
 
@@ -174,7 +170,7 @@ for (const theme of ['midnight', 'light']) {
             // The setting comes from the server, so a fresh browser sees it too.
             const other = await page.context().browser()!.newPage();
             await other.goto(`${baseURL}/ideas`);
-            await other.getByRole('button', { name: 'Manage solutions' }).click();
+            await openManageSolutions(other);
             await expect(other.getByRole('checkbox', { name: 'Work Log' })).not.toBeChecked();
             await other.close();
         } finally {
@@ -189,7 +185,7 @@ for (const theme of ['midnight', 'light']) {
 test('fits a phone screen with the solution filter and dialog fields', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto('/ideas');
-    await page.getByRole('button', { name: 'Manage solutions' }).click();
+    await openManageSolutions(page);
     await expect(page.getByRole('checkbox', { name: 'Ferry Tracker' })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
     await closeDialog(page.getByRole('dialog'));

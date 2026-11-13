@@ -7,7 +7,7 @@ for (const kind of ['idea', 'task'] as const) {
         await page.getByRole('button', { name: `New ${kind}`, exact: true }).click();
         const dialog = page.getByRole('dialog');
         const title = `Smooth ${kind} example`;
-        await dialog.getByLabel(kind === 'idea' ? 'Idea title' : 'Task title', { exact: true }).fill(title);
+        await dialog.getByLabel('Title', { exact: true }).fill(title);
         await dialog
             .getByRole('textbox', { name: 'Details', exact: true })
             .fill(

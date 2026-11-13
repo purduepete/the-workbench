@@ -6,8 +6,8 @@ for (const theme of ['midnight', 'light']) {
         await page.addInitScript((theme) => localStorage.setItem('the-workbench.theme-preference', theme), theme);
         const styles = [];
         for (const [path, opener, title, save, card] of [
-            ['/ideas', 'New idea', 'Idea title', 'Save idea', '.idea-card'],
-            ['/notes', 'Global note', 'Title (optional)', 'Save note', '.global-note-card'],
+            ['/ideas', 'New idea', 'Title', 'Save idea', '.idea-card'],
+            ['/notes', 'Global note', 'Title', 'Save note', '.global-note-card'],
         ]) {
             await page.goto(path);
             await openEditor(page, opener);

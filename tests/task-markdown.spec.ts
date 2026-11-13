@@ -26,7 +26,7 @@ for (const theme of ['midnight', 'light']) {
         await page.getByRole('button', { name: 'New task', exact: true }).click();
         const dialog = page.getByRole('dialog');
         const title = `Markdown task ${theme}`;
-        await dialog.getByLabel('Task title', { exact: true }).fill(title);
+        await dialog.getByLabel('Title', { exact: true }).fill(title);
         await dialog.getByRole('textbox', { name: 'Details', exact: true }).fill(body);
         await expect(dialog.getByRole('button', { name: 'Markdown syntax help', exact: true })).toBeVisible();
         await dialog.getByRole('button', { name: 'Preview', exact: true }).click();
@@ -91,7 +91,7 @@ for (const theme of ['midnight', 'light']) {
         await page.mouse.move(0, 0);
         await row.getByRole('checkbox', { name: `Complete ${title}`, exact: true }).check();
         await expect(row).toHaveAttribute('data-completed', 'true');
-        await expect(page.getByRole('status').first()).toHaveText('Synced');
+        await expect(page.locator('.local-badge')).toHaveText('Synced');
         await page.reload();
         await row.getByRole('button', { name: `Edit ${title}`, exact: true }).click();
         await expect(dialog.getByRole('textbox', { name: 'Details', exact: true })).toHaveValue(body);
@@ -107,7 +107,7 @@ test.describe('touch task details', () => {
         await page.getByRole('button', { name: 'New task', exact: true }).tap();
         const dialog = page.getByRole('dialog');
         const title = 'Touch Markdown task';
-        await dialog.getByLabel('Task title', { exact: true }).fill(title);
+        await dialog.getByLabel('Title', { exact: true }).fill(title);
         await dialog.getByRole('textbox', { name: 'Details', exact: true }).fill(body);
         await dialog.getByRole('button', { name: 'Save task', exact: true }).tap();
         const row = page.getByRole('listitem', { name: title, exact: true });
@@ -128,7 +128,7 @@ test.describe('touch task details', () => {
         await page.getByRole('button', { name: 'New task', exact: true }).tap();
         const dialog = page.getByRole('dialog');
         const title = 'Short touch task';
-        await dialog.getByLabel('Task title', { exact: true }).fill(title);
+        await dialog.getByLabel('Title', { exact: true }).fill(title);
         await dialog.getByRole('textbox', { name: 'Details', exact: true }).fill('One short line.');
         await dialog.getByRole('button', { name: 'Save task', exact: true }).tap();
         const row = page.getByRole('listitem', { name: title, exact: true });

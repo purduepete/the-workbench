@@ -1,18 +1,17 @@
 import { useId, useLayoutEffect, useRef, useState } from 'react';
-import type { CSSProperties, FormEvent, ReactNode } from 'react';
+import type { CSSProperties, FormEvent } from 'react';
 import {
     Archive,
     ArrowDownLeft,
     Boxes,
     Check,
+    CircleDot,
     Clock3,
     Copy,
-    Flag,
     Lightbulb,
     Pin,
     Pencil,
     Search,
-    Settings2,
     Tag,
     ListPlus,
     Trash2,
@@ -31,7 +30,7 @@ import type { SolutionFilter } from './ideas';
 import { SelectField } from './SelectField';
 import { PageLoading } from './Loading';
 import { useTheme } from './ThemeContext';
-import { useEditorDismissal } from './useEditorDismissal';
+import { formEdited, useEditorDismissal } from './useEditorDismissal';
 import { EditorSizeToggle, useEditorSize } from './EditorSize';
 import { DialogCloseButton } from './DialogClose';
 import { useSearchHighlight } from './searchHighlight';
@@ -68,10 +67,11 @@ const statusOptions: { value: IdeaStatus; label: string }[] = [
     { value: 'done', label: 'Done' },
 ];
 
-const priorityOptions: { value: IdeaPriority; label: string }[] = [
-    { value: 'high', label: 'High' },
-    { value: 'medium', label: 'Medium' },
-    { value: 'low', label: 'Low' },
+// Dots follow the idea cards: high uses the accent, low the quiet tone.
+const priorityOptions: { value: IdeaPriority; label: string; dot: string }[] = [
+    { value: 'high', label: 'High', dot: 'var(--accent)' },
+    { value: 'medium', label: 'Medium', dot: 'color-mix(in srgb, var(--accent) 50%, var(--quiet))' },
+    { value: 'low', label: 'Low', dot: 'var(--quiet)' },
 ];
 
 /** Shows the directory name, or the raw id when a solution was removed from the directory. */
@@ -169,6 +169,9 @@ function SolutionsDialog({ solutions, onToggle, onClose }: SolutionsDialogProps)
     );
 }
 
+/** The last entry in the solution filter opens the Manage solutions dialog instead of filtering. */
+const MANAGE_SOLUTIONS = '__manage-solutions__';
+
 const views: { id: IdeaView; label: string; icon: typeof Lightbulb }[] = [
     { id: 'all', label: 'All ideas', icon: Lightbulb },
     { id: 'pinned', label: 'Pinned', icon: Pin },
@@ -197,19 +200,11 @@ function IdeaDialog({
         (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
     const [formError, setFormError] = useState<string | null>(null);
     const [confirmingDelete, setConfirmingDelete] = useState(false);
-    const dismissal = useEditorDismissal(
-        dialogRef,
-        Boolean(initialIdea?.title.trim() || initialIdea?.body.trim()),
-        onDraftProtectionChange
-    );
+    const dismissal = useEditorDismissal(dialogRef, false, onDraftProtectionChange);
     const [solution, setSolution] = useState<string | null>(initialIdea ? initialIdea.solution : defaultSolution);
     const [status, setStatus] = useState<IdeaStatus>(() => statusForSolution(solution, initialIdea?.status));
-    const statusIndex = statusOptions.findIndex((option) => option.value === status);
-    const statusStyle: CSSProperties & { '--segment-index': number } = { '--segment-index': statusIndex };
+
     const [priority, setPriority] = useState<IdeaPriority>(initialIdea?.priority ?? defaultPriority);
-    const priorityStyle: CSSProperties & { '--segment-index': number } = {
-        '--segment-index': priorityOptions.findIndex((option) => option.value === priority),
-    };
 
     useLayoutEffect(() => {
         const dialog = dialogRef.current;
@@ -268,7 +263,7 @@ function IdeaDialog({
             ref={dialogRef}
             className="dialog-backdrop editor-dialog"
             data-maximized={editorSize.maximized}
-            aria-label={idea ? 'Edit idea' : 'New idea'}
+            aria-labelledby="idea-dialog-title"
             tabIndex={-1}
             onKeyDown={(event) => {
                 if (event.key !== 'Escape') return;
@@ -292,27 +287,65 @@ function IdeaDialog({
                 onChange={() => {
                     const form = formRef.current;
                     if (!form) return;
-                    const data = new FormData(form);
-                    dismissal.setProtectedDraft(
-                        Boolean(String(data.get('title') ?? '').trim() || String(data.get('body') ?? '').trim())
-                    );
+                    dismissal.setProtectedDraft(formEdited(form));
                 }}
             >
-                <div className="editor-title-row">
-                    <label className="field-group">
-                        <span className="field-label">Idea title</span>
-                        <input
-                            ref={titleRef}
-                            className="field-input"
-                            name="title"
-                            type="text"
-                            maxLength={100}
-                            defaultValue={initialIdea?.title ?? ''}
-                            required
-                        />
-                    </label>
+                <div className="dialog-corner-actions">
                     <EditorSizeToggle maximized={editorSize.maximized} onToggle={editorSize.toggle} />
                     <DialogCloseButton onClose={onClose} isProtected={dismissal.isProtected} />
+                </div>
+                <div className="dialog-heading">
+                    <div>
+                        <p className="eyebrow">Idea</p>
+                        <h2 id="idea-dialog-title">{idea ? 'Edit idea' : 'New idea'}</h2>
+                    </div>
+                </div>
+                <label className="sr-only" htmlFor="idea-title-input">
+                    Title
+                </label>
+                <input
+                    id="idea-title-input"
+                    ref={titleRef}
+                    className="editor-title-input"
+                    name="title"
+                    type="text"
+                    placeholder="Title"
+                    maxLength={100}
+                    defaultValue={initialIdea?.title ?? ''}
+                    required
+                />
+                <div className="editor-chips">
+                    <SelectField
+                        ariaLabel="Solution"
+                        icon={Boxes}
+                        className="chip-select"
+                        value={solution ?? ''}
+                        options={[{ value: '', label: 'No solution' }, ...solutionOptions(solutions, solution)]}
+                        onChange={(next) => {
+                            const selected = next || null;
+                            setSolution(selected);
+                            setStatus(statusForSolution(selected, status));
+                        }}
+                    />
+                    {/* Status only applies to an idea linked to a solution. */}
+                    {solution !== null && (
+                        <SelectField
+                            ariaLabel="Status"
+                            icon={CircleDot}
+                            prefix="Status"
+                            className="chip-select"
+                            value={status}
+                            options={statusOptions}
+                            onChange={(next) => setStatus(next as IdeaStatus)}
+                        />
+                    )}
+                    <SelectField
+                        ariaLabel="Priority"
+                        className="chip-select"
+                        value={priority}
+                        options={priorityOptions}
+                        onChange={(next) => setPriority(next as IdeaPriority)}
+                    />
                 </div>
                 <MarkdownNoteEditor
                     label="Details"
@@ -332,70 +365,9 @@ function IdeaDialog({
                         aria-describedby="tag-hint"
                     />
                     <span className="field-hint" id="tag-hint">
-                        Separate tags with commas. Up to 12 tags.
+                        Separate tags with commas.
                     </span>
                 </label>
-                <div className="field-row idea-meta-row">
-                    <div className="field-group">
-                        <span className="field-label" id="solution-label">
-                            Solution
-                        </span>
-                        <SelectField
-                            ariaLabel="Solution"
-                            icon={Boxes}
-                            className="field-select"
-                            value={solution ?? ''}
-                            options={[{ value: '', label: 'No solution' }, ...solutionOptions(solutions, solution)]}
-                            onChange={(next) => {
-                                const selected = next || null;
-                                setSolution(selected);
-                                setStatus(statusForSolution(selected, status));
-                            }}
-                        />
-                    </div>
-                    <div className="field-group">
-                        <span className="field-label">Status</span>
-                        <div className="segmented status-segmented" role="group" aria-label="Status">
-                            {solution === null ? (
-                                <button type="button" className="segment-button" aria-pressed="true" disabled>
-                                    N/A
-                                </button>
-                            ) : (
-                                <>
-                                    <span className="segment-fill" style={statusStyle} aria-hidden="true" />
-                                    {statusOptions.map((option) => (
-                                        <button
-                                            key={option.value}
-                                            type="button"
-                                            className="segment-button"
-                                            aria-pressed={status === option.value}
-                                            onClick={() => setStatus(option.value)}
-                                        >
-                                            {option.label}
-                                        </button>
-                                    ))}
-                                </>
-                            )}
-                        </div>
-                    </div>
-                    <div className="field-group">
-                        <span className="field-label">Priority</span>
-                        <div className="segmented status-segmented" role="group" aria-label="Priority">
-                            <span className="segment-fill" style={priorityStyle} aria-hidden="true" />
-                            {priorityOptions.map((option) => (
-                                <button
-                                    key={option.value}
-                                    type="button"
-                                    className="segment-button"
-                                    aria-pressed={priority === option.value}
-                                    onClick={() => setPriority(option.value)}
-                                >
-                                    {option.label}
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-                </div>
                 {formError && (
                     <p className="dialog-error" role="alert">
                         {formError}
@@ -500,7 +472,13 @@ function IdeaCard({
                     </h4>
                     <div className="idea-meta">
                         <span className="priority-chip" data-priority={idea.priority}>
-                            <Flag size={11} aria-hidden="true" />
+                            <span
+                                className="select-dot"
+                                style={{
+                                    background: priorityOptions.find((option) => option.value === idea.priority)?.dot,
+                                }}
+                                aria-hidden="true"
+                            />
                             {priorityOptions.find((option) => option.value === idea.priority)?.label ?? 'High'}
                             <span className="sr-only"> priority</span>
                         </span>
@@ -515,11 +493,10 @@ function IdeaCard({
                                 {solutionName(solutions, idea.solution)}
                             </button>
                         )}
-                        {(idea.solution || idea.status !== 'open') && (
+                        {/* Status only applies to an idea linked to a solution, matching the editor. */}
+                        {idea.solution && (
                             <span className="status-chip" data-status={idea.status}>
-                                {idea.status === 'n/a'
-                                    ? 'N/A'
-                                    : statusOptions.find((option) => option.value === idea.status)?.label}
+                                {statusOptions.find((option) => option.value === idea.status)?.label ?? 'N/A'}
                             </span>
                         )}
                     </div>
@@ -593,7 +570,6 @@ export interface IdeasPageProps {
     sync: ReturnType<typeof useIdeasSync>;
     solutionsState: ReturnType<typeof useSolutions>;
     ready: boolean;
-    syncBadge: ReactNode;
     editingIdea: Idea | null | undefined;
     setEditingIdea: (idea: Idea | null | undefined) => void;
     onCreateTask: (title: string, body: string) => void;
@@ -604,7 +580,6 @@ export function IdeasPage({
     sync,
     solutionsState,
     ready: initialReady,
-    syncBadge,
     editingIdea,
     setEditingIdea,
     onCreateTask,
@@ -645,9 +620,11 @@ export function IdeasPage({
     const visibleIdeas = filterIdeas(ideas, view, query, selectedTag, solutionFilter);
     const filtering = Boolean(query || selectedTag) || solutionFilter !== 'all';
     const allTags = Array.from(new Set(ideas.flatMap((idea) => idea.tags))).sort((a, b) => a.localeCompare(b));
-    const activeView = views.find((item) => item.id === view) ?? views[0];
     const selectedViewIndex = views.findIndex((item) => item.id === view);
-    const segmentStyle: CSSProperties & { '--segment-index': number } = { '--segment-index': selectedViewIndex };
+    const segmentStyle: CSSProperties & { '--segment-index': number; '--segment-count': number } = {
+        '--segment-index': selectedViewIndex,
+        '--segment-count': views.length,
+    };
 
     const showStorageError = (error: string | null) => {
         if (error) setStorageNotice(error);
@@ -723,10 +700,6 @@ export function IdeasPage({
                 />
             ) : (
                 <div className="data-enter">
-                    <section className="intro" aria-label="Sync status">
-                        <div className="intro-aside">{syncBadge}</div>
-                    </section>
-
                     <section ref={workspaceRef} className="workspace" aria-label="Your ideas">
                         <div className="workspace-tools">
                             <label className="search-wrap">
@@ -735,7 +708,7 @@ export function IdeasPage({
                                 <input
                                     className="search-input"
                                     type="search"
-                                    placeholder="Search a thought, detail, or tag..."
+                                    placeholder="Search ideas..."
                                     value={query}
                                     onChange={(event) => setQuery(event.target.value)}
                                 />
@@ -746,19 +719,21 @@ export function IdeasPage({
                                     icon={Boxes}
                                     className="filter-select"
                                     value={solutionFilter}
-                                    options={filterOptions}
-                                    onChange={setSolutionFilter}
+                                    options={[
+                                        ...filterOptions,
+                                        { value: MANAGE_SOLUTIONS, label: 'Manage solutions…', divider: true },
+                                    ]}
+                                    onChange={(next) =>
+                                        next === MANAGE_SOLUTIONS ? setManagingSolutions(true) : setSolutionFilter(next)
+                                    }
                                 />
-                                <button
-                                    type="button"
-                                    className="icon-button manage-solutions"
-                                    aria-label="Manage solutions"
-                                    onClick={() => setManagingSolutions(true)}
-                                >
-                                    <Settings2 size={16} aria-hidden="true" />
-                                </button>
                             </div>
-                            <div className="segmented" role="group" aria-label="Idea view">
+                            <div
+                                className="segmented page-pill"
+                                role="group"
+                                aria-label="Idea view"
+                                style={segmentStyle}
+                            >
                                 <span className="segment-fill" style={segmentStyle} aria-hidden="true" />
                                 {views.map(({ id, label, icon: Icon }) => (
                                     <button
@@ -778,15 +753,15 @@ export function IdeasPage({
 
                         {allTags.length > 0 && (
                             <div className="tag-filter-row" aria-label="Filter by tag">
-                                <span className="tag-filter-label">TAGS</span>
                                 {allTags.map((tag) => (
                                     <button
                                         key={tag.toLocaleLowerCase()}
                                         type="button"
-                                        className="tag-filter"
+                                        className="tag-chip tag-filter"
                                         aria-pressed={selectedTag === tag}
                                         onClick={() => setSelectedTag((current) => (current === tag ? null : tag))}
                                     >
+                                        <Tag size={10} aria-hidden="true" />
                                         {tag}
                                     </button>
                                 ))}
@@ -797,13 +772,6 @@ export function IdeasPage({
                                 )}
                             </div>
                         )}
-
-                        <div className="content-heading">
-                            <h3>{selectedTag ? `Tagged “${selectedTag}”` : activeView.label}</h3>
-                            <span className="result-count" aria-live="polite">
-                                {visibleIdeas.length} {visibleIdeas.length === 1 ? 'note' : 'notes'}
-                            </span>
-                        </div>
 
                         {visibleIdeas.length > 0 ? (
                             <div className="idea-grid">

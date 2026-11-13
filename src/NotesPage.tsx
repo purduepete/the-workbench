@@ -1,14 +1,15 @@
 import { useLayoutEffect, useRef, useState } from 'react';
-import type { CSSProperties, FormEvent, ReactNode } from 'react';
+import type { CSSProperties, FormEvent } from 'react';
 import {
-    CalendarDays,
     Check,
     ChevronDown,
     ChevronRight,
     ChevronsDownUp,
     ChevronsUpDown,
     Clock3,
+    Layers,
     NotebookPen,
+    Pencil,
     Plus,
     Search,
     Tag,
@@ -17,7 +18,7 @@ import {
 } from 'lucide-react';
 import { globalNoteLimits, journalLimits } from '../shared/contracts';
 import type { NoteCategory } from '../shared/contracts';
-import { categoryLabel, kindOf, NoteCategories } from './NoteCategories';
+import { kindOf, NoteCategories } from './NoteCategories';
 import type { NoteFilter, NoteKind } from './NoteCategories';
 import { formatIdeaTimestamp, parseTags } from './ideas';
 import {
@@ -31,7 +32,8 @@ import {
     writeNoteFilter,
 } from './journal';
 import type { JournalEntry } from './journal';
-import { CalendarDialog } from './CalendarDialog';
+import { DateField } from './CalendarDialog';
+import { SelectField } from './SelectField';
 import { NoteGroup } from './NoteGroup';
 import type { GlobalNote } from './globalNotesSync';
 import { PageLoading } from './Loading';
@@ -43,7 +45,7 @@ import type { useGlobalNotesSync } from './useGlobalNotesSync';
 import type { useCommentsSync } from './useCommentsSync';
 import { CommentaryAside, DetachedCommentary } from './NoteComments';
 import { commentaryId, sectionKey, sectionKeys, WHOLE_NOTE } from './commentary';
-import { useEditorDismissal } from './useEditorDismissal';
+import { formEdited, useEditorDismissal } from './useEditorDismissal';
 import { EditorSizeToggle, useEditorSize } from './EditorSize';
 import { DialogCloseButton } from './DialogClose';
 import { useSearchHighlight } from './searchHighlight';
@@ -61,6 +63,8 @@ export interface NoteSaveInput {
     title: string;
     body: string;
     tags: string[];
+    /** The day a new Home or Work note is saved under. */
+    entryDate: string;
 }
 
 interface NoteDialogProps {
@@ -72,21 +76,24 @@ interface NoteDialogProps {
     onSave: (note: NoteSaveInput) => string | null;
     onDelete: () => string | null;
     onDraftProtectionChange: (protectedDraft: boolean) => void;
-    fromCalendar?: boolean;
 }
 
 const titleLimit = Math.min(journalLimits.title, globalNoteLimits.title);
+const noteKindOptions = [
+    { value: 'global', label: 'Global' },
+    { value: 'home', label: 'Home' },
+    { value: 'work', label: 'Work' },
+];
 
 /** Edits one note. Home and Work notes belong to a day; switching to Global removes the date. */
 function NoteDialog({
-    entryDate,
+    entryDate: initialEntryDate,
     note,
     initialKind,
     onClose,
     onSave,
     onDelete,
     onDraftProtectionChange,
-    fromCalendar = false,
 }: NoteDialogProps) {
     const dialogRef = useRef<HTMLDialogElement>(null);
     const editorSize = useEditorSize();
@@ -101,11 +108,9 @@ function NoteDialog({
     const [confirmingDelete, setConfirmingDelete] = useState(false);
     const [confirmingEmpty, setConfirmingEmpty] = useState(false);
     const [kind, setKind] = useState<NoteKind>(note?.kind ?? initialKind);
-    const dismissal = useEditorDismissal(
-        dialogRef,
-        Boolean(note?.title.trim() || note?.body.trim()),
-        onDraftProtectionChange
-    );
+    // A new dated note can be filed under any day; a saved note keeps its date.
+    const [entryDate, setEntryDate] = useState(initialEntryDate);
+    const dismissal = useEditorDismissal(dialogRef, false, onDraftProtectionChange);
 
     useLayoutEffect(() => {
         const dialog = dialogRef.current;
@@ -153,7 +158,7 @@ function NoteDialog({
         }
         // Global notes are listed by title; without one, the first line becomes the title.
         if (kind === 'global' && !title) title = noteHeading({ title: '', body }).slice(0, titleLimit);
-        finish(onSave({ kind, title, body, tags }));
+        finish(onSave({ kind, title, body, tags, entryDate }));
     };
 
     const handleDelete = () => {
@@ -170,7 +175,6 @@ function NoteDialog({
             ref={dialogRef}
             className="dialog-backdrop editor-dialog"
             data-maximized={editorSize.maximized}
-            data-replacing={fromCalendar}
             aria-labelledby="journal-dialog-title"
             tabIndex={-1}
             onKeyDown={(event) => {
@@ -195,11 +199,8 @@ function NoteDialog({
                 onChange={() => {
                     const form = formRef.current;
                     if (!form) return;
-                    const data = new FormData(form);
                     setConfirmingEmpty(false);
-                    dismissal.setProtectedDraft(
-                        ['title', 'body', 'tags'].some((field) => String(data.get(field) ?? '').trim())
-                    );
+                    dismissal.setProtectedDraft(formEdited(form));
                 }}
             >
                 <div className="dialog-corner-actions">
@@ -208,34 +209,43 @@ function NoteDialog({
                 </div>
                 <div className="dialog-heading">
                     <div>
-                        <p className="eyebrow">{kind === 'global' ? 'Global note' : 'Daily note'}</p>
-                        <h2 id="journal-dialog-title">
-                            {kind === 'global' ? verb : `${verb} for ${formatEntryDate(entryDate)}`}
-                        </h2>
+                        <p className="eyebrow">Note</p>
+                        <h2 id="journal-dialog-title">{verb}</h2>
                     </div>
                 </div>
-                <div className="journal-meta-row">
-                    <div className="field-group">
-                        <span className="field-label">Section</span>
-                        <NoteCategories<NoteKind>
-                            value={kind}
-                            onChange={(value) => {
-                                setKind(value);
-                                setFormError(null);
-                            }}
+                <label className="sr-only" htmlFor="journal-title-input">
+                    Title
+                </label>
+                <input
+                    id="journal-title-input"
+                    ref={titleRef}
+                    className="editor-title-input"
+                    name="title"
+                    type="text"
+                    placeholder="Title"
+                    maxLength={titleLimit}
+                    defaultValue={note?.title ?? ''}
+                />
+                <div className="editor-chips">
+                    <SelectField
+                        ariaLabel="Section"
+                        icon={Layers}
+                        className="chip-select"
+                        value={kind}
+                        options={noteKindOptions}
+                        onChange={(value) => {
+                            setKind(value as NoteKind);
+                            setFormError(null);
+                        }}
+                    />
+                    {kind !== 'global' && (
+                        <DateField
+                            label="Date"
+                            value={entryDate}
+                            // A saved daily note keeps its date; a new note, or a Global note becoming daily, picks one.
+                            onChange={note && note.kind !== 'global' ? undefined : setEntryDate}
                         />
-                    </div>
-                    <label className="field-group journal-title-field">
-                        <span className="field-label">Title (optional)</span>
-                        <input
-                            ref={titleRef}
-                            className="field-input"
-                            name="title"
-                            type="text"
-                            maxLength={titleLimit}
-                            defaultValue={note?.title ?? ''}
-                        />
-                    </label>
+                    )}
                 </div>
                 <MarkdownNoteEditor
                     label="Details"
@@ -298,7 +308,6 @@ export interface NotesPageProps {
     globalNotes: ReturnType<typeof useGlobalNotesSync>;
     comments: ReturnType<typeof useCommentsSync>;
     ready: boolean;
-    syncBadge: ReactNode;
     today: string;
     editingNote: JournalEditTarget | undefined;
     setEditingNote: (target: JournalEditTarget | undefined) => void;
@@ -349,7 +358,6 @@ export function NotesPage({
     globalNotes,
     comments,
     ready,
-    syncBadge,
     today,
     editingNote,
     setEditingNote,
@@ -369,14 +377,11 @@ export function NotesPage({
     useSearchHighlight(workspaceRef, query, '.idea-card');
     const [categoryFilter, setCategoryFilter] = useState<NoteFilter>(readNoteFilter);
     const newKind: NoteKind = categoryFilter;
-    // Notes added from a day's + button or the calendar belong to that day.
+    // Notes added from a day's + button belong to that day.
     const [datedNew, setDatedNew] = useState(false);
     const [selectedTag, setSelectedTag] = useState<string | null>(null);
-    const [calendarOpen, setCalendarOpen] = useState(false);
-    const [calendarSelection, setCalendarSelection] = useState(false);
     const [expandedNotes, setExpandedNotes] = useState<Record<string, boolean>>({});
     const [expandedWeeks, setExpandedWeeks] = useState<Record<string, boolean>>({});
-    const dayRefs = useRef(new Map<string, HTMLElement>());
     const [sectionCommands, setSectionCommands] = useState<Record<string, SectionCommand>>({});
     const { entries } = journal;
     const showGlobal = categoryFilter === 'global';
@@ -514,7 +519,6 @@ export function NotesPage({
                             }
                         />
                     )}
-                    <span className="card-label">{categoryLabel(entry.category)}</span>
                 </div>
                 <div id={`note-${key}-details`} hidden={!expanded}>
                     {commentaryBody(entry.id, heading, entry.body, sectionCommand, (body) =>
@@ -543,11 +547,11 @@ export function NotesPage({
                         </span>
                         <button
                             type="button"
-                            className="edit-button"
+                            className="card-action"
                             aria-label={`Edit ${heading}`}
                             onClick={() => setEditingNote({ id: entry.id, entryDate: entry.entryDate })}
                         >
-                            Edit
+                            <Pencil size={15} aria-hidden="true" />
                         </button>
                     </div>
                 </div>
@@ -588,14 +592,14 @@ export function NotesPage({
                             </span>
                             <button
                                 type="button"
-                                className="edit-button"
+                                className="card-action"
                                 aria-label={`Edit ${note.title}`}
                                 onClick={() => {
                                     setDatedNew(false);
                                     setEditingNote({ id: note.id, entryDate: today });
                                 }}
                             >
-                                Edit
+                                <Pencil size={15} aria-hidden="true" />
                             </button>
                         </div>
                     </article>
@@ -631,10 +635,6 @@ export function NotesPage({
                 />
             ) : (
                 <div className="data-enter">
-                    <section className="intro" aria-label="Sync status">
-                        <div className="intro-aside">{syncBadge}</div>
-                    </section>
-
                     <section ref={workspaceRef} className="workspace" aria-label="Your notes">
                         <div className="workspace-tools">
                             <label className="search-wrap">
@@ -643,24 +643,12 @@ export function NotesPage({
                                 <input
                                     className="search-input"
                                     type="search"
-                                    placeholder="Search your notes or tags..."
+                                    placeholder="Search notes..."
                                     value={query}
                                     onChange={(event) => setQuery(event.target.value)}
                                 />
                             </label>
                             <div className="notes-toolbar-actions">
-                                {categoryFilter !== 'global' && (
-                                    <div className="notes-actions">
-                                        <button
-                                            type="button"
-                                            className="secondary-button"
-                                            onClick={() => setCalendarOpen(true)}
-                                        >
-                                            <CalendarDays size={15} aria-hidden="true" />
-                                            Calendar
-                                        </button>
-                                    </div>
-                                )}
                                 <NoteCategories
                                     value={categoryFilter}
                                     filter
@@ -675,15 +663,15 @@ export function NotesPage({
 
                         {allTags.length > 0 && (
                             <div className="tag-filter-row" aria-label="Filter by tag">
-                                <span className="tag-filter-label">TAGS</span>
                                 {allTags.map((tag) => (
                                     <button
                                         key={tag.toLocaleLowerCase()}
                                         type="button"
-                                        className="tag-filter"
+                                        className="tag-chip tag-filter"
                                         aria-pressed={selectedTag === tag}
                                         onClick={() => setSelectedTag((current) => (current === tag ? null : tag))}
                                     >
+                                        <Tag size={10} aria-hidden="true" />
                                         {tag}
                                     </button>
                                 ))}
@@ -717,10 +705,6 @@ export function NotesPage({
                                                 key={day.entryDate}
                                                 className="journal-day"
                                                 aria-label={`Notes for ${dateLabel}`}
-                                                ref={(element) => {
-                                                    if (element) dayRefs.current.set(day.entryDate, element);
-                                                    else dayRefs.current.delete(day.entryDate);
-                                                }}
                                             >
                                                 <div className="journal-day-heading">
                                                     <h4>
@@ -749,7 +733,13 @@ export function NotesPage({
                                 <span className="empty-icon" aria-hidden="true">
                                     {filtering ? <Search size={21} /> : <NotebookPen size={22} />}
                                 </span>
-                                <h4>{filtering ? 'No notes match this search' : 'No notes yet'}</h4>
+                                <h4>
+                                    {filtering
+                                        ? 'No notes match this search'
+                                        : categoryFilter === 'global'
+                                          ? 'No global notes yet'
+                                          : `No ${categoryFilter} notes yet`}
+                                </h4>
                             </div>
                         ) : null}
                     </section>
@@ -768,11 +758,9 @@ export function NotesPage({
                     }
                     initialKind={datedNew && newKind === 'global' ? 'home' : newKind}
                     onClose={() => {
-                        setCalendarSelection(false);
                         setDatedNew(false);
                         setEditingNote(undefined);
                     }}
-                    fromCalendar={calendarSelection}
                     onSave={(input) => {
                         const { id } = editingNote;
                         // Changing kind moves the note between daily and global storage under the same id, so
@@ -786,14 +774,18 @@ export function NotesPage({
                             });
                             return error ?? (editingEntry ? journal.remove(id, editingEntry.entryDate) : null);
                         }
+                        const entryDate = editingEntry?.entryDate ?? input.entryDate;
                         const error = journal.save({
                             id,
-                            entryDate: editingEntry?.entryDate ?? editingNote.entryDate,
+                            entryDate,
                             title: input.title,
                             body: input.body,
                             tags: input.tags,
                             category: input.kind,
                         });
+                        // A new note filed under another week opens that week so it can be seen.
+                        if (!error)
+                            setExpandedWeeks((current) => ({ ...current, [noteGroupKey(entryDate, today)]: true }));
                         return error ?? (editingGlobal ? globalNotes.remove(id) : null);
                     }}
                     onDelete={() =>
@@ -802,30 +794,6 @@ export function NotesPage({
                             : journal.remove(editingNote.id, editingEntry?.entryDate ?? editingNote.entryDate)
                     }
                     onDraftProtectionChange={onDraftProtectionChange}
-                />
-            )}{' '}
-            {calendarOpen && (
-                <CalendarDialog
-                    entries={categoryEntries.map((entry) => entry.entryDate)}
-                    today={today}
-                    onClose={() => setCalendarOpen(false)}
-                    onSelect={(date) => {
-                        setCalendarOpen(false);
-                        if (!categoryEntries.some((entry) => entry.entryDate === date)) {
-                            setCalendarSelection(true);
-                            openNewNote(date);
-                            return;
-                        }
-                        setQuery('');
-                        setSelectedTag(null);
-                        setExpandedWeeks((current) => ({ ...current, [noteGroupKey(date, today)]: true }));
-                        requestAnimationFrame(() =>
-                            dayRefs.current.get(date)?.scrollIntoView({
-                                block: 'start',
-                                behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth',
-                            })
-                        );
-                    }}
                 />
             )}
         </>

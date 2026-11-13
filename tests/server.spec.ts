@@ -88,7 +88,7 @@ test('reopens offline, keeps edits, and syncs them once on reconnect', async ({ 
     await page.goto('/ideas');
     await page.evaluate(() => navigator.serviceWorker.ready);
     await page.reload();
-    await expect(page.getByRole('status')).toHaveText('Synced');
+    await expect(page.locator('.local-badge')).toHaveText('Synced');
 
     await context.setOffline(true);
     await page.reload();
@@ -96,22 +96,22 @@ test('reopens offline, keeps edits, and syncs them once on reconnect', async ({ 
 
     await page.getByRole('button', { name: 'New idea' }).click();
     const dialog = page.getByRole('dialog');
-    await dialog.getByLabel('Idea title').fill('Offline thought');
+    await dialog.getByLabel('Title', { exact: true }).fill('Offline thought');
     await dialog.getByRole('button', { name: 'Save idea' }).click();
-    await expect(page.getByRole('status')).toHaveText(/Offline, 1 change waiting/);
+    await expect(page.locator('.local-badge')).toHaveText(/Offline, 1 change waiting/);
 
     let previous = 'Offline thought';
     for (const title of ['Offline thought v2', 'Offline thought v3']) {
         const current = page.locator('.idea-card').filter({ has: page.getByRole('heading', { name: previous }) });
         await current.getByRole('button', { name: 'Edit' }).click();
-        await dialog.getByLabel('Idea title').fill(title);
+        await dialog.getByLabel('Title', { exact: true }).fill(title);
         await dialog.getByRole('button', { name: 'Save idea' }).click();
         previous = title;
     }
     await expect(page.getByRole('heading', { name: 'Offline thought v3' })).toBeVisible();
 
     await context.setOffline(false);
-    await expect(page.getByRole('status')).toHaveText('Synced', { timeout: 15_000 });
+    await expect(page.locator('.local-badge')).toHaveText('Synced', { timeout: 15_000 });
     const { ideas } = (await (await page.request.get('/api/ideas')).json()) as { ideas: { title: string }[] };
     expect(ideas.filter((idea) => idea.title.startsWith('Offline thought')).map((idea) => idea.title)).toEqual([
         'Offline thought v3',

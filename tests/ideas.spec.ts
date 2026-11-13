@@ -1,4 +1,4 @@
-import { expect, test, closeDialog, openEditor } from './fixtures';
+import { expect, test, closeDialog, openEditor, openManageSolutions } from './fixtures';
 
 test('uses The Workbench for the site and installed app', async ({ page, request }) => {
     await page.goto('/ideas');
@@ -35,7 +35,7 @@ for (const theme of ['midnight', 'light']) {
         }) => {
             await page.addInitScript((value) => localStorage.setItem('the-workbench.theme-preference', value), theme);
             await page.goto('/ideas');
-            await expect(page.getByRole('status')).toHaveText('Synced');
+            await expect(page.locator('.local-badge')).toHaveText('Synced');
             const refresh = page.getByRole('button', { name: 'Refresh ideas' });
             const themeButton = page.getByRole('button', { name: /^Theme:/ });
             // Sample colors only after the theme's color transitions settle.
@@ -98,22 +98,29 @@ for (const theme of ['midnight', 'light']) {
             await page.setViewportSize({ width, height: 900 });
             await page.goto('/ideas');
             for (const opener of ['New idea', 'Manage solutions']) {
-                await page.getByRole('button', { name: opener, exact: true }).click();
+                if (opener === 'New idea') await page.getByRole('button', { name: opener, exact: true }).click();
+                else await openManageSolutions(page);
                 const dialog = page.getByRole('dialog', { name: opener });
                 if (opener === 'New idea') {
                     await expect(dialog.getByRole('button', { name: 'Close', exact: true })).toBeVisible();
                     const form = dialog.locator('form.idea-form');
-                    const fields = form.locator('.field-group');
-                    const firstField = fields.first();
-                    await expect(firstField).toHaveCSS('margin-top', '0px');
-                    await expect(fields.nth(1)).toHaveCSS('margin-top', '16px');
+                    const heading = form.locator('.dialog-heading');
+                    const title = form.locator('.editor-title-input');
+                    const chips = form.locator('.editor-chips');
+                    await expect(heading).toHaveCSS('margin-top', '0px');
                     const formBox = await form.boundingBox();
-                    const fieldBox = await firstField.boundingBox();
-                    if (!formBox || !fieldBox) throw new Error('Idea form fields are missing.');
+                    const headingBox = await heading.boundingBox();
+                    const titleBox = await title.boundingBox();
+                    const chipsBox = await chips.boundingBox();
+                    if (!formBox || !headingBox || !titleBox || !chipsBox)
+                        throw new Error('Idea form fields are missing.');
                     const paddingTop = await form.evaluate((element) =>
                         parseFloat(getComputedStyle(element).paddingTop)
                     );
-                    expect(fieldBox.y - formBox.y).toBeCloseTo(paddingTop, 0);
+                    // The heading starts at the form's top padding, with the title and chips below it in order.
+                    expect(headingBox.y - formBox.y).toBeCloseTo(paddingTop, 0);
+                    expect(titleBox.y).toBeGreaterThanOrEqual(headingBox.y + headingBox.height - 1);
+                    expect(chipsBox.y).toBeGreaterThanOrEqual(titleBox.y + titleBox.height - 1);
                     await closeDialog(dialog);
                     await expect(dialog).toHaveCount(0);
                     continue;
@@ -132,7 +139,7 @@ test('positions desktop dialogs near the top and keeps their controls usable', a
     await page.goto('/ideas');
     await page.getByRole('button', { name: 'New idea' }).click();
     const newDialog = page.getByRole('dialog', { name: 'New idea' });
-    await newDialog.getByLabel('Idea title').fill('Desktop dialog positioning');
+    await newDialog.getByLabel('Title', { exact: true }).fill('Desktop dialog positioning');
     await newDialog.getByRole('button', { name: 'Save idea' }).click();
     const card = page.locator('.idea-card').filter({
         has: page.getByRole('heading', { name: 'Desktop dialog positioning', exact: true }),
@@ -147,11 +154,9 @@ test('positions desktop dialogs near the top and keeps their controls usable', a
     ]) {
         await page.setViewportSize(viewport);
         for (const name of ['New idea', 'Edit idea', 'Manage solutions']) {
-            const opener =
-                name === 'Edit idea'
-                    ? card.getByRole('button', { name: 'Edit' })
-                    : page.getByRole('button', { name, exact: true });
-            await opener.click();
+            if (name === 'Manage solutions') await openManageSolutions(page);
+            else if (name === 'Edit idea') await card.getByRole('button', { name: 'Edit' }).click();
+            else await page.getByRole('button', { name, exact: true }).click();
             const dialog = page.getByRole('dialog', { name });
             const box = await dialog.boundingBox();
             if (!box) throw new Error(`${name} dialog is missing.`);
@@ -182,7 +187,7 @@ test('expands new and existing idea editors on desktop without hiding controls',
     await page.goto('/ideas');
     await page.getByRole('button', { name: 'New idea', exact: true }).click();
     const newDialog = page.getByRole('dialog', { name: 'New idea' });
-    await newDialog.getByLabel('Idea title').fill('Desktop editor size');
+    await newDialog.getByLabel('Title', { exact: true }).fill('Desktop editor size');
     await newDialog.getByRole('textbox', { name: 'Details', exact: true }).fill('Existing details');
     await newDialog.getByRole('button', { name: 'Save idea' }).click();
     const card = page.locator('.idea-card').filter({
@@ -292,7 +297,8 @@ test.describe('touch dialog placement', () => {
             await page.goto('/ideas');
             expect(await page.evaluate(() => matchMedia('(pointer: coarse)').matches)).toBe(true);
             for (const name of ['New idea', 'Manage solutions']) {
-                await page.getByRole('button', { name, exact: true }).click();
+                if (name === 'New idea') await page.getByRole('button', { name, exact: true }).click();
+                else await openManageSolutions(page);
                 const dialog = page.getByRole('dialog', { name });
                 const box = await dialog.boundingBox();
                 if (!box) throw new Error(`${name} dialog is missing.`);
@@ -341,11 +347,13 @@ for (const device of [
         const opener = page.getByRole('button', { name: 'New idea' });
         await opener.click();
         const dialog = page.getByRole('dialog', { name: 'New idea' });
-        const title = dialog.getByLabel('Idea title');
+        const title = dialog.getByLabel('Title', { exact: true });
         await expect(device.touch ? dialog : title).toBeFocused();
         if (device.touch) {
             await expect(page.locator('html')).not.toHaveAttribute('data-idea-input-focused', 'true');
-            await page.keyboard.press('Tab');
+            // Tab moves into the dialog; the corner buttons come before the title.
+            for (let step = 0; step < 3 && !(await title.evaluate((node) => node === document.activeElement)); step++)
+                await page.keyboard.press('Tab');
             await expect(title).toBeFocused();
         }
         await title.click();
@@ -362,13 +370,12 @@ for (const device of [
         });
         await edit.click();
         const editDialog = page.getByRole('dialog', { name: 'Edit idea' });
-        await expect(device.touch ? editDialog : editDialog.getByLabel('Idea title')).toBeFocused();
+        await expect(device.touch ? editDialog : editDialog.getByLabel('Title', { exact: true })).toBeFocused();
         if (device.touch) await expect(page.locator('html')).not.toHaveAttribute('data-idea-input-focused', 'true');
-        await expect(editDialog.locator('form.idea-form .field-group').first()).toHaveCSS('margin-top', '0px');
+        await expect(editDialog.locator('form.idea-form .dialog-heading')).toHaveCSS('margin-top', '0px');
+        await expect(editDialog.getByLabel('Title', { exact: true })).toHaveValue(ideaTitle);
+        // An unchanged saved idea closes on Escape without asking to discard.
         await page.keyboard.press('Escape');
-        await expect(editDialog).toBeVisible();
-        await expect(editDialog.getByLabel('Idea title')).toHaveValue(ideaTitle);
-        await closeDialog(editDialog);
         await expect(editDialog).toHaveCount(0);
         await expect(edit).toBeFocused();
     });
@@ -390,7 +397,7 @@ test('keeps the initial loading state until a failed sync succeeds on retry', as
     });
 
     await page.goto('/ideas');
-    await expect(page.getByRole('status')).toContainText('Loading ideas');
+    await expect(page.getByRole('status').filter({ hasText: 'Loading ideas' })).toBeVisible();
     await expect(page.locator('.page-loading-message')).toHaveText('Ideas could not sync. Retrying automatically.');
     await expect(page.getByRole('heading', { name: 'No ideas yet' })).toHaveCount(0);
 
@@ -406,7 +413,7 @@ test('capture, search, pin, edit and archive an idea', async ({ page }) => {
     await page.getByRole('button', { name: 'New idea' }).click();
 
     const dialog = page.getByRole('dialog');
-    await dialog.getByLabel('Idea title').fill('Sketch a reading nook');
+    await dialog.getByLabel('Title', { exact: true }).fill('Sketch a reading nook');
     await dialog
         .getByRole('textbox', { name: 'Details', exact: true })
         .fill('Use the corner by the window and add a lamp.');
@@ -422,7 +429,10 @@ test('capture, search, pin, edit and archive an idea', async ({ page }) => {
     await expect(card.getByText('Use the corner by the window and add a lamp.')).toBeVisible();
     await card.getByRole('button', { name: 'Pin Sketch a reading nook' }).click();
     await page.getByRole('button', { name: 'Filter by home' }).click();
-    await expect(page.getByRole('heading', { name: 'Tagged “home”' })).toBeVisible();
+    await expect(page.locator('.tag-filter-row').getByRole('button', { name: 'home', exact: true })).toHaveAttribute(
+        'aria-pressed',
+        'true'
+    );
     await page.getByRole('button', { name: 'Clear tag' }).click();
     await page.getByRole('searchbox', { name: 'Search ideas' }).fill('reading');
     await expect(card).toBeVisible();
@@ -430,7 +440,7 @@ test('capture, search, pin, edit and archive an idea', async ({ page }) => {
     await expect(page.getByText('No ideas match this search')).toBeVisible();
     await page.getByRole('searchbox', { name: 'Search ideas' }).fill('');
     await card.getByRole('button', { name: 'Edit' }).click();
-    await dialog.getByLabel('Idea title').fill('Reading nook plan');
+    await dialog.getByLabel('Title', { exact: true }).fill('Reading nook plan');
     await dialog.getByRole('button', { name: 'Save idea' }).click();
     await expect(page.getByRole('heading', { name: 'Reading nook plan' })).toBeVisible();
     await page.getByRole('button', { name: 'All ideas' }).click();
@@ -483,17 +493,19 @@ test('keeps the desktop workspace compact', async ({ page }) => {
     await expect(page.locator('.workspace-tools')).toBeVisible();
     const measurements = await page.evaluate(() => {
         const main = document.querySelector('main.page-width');
-        const intro = document.querySelector('.intro');
         const toolbar = document.querySelector('.workspace-tools');
-        if (!main || !intro || !toolbar) throw new Error('Workspace layout elements are missing.');
+        if (!main || !toolbar) throw new Error('Workspace layout elements are missing.');
+        const mainTopPadding = parseFloat(getComputedStyle(main).paddingTop);
         return {
-            mainTopPadding: parseFloat(getComputedStyle(main).paddingTop),
-            introBottomPadding: parseFloat(getComputedStyle(intro).paddingBottom),
+            mainTopPadding,
+            // The sync status moved to the header, so the toolbar sits right below the page padding.
+            toolbarOffset: toolbar.getBoundingClientRect().top - main.getBoundingClientRect().top - mainTopPadding,
             toolbarMinimumHeight: parseFloat(getComputedStyle(toolbar).minHeight),
         };
     });
+    await expect(page.locator('.intro')).toHaveCount(0);
     expect(measurements.mainTopPadding).toBeLessThanOrEqual(24);
-    expect(measurements.introBottomPadding).toBeLessThanOrEqual(16);
+    expect(measurements.toolbarOffset).toBeLessThanOrEqual(16);
     expect(measurements.toolbarMinimumHeight).toBeLessThanOrEqual(60);
 });
 
