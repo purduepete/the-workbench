@@ -259,6 +259,7 @@ export function CommentaryAside({
         <button
             type="button"
             className="commentary-grip"
+            data-closing={closing || undefined}
             aria-label={`Resize commentary for ${label}`}
             onClick={() => (dragged.current = false)}
             onPointerDown={onPointerDown}

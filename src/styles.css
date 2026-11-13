@@ -2603,9 +2603,9 @@ div.markdown-task-text {
 }
 
 .journal-day-heading .journal-day-add {
-    width: 28px;
-    height: 28px;
-    min-height: 28px;
+    width: 24px;
+    height: 24px;
+    min-height: 24px;
     margin-left: auto;
     padding: 0;
 }
@@ -2709,7 +2709,7 @@ div.markdown-task-text {
 .commentary-input {
     display: block;
     width: 100%;
-    min-height: 120px;
+    min-height: 84px;
     resize: vertical;
     font:
         13px/1.5 ui-monospace,
@@ -2958,36 +2958,42 @@ div.markdown-task-text {
 /* The pane fades and unfolds from the bar on open, and fades back toward it on close. */
 @keyframes commentary-reveal {
     from {
+        height: 0;
+        padding-block: 0;
+        overflow: hidden;
         opacity: 0;
         transform: translateX(-12px);
-        clip-path: inset(0 0 100% 0);
     }
 
     to {
+        height: auto;
+        overflow: hidden;
         opacity: 1;
         transform: none;
-        clip-path: inset(0 0 0 0);
     }
 }
 
 @keyframes commentary-conceal {
     from {
+        height: auto;
         opacity: 1;
         transform: none;
     }
 
     to {
+        height: 0;
+        padding-block: 0;
         opacity: 0;
         transform: translateX(-12px);
     }
 }
 
 .commentary-layout[data-open='true'] > .commentary-pane {
-    animation: commentary-reveal 0.42s cubic-bezier(0.22, 1, 0.36, 1) both;
+    animation: commentary-reveal 0.42s cubic-bezier(0.22, 1, 0.36, 1) backwards;
 }
 
 .commentary-layout[data-open='true'] > .commentary-pane[data-closing] {
-    animation: commentary-conceal 0.24s cubic-bezier(0.4, 0, 1, 1) both;
+    animation: commentary-conceal 0.26s cubic-bezier(0.4, 0, 0.2, 1) both;
 }
 
 /* A closed rail is a small dot; the open rail keeps its full-height bar for resizing. */
@@ -3180,4 +3186,58 @@ div.markdown-task-text {
         background: var(--accent);
         transition: background-color 0.18s ease;
     }
+}
+
+/* Sections fold open and closed, and a closing comment folds with them, so collapsing several at once is one smooth
+   motion. Browsers without interpolate-size switch instantly. */
+.markdown-section [role='region'],
+.commentary-pane {
+    interpolate-size: allow-keywords;
+}
+
+.markdown-section [role='region'][data-folds] {
+    overflow: clip;
+    transition:
+        height 0.26s cubic-bezier(0.4, 0, 0.2, 1),
+        opacity 0.2s ease,
+        display 0.26s allow-discrete;
+}
+
+.markdown-section [role='region'][data-folds][hidden] {
+    display: none;
+    height: 0;
+    opacity: 0;
+}
+
+@starting-style {
+    .markdown-section [role='region'][data-folds]:not([hidden]) {
+        height: 0;
+        opacity: 0;
+    }
+}
+
+/* The grabber fades in and out with its comment. */
+@keyframes commentary-grip-in {
+    from {
+        opacity: 0;
+    }
+}
+
+@keyframes commentary-grip-out {
+    to {
+        opacity: 0;
+    }
+}
+
+.commentary-grip {
+    animation: commentary-grip-in 0.42s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.commentary-grip[data-closing] {
+    animation: commentary-grip-out 0.26s cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
+/* A folding comment clips its contents rather than showing a scrollbar. */
+.commentary-pane[data-closing] {
+    overflow: hidden;
 }

@@ -112,8 +112,15 @@ function CollapsibleSection({ children }: { children?: ReactNode }) {
     const aside = useContext(SectionAsideContext);
     const [expanded, setExpanded] = useState(command?.expanded ?? true);
     const [appliedSeq, setAppliedSeq] = useState(command?.seq ?? 0);
+    // Only sections someone has opened or closed animate, so a page load never folds every section open.
+    const [folds, setFolds] = useState(false);
+    const foldTo = (value: boolean) => {
+        setFolds(true);
+        setExpanded(value);
+    };
     if (command && command.seq !== appliedSeq) {
         setAppliedSeq(command.seq);
+        setFolds(true);
         setExpanded(command.expanded);
     }
     const headingId = `note-section-heading-${useId()}`;
@@ -132,20 +139,26 @@ function CollapsibleSection({ children }: { children?: ReactNode }) {
                     type="button"
                     aria-expanded={expanded}
                     aria-controls={regionId}
-                    onClick={() => setExpanded((value) => !value)}
+                    onClick={() => foldTo(!expanded)}
                 >
                     {heading.props.children}
                     <ChevronDown size={16} aria-hidden="true" />
                 </button>
             </h2>
-            <div id={regionId} role="region" aria-labelledby={headingId} hidden={!expanded}>
+            <div
+                id={regionId}
+                role="region"
+                aria-labelledby={headingId}
+                hidden={!expanded}
+                data-folds={folds || undefined}
+            >
                 {body}
             </div>
         </>
     );
     return (
         <section className="markdown-section">
-            {aside ? aside(textOf(heading.props.children), content, { expanded, setExpanded }) : content}
+            {aside ? aside(textOf(heading.props.children), content, { expanded, setExpanded: foldTo }) : content}
         </section>
     );
 }

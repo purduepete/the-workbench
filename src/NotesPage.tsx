@@ -735,7 +735,7 @@ export function NotesPage({
                                                         aria-label={`Add a note for ${dateLabel}`}
                                                         onClick={() => openNewNote(day.entryDate)}
                                                     >
-                                                        <Plus size={14} aria-hidden="true" />
+                                                        <Plus size={12} aria-hidden="true" />
                                                     </button>
                                                 </div>
                                                 {day.entries.map((entry) => renderNote(entry))}
