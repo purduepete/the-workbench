@@ -1,5 +1,5 @@
 import { test as base } from '@playwright/test';
-import type { Locator } from '@playwright/test';
+import type { Locator, Page } from '@playwright/test';
 
 export * from '@playwright/test';
 
@@ -20,4 +20,16 @@ export async function closeDialog(dialog: Locator) {
     await dialog.getByRole('button', { name: 'Close', exact: true }).click();
     const discard = dialog.getByRole('button', { name: 'Discard changes', exact: true });
     if (await discard.isVisible()) await discard.click();
+}
+
+/** Opens a note editor by its toolbar button. "Global note" opens New note and switches it to Global. */
+export async function openEditor(page: Page, name: string, how: 'click' | 'tap' = 'click') {
+    const opener = page.getByRole('button', { name: name === 'Global note' ? 'New note' : name, exact: true }).first();
+    await (how === 'tap' ? opener.tap() : opener.click());
+    if (name !== 'Global note') return;
+    await page
+        .getByRole('dialog')
+        .getByRole('group', { name: 'Note category', exact: true })
+        .getByRole('button', { name: 'Global', exact: true })
+        .click();
 }

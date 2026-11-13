@@ -1,4 +1,4 @@
-import { expect, test } from './fixtures';
+import { expect, test, openEditor } from './fixtures';
 import { localDateKey } from '../src/journal';
 import type { ServerGlobalNote, ServerIdea, ServerJournalEntry } from '../shared/contracts';
 import type { ServerTask } from '../shared/tasks';
@@ -27,15 +27,18 @@ test('first visit prepares a new offline tab, all edit queues survive reload and
     await offline.getByRole('button', { name: 'New note', exact: true }).click();
     let dialog = offline.getByRole('dialog');
     await dialog.locator('textarea[name="body"]').fill(journalBody);
-    await dialog.getByRole('button', { name: 'Save entry' }).click();
-    await offline.getByRole('button', { name: 'Global note', exact: true }).click();
+    await dialog.getByRole('button', { name: 'Save note' }).click();
+    await openEditor(offline, 'Global note');
     dialog = offline.getByRole('dialog');
     await dialog.locator('input[name="title"]').fill(globalTitle);
     await dialog.locator('textarea[name="body"]').fill('Saved without Internet');
     await dialog.getByRole('button', { name: 'Save note' }).click();
     await offline.reload();
     await expect(offline.getByRole('paragraph').filter({ hasText: journalBody })).toBeVisible();
-    await offline.getByRole('button', { name: 'Global notes', exact: true }).click();
+    await offline
+        .getByRole('group', { name: 'Filter notes', exact: true })
+        .getByRole('button', { name: 'Global', exact: true })
+        .click();
     await expect(offline.getByRole('heading', { name: globalTitle })).toBeVisible();
 
     await offline.goto('/ideas');
@@ -98,7 +101,7 @@ test('a cached shell without downloaded records still allows offline capture', a
     await page.goto('/notes');
     await page.getByRole('button', { name: 'New note', exact: true }).click();
     await page.getByRole('dialog').locator('textarea[name="body"]').fill('First local offline journal');
-    await page.getByRole('dialog').getByRole('button', { name: 'Save entry' }).click();
+    await page.getByRole('dialog').getByRole('button', { name: 'Save note' }).click();
     await expect(page.getByRole('paragraph').filter({ hasText: 'First local offline journal' })).toBeVisible();
     await page.goto('/tasks');
     await page.getByRole('button', { name: 'New task', exact: true }).click();

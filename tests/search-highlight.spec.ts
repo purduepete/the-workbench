@@ -1,4 +1,4 @@
-import { expect, test } from './fixtures';
+import { expect, test, openEditor } from './fixtures';
 import type { Page } from './fixtures';
 
 const highlighted = (page: Page) =>
@@ -20,10 +20,14 @@ test('search highlights matching text in ideas, notes and tasks and clears with 
     await expect.poll(() => highlighted(page)).toEqual([]);
 
     await page.goto('/notes');
-    await page.getByRole('button', { name: 'Global note', exact: true }).click();
+    await openEditor(page, 'Global note');
     dialog = page.getByRole('dialog');
-    await dialog.getByLabel('Title', { exact: true }).fill(`Note about ${word}`);
+    await dialog.getByLabel('Title (optional)', { exact: true }).fill(`Note about ${word}`);
     await dialog.getByRole('button', { name: 'Save note', exact: true }).click();
+    await page
+        .getByRole('group', { name: 'Filter notes', exact: true })
+        .getByRole('button', { name: 'Global', exact: true })
+        .click();
     await page.getByRole('searchbox', { name: 'Search notes' }).fill(word);
     await expect.poll(() => highlighted(page)).toContain(word);
 

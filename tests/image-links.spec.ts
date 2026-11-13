@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { openEditor } from './fixtures';
 import { spawn } from 'node:child_process';
 import type { ChildProcess } from 'node:child_process';
 
@@ -32,7 +33,7 @@ test.afterAll(async () => {
 test('unconfigured OneDrive explains setup without manual sharing controls', async ({ page }) => {
     await page.route('**/api/onedrive', (route) => route.fulfill({ json: { configuration: null } }));
     await page.goto('/notes');
-    await page.getByRole('button', { name: 'Global note', exact: true }).click();
+    await openEditor(page, 'Global note');
     const dialog = page.getByRole('dialog');
     await dialog.getByRole('button', { name: 'Add image link', exact: true }).click();
     const fields = dialog.getByRole('group', { name: 'OneDrive image link' });
@@ -51,7 +52,7 @@ test('unconfigured OneDrive explains setup without manual sharing controls', asy
 for (const theme of ['midnight', 'light']) {
     for (const editor of [
         { path: '/ideas', open: 'New idea', save: 'Save idea', title: true },
-        { path: '/notes', open: 'New note', save: 'Save entry', title: false },
+        { path: '/notes', open: 'New note', save: 'Save note', title: false },
         { path: '/notes', open: 'Global note', save: 'Save note', title: true },
         { path: '/tasks', open: 'New task', save: 'Save task', title: true },
     ]) {
@@ -94,7 +95,7 @@ for (const theme of ['midnight', 'light']) {
                 })
             );
             await page.goto(editor.path);
-            await page.getByRole('button', { name: editor.open, exact: true }).click();
+            await openEditor(page, editor.open);
             const dialog = page.getByRole('dialog');
             if (editor.title) await dialog.locator('input[name="title"]').fill(`Image ${editor.open} ${theme}`);
             const body = dialog.locator('textarea[name="body"]');
@@ -109,7 +110,10 @@ for (const theme of ['midnight', 'light']) {
             await dialog.getByRole('button', { name: editor.save, exact: true }).click();
             await expect(dialog).toBeHidden();
             if (editor.open === 'Global note')
-                await page.getByRole('button', { name: 'Global notes', exact: true }).click();
+                await page
+                    .getByRole('group', { name: 'Filter notes', exact: true })
+                    .getByRole('button', { name: 'Global', exact: true })
+                    .click();
             const reopen =
                 editor.open === 'New note'
                     ? page.getByRole('button', { name: 'Edit Existing details.', exact: true }).last()

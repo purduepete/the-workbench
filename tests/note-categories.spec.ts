@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { openEditor } from './fixtures';
 import { spawn } from 'node:child_process';
 import type { ChildProcess } from 'node:child_process';
 
@@ -21,29 +22,62 @@ test.afterAll(async () => {
     await exited;
 });
 
-test('global notes appear only under All', async ({ page }) => {
+test('global notes show under All and Global, and a note moves between Global and a dated section', async ({
+    page,
+}) => {
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await page.setViewportSize({ width: 390, height: 900 });
+    await page.clock.install({ time: new Date('2026-11-06T12:00:00-08:00') });
     await page.goto('/notes');
     const filter = page.getByRole('group', { name: 'Filter notes', exact: true });
 
-    await page.getByRole('button', { name: 'Global note', exact: true }).click();
+    await openEditor(page, 'Global note');
     const dialog = page.getByRole('dialog');
-    await dialog.locator('input[name="title"]').fill('Uncategorized reference');
+    await expect(dialog.getByRole('heading', { name: 'New note', exact: true })).toBeVisible();
+    await dialog.locator('input[name="title"]').fill('Reference list');
     await dialog.getByRole('button', { name: 'Save note', exact: true }).click();
-    const global = page.locator('.global-note-card').filter({ hasText: 'Uncategorized reference' });
-    await page.getByRole('button', { name: 'Global notes', exact: true }).click();
+    const global = page.locator('.global-note-card').filter({ hasText: 'Reference list' });
+    await page
+        .getByRole('group', { name: 'Filter notes', exact: true })
+        .getByRole('button', { name: 'Global', exact: true })
+        .click();
     await expect(global).toBeVisible();
 
-    for (const name of ['Home', 'Work', 'Unclassified']) {
+    for (const name of ['Home', 'Work']) {
         await filter.getByRole('button', { name, exact: true }).click();
         await expect(global).toHaveCount(0);
     }
-    await filter.getByRole('button', { name: 'All', exact: true }).click();
-    await page.getByRole('button', { name: 'Global notes', exact: true }).click();
+    // Under Global the group starts open.
+    await filter.getByRole('button', { name: 'Global', exact: true }).click();
     await expect(global).toBeVisible();
-});
 
+    // Switching a global note to Work dates it today; switching back removes the date.
+    await global.getByRole('button', { name: 'Edit Reference list', exact: true }).click();
+    const category = dialog.getByRole('group', { name: 'Note category', exact: true });
+    await expect(category.getByRole('button', { name: 'Global', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    await category.getByRole('button', { name: 'Work', exact: true }).click();
+    await expect(dialog.getByRole('heading', { name: 'Edit note for 11/06/2026', exact: true })).toBeVisible();
+    await dialog.locator('textarea[name="body"]').fill('Now a work note');
+    await dialog.getByRole('button', { name: 'Save note', exact: true }).click();
+    await expect(global).toHaveCount(0);
+    await filter.getByRole('button', { name: 'Work', exact: true }).click();
+    const daily = page.getByRole('region', { name: 'Notes for 11/06/2026' }).locator('.journal-card');
+    await expect(daily.filter({ hasText: 'Now a work note' })).toBeVisible();
+    await daily.getByRole('button', { name: 'Edit Reference list', exact: true }).click();
+    await category.getByRole('button', { name: 'Global', exact: true }).click();
+    await dialog.getByRole('button', { name: 'Save note', exact: true }).click();
+    await expect(daily).toHaveCount(0);
+    await filter.getByRole('button', { name: 'Global', exact: true }).click();
+    await expect(global).toContainText('Now a work note');
+    await expect(page.getByRole('status')).toHaveText('Synced');
+    const [{ notes }, { entries }] = await Promise.all([
+        (await page.request.get('/api/global-notes')).json(),
+        (await page.request.get('/api/journal')).json(),
+    ]);
+    const note = notes.find((value: { title: string }) => value.title === 'Reference list');
+    expect(note).toMatchObject({ body: 'Now a work note' });
+    expect(entries.filter((value: { id: string }) => value.id === note.id)).toEqual([]);
+});
 test('a day holds several titled notes that move between sections and delete one at a time', async ({ page }) => {
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await page.clock.install({ time: new Date('2026-11-06T12:00:00-08:00') });
@@ -59,7 +93,7 @@ test('a day holds several titled notes that move between sections and delete one
         await category.getByRole('button', { name: section, exact: true }).click();
         await title.fill(heading);
         await body.fill(details);
-        await dialog.getByRole('button', { name: 'Save entry', exact: true }).click();
+        await dialog.getByRole('button', { name: 'Save note', exact: true }).click();
         await expect(dialog).toHaveCount(0);
     };
     await create('Work', 'Standup', 'Standup details');
@@ -69,12 +103,15 @@ test('a day holds several titled notes that move between sections and delete one
     const day = page.getByRole('region', { name: 'Notes for 11/06/2026' });
     const headings = () =>
         day.locator('.journal-day-toggle').evaluateAll((nodes) => nodes.map((node) => node.getAttribute('aria-label')));
-    await expect(day.locator('.journal-card')).toHaveCount(3);
+    // Notes page opens on Work, so the Home note is hidden until Home is selected.
+    await expect(day.locator('.journal-card')).toHaveCount(2);
+    await expect.poll(headings).toEqual(['Standup', 'Retro']);
+    await filter.getByRole('button', { name: 'Home', exact: true }).click();
     // An open untitled note does not repeat its first line in the heading.
     await expect(
         day.locator('.journal-card').filter({ hasText: 'Groceries to buy' }).locator('.journal-note-title')
     ).toHaveText('');
-    await expect.poll(headings).toEqual(['Standup', 'Retro', 'Groceries to buy']);
+    await expect.poll(headings).toEqual(['Groceries to buy']);
     await filter.getByRole('button', { name: 'Work', exact: true }).click();
     await expect.poll(headings).toEqual(['Standup', 'Retro']);
 
@@ -83,17 +120,17 @@ test('a day holds several titled notes that move between sections and delete one
     await expect(body).toHaveValue('Retro details');
     await category.getByRole('button', { name: 'Home', exact: true }).click();
     await title.fill('Retro at home');
-    await dialog.getByRole('button', { name: 'Save entry', exact: true }).click();
+    await dialog.getByRole('button', { name: 'Save note', exact: true }).click();
     await expect.poll(headings).toEqual(['Standup']);
     await filter.getByRole('button', { name: 'Home', exact: true }).click();
     await expect.poll(headings).toEqual(['Retro at home', 'Groceries to buy']);
 
-    await filter.getByRole('button', { name: 'All', exact: true }).click();
+    await filter.getByRole('button', { name: 'Work', exact: true }).click();
     await day.getByRole('button', { name: 'Edit Standup', exact: true }).click();
     await dialog.getByRole('button', { name: 'Delete note', exact: true }).click();
     await dialog.getByRole('button', { name: 'Confirm delete', exact: true }).click();
     await expect(dialog).toHaveCount(0);
-    await expect.poll(headings).toEqual(['Retro at home', 'Groceries to buy']);
+    await expect(day).toHaveCount(0);
 
     // The day's own add button opens a new note for that day in the filtered section.
     await filter.getByRole('button', { name: 'Home', exact: true }).click();
@@ -102,7 +139,7 @@ test('a day holds several titled notes that move between sections and delete one
     await expect(category.getByRole('button', { name: 'Home', exact: true })).toHaveAttribute('aria-pressed', 'true');
     await expect(body).toHaveValue('');
     await body.fill('Evening walk');
-    await dialog.getByRole('button', { name: 'Save entry', exact: true }).click();
+    await dialog.getByRole('button', { name: 'Save note', exact: true }).click();
     await expect.poll(headings).toEqual(['Retro at home', 'Groceries to buy', 'Evening walk']);
     await expect(page.getByRole('status')).toHaveText('Synced');
     const journal = await (await page.request.get('/api/journal')).json();
@@ -132,20 +169,21 @@ for (const theme of ['midnight', 'light']) {
         await expect(filter).toBeVisible();
         await page.evaluate(() => document.fonts.ready);
         const actions = page.locator('.notes-actions');
-        expect(await filter.evaluate((node) => node.nextElementSibling?.classList.contains('notes-actions'))).toBe(
+        // Calendar sits to the left of the Global/Home/Work control; on a phone it takes the row above.
+        expect(await filter.evaluate((node) => node.previousElementSibling?.classList.contains('notes-actions'))).toBe(
             true
         );
         const filterBox = await filter.boundingBox();
         const actionsBox = await actions.boundingBox();
         if (!filterBox || !actionsBox) throw new Error('Notes toolbar controls are missing.');
         if (theme === 'midnight') {
-            expect(actionsBox.x).toBeGreaterThanOrEqual(filterBox.x + filterBox.width);
-            expect(actionsBox.x - filterBox.x - filterBox.width).toBeCloseTo(12, 0);
+            expect(filterBox.x).toBeGreaterThanOrEqual(actionsBox.x + actionsBox.width);
+            expect(filterBox.x - actionsBox.x - actionsBox.width).toBeCloseTo(12, 0);
             expect(Math.abs(actionsBox.y - filterBox.y)).toBeLessThanOrEqual(2);
         } else {
-            expect(actionsBox.y).toBeGreaterThanOrEqual(filterBox.y + filterBox.height);
+            expect(filterBox.y).toBeGreaterThanOrEqual(actionsBox.y + actionsBox.height);
         }
-        await expect(actions.getByRole('button')).toHaveText(['Global note', 'Calendar']);
+        await expect(actions.getByRole('button')).toHaveText(['Calendar']);
         expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);
 
         await filter.getByRole('button', { name: 'Work', exact: true }).click();
@@ -165,7 +203,7 @@ for (const theme of ['midnight', 'light']) {
         const title = dialog.locator('input[name="title"]');
         const body = dialog.locator('textarea[name="body"]');
         const tags = dialog.locator('input[name="tags"]');
-        const save = () => dialog.getByRole('button', { name: 'Save entry', exact: true }).click();
+        const save = () => dialog.getByRole('button', { name: 'Save note', exact: true }).click();
         const select = async (name: string) => category.getByRole('button', { name, exact: true }).click();
 
         await title.fill(`Work plan ${theme}`);
@@ -181,7 +219,7 @@ for (const theme of ['midnight', 'light']) {
         await tags.fill('home-tag');
         await save();
         await page.getByRole('button', { name: 'New note', exact: true }).click();
-        await select('Unclassified');
+        await select('Global');
         await body.fill(`Daily other ${theme}`);
         await tags.fill('other-tag');
         await save();
@@ -193,9 +231,14 @@ for (const theme of ['midnight', 'light']) {
         await filter.getByRole('button', { name: 'Home', exact: true }).click();
         await expect(daily).toHaveCount(0);
         await expect(home).toBeVisible();
-        await filter.getByRole('button', { name: 'All', exact: true }).click();
         const cards = page.locator('.journal-card');
-        await expect(cards.filter({ hasText: new RegExp(`Daily (work|home|other) ${theme}`) })).toHaveCount(3);
+        await expect(cards.filter({ hasText: new RegExp(`Daily (work|home|other) ${theme}`) })).toHaveCount(1);
+        await page
+            .getByRole('group', { name: 'Filter notes', exact: true })
+            .getByRole('button', { name: 'Global', exact: true })
+            .click();
+        await expect(page.locator('.global-note-card').filter({ hasText: `Daily other ${theme}` })).toBeVisible();
+        await filter.getByRole('button', { name: 'Work', exact: true }).click();
         const ids = await page.locator('.journal-week [id]').evaluateAll((nodes) => nodes.map((node) => node.id));
         expect(new Set(ids).size).toBe(ids.length);
         await expect(page.getByRole('status')).toHaveText('Synced');
@@ -218,6 +261,7 @@ for (const theme of ['midnight', 'light']) {
         await page.reload();
 
         // Emptying the details of a saved note deletes it after a confirmation.
+        await filter.getByRole('button', { name: 'Home', exact: true }).click();
         await home.getByRole('button', { name: `Edit Daily home ${theme}`, exact: true }).click();
         await body.fill('');
         await save();
@@ -235,7 +279,11 @@ for (const theme of ['midnight', 'light']) {
             version: 2,
         });
         expect(find(`Second work note ${theme}`)).toMatchObject({ title: `Offline extra ${theme}`, category: 'work' });
-        expect(find(`Daily other ${theme}`)).toMatchObject({ category: null, tags: ['other-tag'], version: 1 });
+        expect(find(`Daily other ${theme}`)).toBeUndefined();
+        const { notes } = await (await page.request.get('/api/global-notes')).json();
+        expect(notes.find((note: { title: string }) => note.title === `Daily other ${theme}`)).toMatchObject({
+            tags: ['other-tag'],
+        });
         expect(
             journal.entries.some(
                 (entry: { body: string; deleted: boolean }) =>

@@ -1,4 +1,4 @@
-import { expect, test, closeDialog } from './fixtures';
+import { expect, test, closeDialog, openEditor } from './fixtures';
 import type { Locator } from './fixtures';
 
 async function expectMarkerPainted(item: Locator) {
@@ -68,26 +68,23 @@ async function expectMarkdownListMarkers(container: Locator) {
     await expectMarkerPainted(numbered.locator(':scope > li').first());
 }
 
-test('global note comes before calendar on phone and desktop', async ({ page }) => {
+test('the calendar sits in the notes toolbar and hides under Global, which has no dates', async ({ page }) => {
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await page.goto('/notes');
-    const buttons = page.locator('.notes-actions > button');
-    await expect(buttons).toHaveText(['Global note', 'Calendar']);
-    for (const width of [390, 1280, 1920]) {
-        await page.setViewportSize({ width, height: 900 });
-        // Measure both buttons in one frame; separate reads can straddle a scroll adjustment after the resize.
-        const [globalNote, calendar] = await buttons.evaluateAll((elements) =>
-            elements.map((element) => {
-                const { x, y, width: w, height } = element.getBoundingClientRect();
-                return { x, y, width: w, height };
-            })
-        );
-        if (!globalNote || !calendar) throw new Error('Notes action buttons are not visible');
-        expect(globalNote.x + globalNote.width).toBeLessThanOrEqual(calendar.x);
-        expect(globalNote.y).toBeCloseTo(calendar.y, 0);
-    }
+    const filter = page.getByRole('group', { name: 'Filter notes', exact: true });
+    await expect(filter.getByRole('button')).toHaveText(['Global', 'Home', 'Work']);
+    await expect(filter.getByRole('button', { name: 'Work', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('.notes-actions > button')).toHaveText(['Calendar']);
+    await expect(page.getByRole('button', { name: 'Global note', exact: true })).toHaveCount(0);
+    await filter.getByRole('button', { name: 'Global', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Calendar', exact: true })).toHaveCount(0);
+    await page.getByRole('button', { name: 'New note', exact: true }).click();
+    const dialog = page.getByRole('dialog');
+    await expect(dialog.getByRole('heading', { name: 'New note', exact: true })).toBeVisible();
+    await expect(
+        dialog.getByRole('group', { name: 'Note category' }).getByRole('button', { name: 'Global', exact: true })
+    ).toHaveAttribute('aria-pressed', 'true');
 });
-
 test('empty pages omit the long instructional copy', async ({ page }) => {
     const copy = [
         'Start with a quick note. Add the context now, and sort it out later.',
@@ -137,10 +134,7 @@ for (const device of [
             });
         });
 
-        for (const editor of [
-            { button: 'New note', focus: 'Details' },
-            { button: 'Global note', focus: 'Title' },
-        ]) {
+        for (const editor of [{ button: 'New note', focus: 'Details' }]) {
             await page.evaluate(() => {
                 delete document.documentElement.dataset.noteInputFocused;
             });
@@ -172,7 +166,7 @@ for (const theme of ['midnight', 'light']) {
         const dialog = page.getByRole('dialog');
         await dialog.locator('textarea[name="body"]').fill(body);
         await dialog.locator('input[name="tags"]').fill('health, Family');
-        await dialog.getByRole('button', { name: 'Save entry' }).click();
+        await dialog.getByRole('button', { name: 'Save note' }).click();
         await expect(dialog).toBeHidden();
         await expect(page.getByRole('paragraph').filter({ hasText: body })).toBeVisible();
         await expect(page.getByText(/^Week of \d{2}\/\d{2}\/\d{4}$/)).toBeVisible();
@@ -205,7 +199,7 @@ test('calendar scrolls to a day with notes and opens a new note for an empty day
     await page.getByRole('button', { name: 'New note', exact: true }).click();
     const todayEntry = page.getByRole('dialog');
     await todayEntry.locator('textarea[name="body"]').fill('Calendar existing-day entry');
-    await todayEntry.getByRole('button', { name: 'Save entry' }).click();
+    await todayEntry.getByRole('button', { name: 'Save note' }).click();
     await expect(page.getByRole('paragraph').filter({ hasText: 'Calendar existing-day entry' })).toBeVisible();
 
     await page.getByRole('button', { name: 'Calendar', exact: true }).click();
@@ -318,7 +312,7 @@ test('idea, note and task editors share the same desktop height', async ({ page 
     await page.emulateMedia({ reducedMotion: 'reduce' });
     const editors = [
         { path: '/ideas', open: 'New idea', save: 'Save idea', markdown: true },
-        { path: '/notes', open: 'New note', save: 'Save entry', markdown: true },
+        { path: '/notes', open: 'New note', save: 'Save note', markdown: true },
         { path: '/notes', open: 'Global note', save: 'Save note', markdown: true },
         { path: '/tasks', open: 'New task', save: 'Save task', markdown: true },
     ];
@@ -332,7 +326,7 @@ test('idea, note and task editors share the same desktop height', async ({ page 
         await page.setViewportSize(viewport);
         for (const editor of editors) {
             await page.goto(editor.path);
-            await page.getByRole('button', { name: editor.open, exact: true }).first().click();
+            await openEditor(page, editor.open);
             const dialog = page.getByRole('dialog');
             const body = dialog.locator('textarea[name="body"]');
             const save = dialog.getByRole('button', { name: editor.save, exact: true });
@@ -388,7 +382,7 @@ test('daily note sections expand and collapse together from the date header', as
     await editor
         .locator('textarea[name="body"]')
         .fill('## Standup\nNotes one\n\n## Planning\nNotes two\n\n## Follow-up\nNotes three');
-    await editor.getByRole('button', { name: 'Save entry', exact: true }).click();
+    await editor.getByRole('button', { name: 'Save note', exact: true }).click();
     await expect(editor).toHaveCount(0);
     const card = page.locator('.journal-card').filter({ hasText: 'Notes three' });
     const sections = card.locator('.markdown-section-heading button');
@@ -467,7 +461,7 @@ test('journal notes preview Markdown safely and preserve edits when saved', asyn
     await expect(preview.getByRole('button', { name: 'Code sample' })).toHaveCount(1);
     await expect(preview.getByRole('button', { name: 'not a section' })).toHaveCount(0);
 
-    const firstSection = preview.getByRole('button', { name: 'First section' });
+    const firstSection = preview.getByRole('button', { name: 'First section', exact: true });
     await firstSection.press('Enter');
     await expect(firstSection).toHaveAttribute('aria-expanded', 'false');
     await expect(preview.getByRole('link', { name: 'Cross-section' })).toBeHidden();
@@ -476,13 +470,13 @@ test('journal notes preview Markdown safely and preserve edits when saved', asyn
 
     await dialog.getByRole('button', { name: 'Edit', exact: true }).click();
     await expect(body).toHaveValue(markdown);
-    await dialog.getByRole('button', { name: 'Save entry' }).click();
+    await dialog.getByRole('button', { name: 'Save note' }).click();
     await expect(dialog).toBeHidden();
     // Saved daily notes start with their sections collapsed.
     const savedSection = page
         .locator('.journal-card')
         .filter({ hasText: 'Cross-section' })
-        .getByRole('button', { name: 'First section' });
+        .getByRole('button', { name: 'First section', exact: true });
     await expect(savedSection).toHaveAttribute('aria-expanded', 'false');
     await savedSection.click();
     await expect(page.getByRole('link', { name: 'Cross-section' })).toHaveAttribute(
@@ -512,7 +506,7 @@ for (const { theme, width } of [
             '4. Fourth item',
         ].join('\n');
         const title = `List markers ${theme}`;
-        await page.getByRole('button', { name: 'Global note', exact: true }).click();
+        await openEditor(page, 'Global note');
         let dialog = page.getByRole('dialog');
         await dialog.locator('input[name="title"]').fill(title);
         await dialog.locator('textarea[name="body"]').fill(markdown);
@@ -520,8 +514,15 @@ for (const { theme, width } of [
         await expectMarkdownListMarkers(dialog.locator('.markdown-editor-preview'));
         await dialog.getByRole('button', { name: 'Save note' }).click();
         await expect(dialog).toBeHidden();
-        await page.getByRole('button', { name: 'Global notes', exact: true }).click();
+        await page
+            .getByRole('group', { name: 'Filter notes', exact: true })
+            .getByRole('button', { name: 'Global', exact: true })
+            .click();
         await expectMarkdownListMarkers(page.locator('.global-note-card').filter({ hasText: title }));
+        await page
+            .getByRole('group', { name: 'Filter notes', exact: true })
+            .getByRole('button', { name: 'Work', exact: true })
+            .click();
 
         await page.getByRole('button', { name: 'New note', exact: true }).click();
         dialog = page.getByRole('dialog');
@@ -529,7 +530,7 @@ for (const { theme, width } of [
         await dialog.locator('textarea[name="body"]').fill(markdown);
         await dialog.getByRole('button', { name: 'Preview', exact: true }).click();
         await expectMarkdownListMarkers(dialog.locator('.markdown-editor-preview'));
-        await dialog.getByRole('button', { name: 'Save entry' }).click();
+        await dialog.getByRole('button', { name: 'Save note' }).click();
         await expect(dialog).toBeHidden();
         await expectMarkdownListMarkers(page.locator('.journal-card').filter({ hasText: title }));
     });
@@ -612,8 +613,8 @@ test.describe('Markdown syntax help on touch', () => {
         await page.addInitScript(() => localStorage.setItem('the-workbench.theme-preference', 'light'));
         await page.goto('/notes');
         await expect(page.locator('html')).toHaveClass(/light/);
-        await page.getByRole('button', { name: 'Global note', exact: true }).tap();
-        const dialog = page.getByRole('dialog', { name: 'New global note' });
+        await openEditor(page, 'Global note', 'tap');
+        const dialog = page.getByRole('dialog', { name: 'New note', exact: true });
         const help = dialog.getByRole('button', { name: 'Markdown syntax help' });
         // A late font swap changes the label width, so measure after fonts settle.
         await page.evaluate(() => document.fonts.ready.then(() => undefined));
@@ -654,14 +655,17 @@ test('global notes can be searched and reopened without pin controls', async ({ 
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto('/notes');
     const title = `Global ${Date.now()}`;
-    await page.getByRole('button', { name: 'Global note', exact: true }).click();
-    const dialog = page.getByRole('dialog', { name: 'New global note' });
+    await openEditor(page, 'Global note');
+    const dialog = page.getByRole('dialog', { name: 'New note', exact: true });
     await expect(dialog.getByRole('button', { name: 'Close', exact: true })).toBeVisible();
     await dialog.locator('input[name="title"]').fill(title);
     await dialog.locator('textarea[name="body"]').fill('Reference for later');
     await dialog.locator('input[name="tags"]').fill('reference');
     await dialog.getByRole('button', { name: 'Save note' }).click();
-    await page.getByRole('button', { name: 'Global notes', exact: true }).click();
+    await page
+        .getByRole('group', { name: 'Filter notes', exact: true })
+        .getByRole('button', { name: 'Global', exact: true })
+        .click();
     await expect(page.getByRole('heading', { name: title })).toBeVisible();
     await expect(page.getByRole('button', { name: `Pin ${title}` })).toHaveCount(0);
     await expect(page.getByRole('button', { name: `Unpin ${title}` })).toHaveCount(0);
@@ -669,7 +673,10 @@ test('global notes can be searched and reopened without pin controls', async ({ 
     await page.getByRole('searchbox', { name: 'Search notes' }).fill(title);
     await expect(page.getByText('Reference for later')).toBeVisible();
     await page.reload();
-    await page.getByRole('button', { name: 'Global notes', exact: true }).click();
+    await page
+        .getByRole('group', { name: 'Filter notes', exact: true })
+        .getByRole('button', { name: 'Global', exact: true })
+        .click();
     await expect(page.getByRole('heading', { name: title })).toBeVisible();
     await page.getByRole('button', { name: `Edit ${title}` }).click();
     await expect(page.getByRole('dialog').locator('textarea[name="body"]')).toHaveValue('Reference for later');
@@ -680,8 +687,8 @@ test('global notes can be searched and reopened without pin controls', async ({ 
 test('global note editor previews Markdown and submits its hidden textarea value', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto('/notes');
-    await page.getByRole('button', { name: 'Global note', exact: true }).click();
-    const dialog = page.getByRole('dialog', { name: 'New global note' });
+    await openEditor(page, 'Global note');
+    const dialog = page.getByRole('dialog', { name: 'New note', exact: true });
     const body = dialog.locator('textarea[name="body"]');
     await dialog.locator('input[name="title"]').fill('Markdown global note');
     await body.fill('A **global** note.');
@@ -692,7 +699,10 @@ test('global note editor previews Markdown and submits its hidden textarea value
     await dialog.getByRole('button', { name: 'Save note' }).click();
     await expect(dialog).toBeHidden();
 
-    await page.getByRole('button', { name: 'Global notes', exact: true }).click();
+    await page
+        .getByRole('group', { name: 'Filter notes', exact: true })
+        .getByRole('button', { name: 'Global', exact: true })
+        .click();
     const card = page.locator('.global-note-card').filter({ hasText: 'Markdown global note' });
     await expect(card.locator('strong')).toHaveText('global');
     await page.setViewportSize({ width: 1280, height: 900 });
@@ -759,7 +769,7 @@ for (const { theme, width } of [
     { theme: 'midnight', width: 1280 },
     { theme: 'light', width: 390 },
 ]) {
-    test(`global and weekly note groups collapse independently in ${theme}`, async ({ page }) => {
+    test(`weekly groups and the global group collapse independently in ${theme}`, async ({ page }) => {
         await page.addInitScript((value) => localStorage.setItem('the-workbench.theme-preference', value), theme);
         await page.setViewportSize({ width, height: 844 });
         await page.goto('/notes');
@@ -822,6 +832,9 @@ for (const { theme, width } of [
             }
         );
         await page.reload();
+        const filter = page.getByRole('group', { name: 'Filter notes', exact: true });
+        // Daily notes saved before categories were required show under Home.
+        await filter.getByRole('button', { name: 'Home', exact: true }).click();
 
         const globalGroup = page.getByRole('region', { name: 'Global notes', exact: true });
         const globalCard = globalGroup.locator('article').filter({ hasText: globalTitle });
@@ -833,15 +846,11 @@ for (const { theme, width } of [
         const recentToggle = recentGroup.getByRole('button', { name: /^Week of / });
         const olderToggle = olderGroup.getByRole('button', { name: /^Week of / });
 
-        await expect(globalCard).toBeHidden();
         await expect(recentCard).toBeVisible();
         await expect(olderCard).toBeHidden();
-        await expect(globalToggle).toHaveAttribute('aria-expanded', 'false');
         await expect(recentToggle).toHaveAttribute('aria-expanded', 'true');
         await expect(olderToggle).toHaveAttribute('aria-expanded', 'false');
-        await globalToggle.click();
         await olderToggle.click();
-        await expect(globalCard).toBeVisible();
         await expect(olderCard).toBeVisible();
         const recentDayToggle = recentCard.locator('.journal-day-toggle');
         const olderDayToggle = olderCard.locator('.journal-day-toggle');
@@ -858,9 +867,6 @@ for (const { theme, width } of [
         await expect(olderCard.locator('.journal-body')).toBeVisible();
         await recentDayToggle.click();
         await expect(recentCard.locator('.journal-body')).toBeVisible();
-        await globalToggle.click();
-        await expect(globalToggle).toHaveAttribute('aria-expanded', 'false');
-        await expect(globalCard).toBeHidden();
         await expect(recentCard).toBeVisible();
 
         await recentToggle.press('Space');
@@ -869,8 +875,6 @@ for (const { theme, width } of [
         await expect(olderToggle).toHaveAttribute('aria-expanded', 'false');
         await expect(recentCard).toBeHidden();
         await expect(olderCard).toBeHidden();
-        await globalToggle.press('Enter');
-        await expect(globalCard).toBeVisible();
         await expect(recentCard).toBeHidden();
         await recentToggle.press('Enter');
         await olderToggle.press('Space');
@@ -878,65 +882,125 @@ for (const { theme, width } of [
         await expect(olderCard).toBeVisible();
         await expect(recentDayToggle).toHaveAttribute('aria-expanded', 'true');
         await expect(olderDayToggle).toHaveAttribute('aria-expanded', 'true');
+        // Global notes have their own filter, where the group starts open and still collapses.
+        await filter.getByRole('button', { name: 'Global', exact: true }).click();
+        await expect(recentCard).toHaveCount(0);
+        await expect(globalToggle).toHaveAttribute('aria-expanded', 'true');
+        await expect(globalCard).toBeVisible();
         await expect(globalGroup.getByRole('button', { name: /^(Pin|Unpin) / })).toHaveCount(0);
+        await globalToggle.press('Enter');
+        await expect(globalCard).toBeHidden();
         const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
         expect(overflow).toBeLessThanOrEqual(0);
     });
 }
 
-test('comments are added, edited and deleted under a daily note, online and offline', async ({ page, context }) => {
+test('section commentary opens from a rail in each section, and from one rail on a note without sections', async ({
+    page,
+    context,
+}) => {
     await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.setViewportSize({ width: 1280, height: 900 });
     await page.goto('/notes');
-    await page.getByRole('button', { name: 'New note', exact: true }).click();
+    const stamp = Date.now();
+    const prep = `Interview prep ${stamp}`;
+    const plainTitle = `Plain note ${stamp}`;
     const dialog = page.getByRole('dialog');
-    await dialog.locator('input[name="title"]').fill('Commented note');
-    await dialog.locator('textarea[name="body"]').fill('Original details');
-    await dialog.getByRole('button', { name: 'Save entry', exact: true }).click();
-    await expect(dialog).toHaveCount(0);
+    const create = async (title: string, body: string) => {
+        await page.getByRole('button', { name: 'New note', exact: true }).click();
+        await dialog.locator('input[name="title"]').fill(title);
+        await dialog.locator('textarea[name="body"]').fill(body);
+        await dialog.getByRole('button', { name: 'Save note', exact: true }).click();
+        await expect(dialog).toHaveCount(0);
+    };
+    await create(prep, '## My qualifications\nCareer summary\n\n## Questions\nWhat is next?');
+    await create(plainTitle, 'No sections in this one');
 
-    const card = page.locator('.journal-card').filter({ hasText: 'Commented note' });
-    const pane = card.getByRole('region', { name: 'Comments on Commented note' });
-    const box = pane.getByRole('textbox', { name: 'Add a comment to Commented note' });
-    const add = pane.getByRole('button', { name: 'Add comment', exact: true });
-    await expect(add).toBeDisabled();
-    await box.fill('First follow-up');
-    await add.click();
-    await expect(box).toHaveValue('');
-    await box.fill('Second follow-up');
-    await box.press('Control+Enter');
-    const items = pane.locator('.note-comment-body');
-    await expect(items).toHaveText(['First follow-up', 'Second follow-up']);
-    await expect(pane.locator('.note-comment-meta time').first()).toHaveText(/^\d{2}\/\d{2}\/\d{4} \d{2}:\d{2}$/);
-    await expect(card.locator('.journal-body').first()).toHaveText('Original details');
+    const card = page.locator('.journal-card').filter({ hasText: prep });
+    await card.getByRole('button', { name: 'Expand all sections', exact: true }).click();
+    const rail = card.getByRole('button', { name: 'Add commentary for Questions', exact: true });
+    await expect(card.getByRole('button', { name: /commentary for/i })).toHaveCount(2);
+    // In a section, the rail sits in the heading row just left of the section's arrow.
+    const heading = card.getByRole('button', { name: 'Questions', exact: true });
+    const [railBox, headingBox, arrowBox] = await Promise.all([
+        rail.boundingBox(),
+        heading.boundingBox(),
+        heading.locator('svg').boundingBox(),
+    ]);
+    if (!railBox || !headingBox || !arrowBox) throw new Error('Rail or heading is missing.');
+    expect(railBox.x + railBox.width).toBeLessThanOrEqual(arrowBox.x);
+    expect(arrowBox.x - (railBox.x + railBox.width)).toBeLessThanOrEqual(10);
+    expect(Math.abs(railBox.y + railBox.height / 2 - (arrowBox.y + arrowBox.height / 2))).toBeLessThanOrEqual(3);
+    // A note without sections keeps its rail at the content's upper right.
+    const plainCard = page.locator('.journal-card').filter({ hasText: plainTitle });
+    const plainRail = await plainCard
+        .getByRole('button', { name: `Add commentary for ${plainTitle}`, exact: true })
+        .boundingBox();
+    const plainBody = await plainCard.locator('.commentary-layout').boundingBox();
+    expect(plainBody!.x + plainBody!.width - (plainRail!.x + plainRail!.width)).toBeLessThanOrEqual(1);
 
-    await pane
-        .getByRole('button', { name: /^Edit comment from / })
-        .first()
-        .click();
-    const edit = pane.getByRole('textbox', { name: 'Edit comment', exact: true });
-    await edit.fill('First follow-up, revised');
-    await pane.getByRole('button', { name: 'Save comment', exact: true }).click();
-    await expect(items).toHaveText(['First follow-up, revised', 'Second follow-up']);
+    await rail.click();
+    const pane = card.getByRole('complementary', { name: 'Commentary for Questions', exact: true });
+    const input = pane.getByRole('textbox', { name: 'Commentary for Questions', exact: true });
+    await expect(input).toBeFocused();
+    await input.fill('Ask about **reporting** first');
+    await pane.getByRole('button', { name: 'View commentary', exact: true }).click();
+    await expect(pane.locator('strong')).toHaveText('reporting');
+    await expect(pane.getByRole('button', { name: 'Edit commentary', exact: true })).toBeVisible();
+    const paneBox = await pane.boundingBox();
+    if (!paneBox) throw new Error('Pane is missing.');
+    // Open on desktop: the arrow stays at the right, the pane sits just left of it with its top level with the
+    // heading, and the bar runs down the pane's left edge.
+    const [openArrow, openRailNow, openHeading] = await Promise.all([
+        heading.locator('svg').boundingBox(),
+        card.getByRole('button', { name: 'Commentary for Questions', exact: true }).boundingBox(),
+        heading.boundingBox(),
+    ]);
+    expect(Math.abs(openArrow!.x - arrowBox.x)).toBeLessThanOrEqual(1);
+    expect(paneBox.x + paneBox.width).toBeLessThanOrEqual(openArrow!.x);
+    expect(Math.abs(paneBox.y - openHeading!.y)).toBeLessThanOrEqual(2);
+    expect(openRailNow!.x + openRailNow!.width).toBeLessThanOrEqual(paneBox.x + 1);
+    expect(paneBox.x - (openRailNow!.x + openRailNow!.width)).toBeLessThanOrEqual(2);
+    await expect(pane).toHaveCSS('scrollbar-width', 'thin');
 
-    await pane
-        .getByRole('button', { name: /^Delete comment from / })
-        .last()
-        .click();
-    await pane.getByRole('button', { name: 'Confirm delete comment', exact: true }).click();
-    await expect(items).toHaveText(['First follow-up, revised']);
-    await expect(page.getByRole('status').first()).toHaveText('Synced');
+    // Dragging the rail sets the pane width.
+    const openRail = card.getByRole('button', { name: 'Commentary for Questions', exact: true });
+    const handle = await openRail.boundingBox();
+    if (!handle) throw new Error('Rail is missing.');
+    await page.mouse.move(handle.x + handle.width / 2, handle.y + 10);
+    await page.mouse.down();
+    await page.mouse.move(handle.x - 120, handle.y + 10, { steps: 6 });
+    await page.mouse.up();
+    expect((await pane.boundingBox())!.width).toBeGreaterThan(paneBox.width + 80);
+    await expect(pane).toBeVisible();
 
+    const plain = page.locator('.journal-card').filter({ hasText: plainTitle });
+    await plain.getByRole('button', { name: `Add commentary for ${plainTitle}`, exact: true }).click();
+    const plainInput = plain.getByRole('textbox', { name: `Commentary for ${plainTitle}`, exact: true });
     await context.setOffline(true);
-    await box.fill('Written offline');
-    await add.click();
-    await expect(items).toHaveText(['First follow-up, revised', 'Written offline']);
+    await plainInput.fill('Written offline');
+    await plainInput.press('Escape');
+    await expect(plain.getByRole('complementary').getByText('Written offline')).toBeVisible();
     await context.setOffline(false);
     await expect(page.getByRole('status').first()).toHaveText('Synced', { timeout: 45_000 });
+
     await page.reload();
-    await expect(items).toHaveText(['First follow-up, revised', 'Written offline']);
+    const reloaded = page.locator('.journal-card').filter({ hasText: prep });
+    await reloaded.getByRole('button', { name: 'Expand all sections', exact: true }).click();
+    await reloaded.getByRole('button', { name: 'Commentary for Questions', exact: true }).click();
+    await expect(reloaded.getByRole('complementary').locator('strong')).toHaveText('reporting');
+    // Emptying commentary deletes it.
+    await reloaded.getByRole('button', { name: 'Edit commentary', exact: true }).click();
+    await reloaded.getByRole('textbox', { name: 'Commentary for Questions', exact: true }).fill('');
+    await reloaded.getByRole('button', { name: 'View commentary', exact: true }).click();
+    await expect(reloaded.getByText('No commentary yet.')).toBeVisible();
+    await expect(page.getByRole('status').first()).toHaveText('Synced');
     const { comments } = await (await page.request.get('/api/journal/comments')).json();
-    expect(comments.map((comment: { body: string }) => comment.body)).toEqual(
-        expect.arrayContaining(['First follow-up, revised', 'Written offline'])
-    );
-    expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(0);
+    expect(comments.map((comment: { body: string }) => comment.body)).toContain('Written offline');
+    expect(comments.map((comment: { body: string }) => comment.body)).not.toContain('Ask about **reporting** first');
+
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect
+        .poll(() => page.evaluate(() => document.documentElement.scrollWidth - innerWidth))
+        .toBeLessThanOrEqual(0);
 });

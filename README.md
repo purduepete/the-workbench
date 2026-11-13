@@ -133,8 +133,8 @@ When a sign-in expires, sign in again before browsing. Real-account acceptance r
 selecting and reopening a private image after configuring the registration, including
 on the intended iPhone/iPad and both production access paths.
 
-The header's `Notes | Tasks | Ideas` control switches between pages. Notes is the home page: `/` opens `/notes`, and Ideas lives at `/ideas`. `/notes` is a personal journal with separate Home,
-Work and Unclassified entries per local day. Journal and global note bodies support Markdown, including headings, lists, tables and links. The info button
+The header's `Notes | Tasks | Ideas` control switches between pages. Notes is the home page: `/` opens `/notes`, and Ideas lives at `/ideas`. `/notes` is a personal journal. Every note is Home,
+Work or Global: Home and Work notes belong to a local day, and Global notes have no date. Journal and global note bodies support Markdown, including headings, lists, tables and links. The info button
 beside the entry label shows syntax examples. Use the Edit / Preview control while writing. **Add section** inserts a
 collapsible `##` heading; new sections start expanded. Raw HTML is shown as text, and links are limited to `http`,
 `https` and `mailto`.
@@ -149,9 +149,9 @@ note** button opens today's entry; older entries open from their card. The Calen
 marked entry days; click a day (or press Enter on it) to open its entry or start a blank one. Today jumps to the current day. Saving an empty entry asks to confirm, then
 deletes it.
 
-Global notes have titles and tags, are not tied to a date, and appear above the journal entries. The global group and
-each weekly group can be collapsed independently. The search box and tag filter cover both types of notes. Global note
-titles are required, but the body can be empty.
+Global notes have titles and tags, are not tied to a date, and appear above the daily notes. The global group and
+each weekly group can be collapsed independently. The search box and tag filter cover both kinds of notes. A Global note
+needs a title or details; without a title, its first line becomes the title.
 
 Daily notes group by week for the current week and the 3 before it; every earlier day goes in one Older group, still split by date. Only the current week starts expanded; other weeks, Older and global notes start collapsed. Modals close from an X in the upper-right corner,
 to the right of the maximize button when there is one, and open with an opacity-only fade.
@@ -164,21 +164,26 @@ An open note with two or more `##` sections shows a two-icon pill, just left of 
 that expands or collapses every section at once; each section still opens and closes on its own. Daily note sections
 start collapsed; sections in ideas, tasks, global notes and editor previews start open.
 
-An expanded daily note ends with a Comments pane for follow-up commentary added later. Each comment is stamped with
-the local time it was added (mm/dd/yyyy HH:mm), renders Markdown, and can be edited or deleted on its own without
-opening the note editor; Ctrl or Cmd + Enter adds or saves one. Comments sync and queue offline separately from the
-note, using the same merge rule: a stale edit is appended under a dated separator.
+Each `##` section of a daily note has a short bar in its upper right; a note without sections has one bar for the
+whole note. Clicking the bar opens Markdown commentary beside the section (below it on a phone), and dragging it sets
+the pane width, which is remembered. A quiet pencil or eye icon in the pane's corner switches between editing and
+viewing; Escape or Ctrl/Cmd + Enter also returns to viewing, which saves. Emptying commentary deletes it. A bar is
+brighter when its section has commentary. Commentary belongs to the section heading, so renaming a heading moves its
+commentary to a "Commentary from renamed sections" block under the note, where it can be read or deleted.
+Commentary syncs and queues offline separately from the note, using the same merge rule: a stale edit is appended
+under a dated separator. It is stored in `journal_comments`, one row per section, with an id derived from the note
+id and the section heading.
 
 Notes sync offline the same way ideas do, keyed by note id:
 
-Daily entries have a Home or Work category. The Notes page filters daily entries
-by All, Home, Work or Unclassified, including calendar markers and daily-entry tags.
-Global notes have no category and appear only under All.
-New notes use the selected category filter, or Home when viewing All.
-The daily editor edits one note: its section, title, details and tags. Changing the section moves that note.
-New note opens a new note for today; clicking a calendar day with no notes opens a new note for that day, and a day
+The Notes page shows one kind at a time: Global, Home or Work, including calendar markers and tags. It remembers the
+last choice and starts on Work. Global shows its group open and hides the calendar. New note uses the selected kind;
+a day's + button and the calendar always start a Home or Work note for that day.
+One editor edits every note: its section (Home, Work or Global), title, details and tags. Switching a dated note to
+Global removes its date; switching a Global note to Home or Work dates it today. The note keeps its id either way, so
+its section commentary follows it. Clicking a calendar day with no notes opens a new note for that day, and a day
 that has notes scrolls to it. Saving an existing note with empty details asks once, then deletes it.
-Existing entries stay in their saved section; uncategorized entries stay Unclassified.
+Daily notes saved without a category before Home and Work were required show as Home.
 Each note has its own version, offline queue and tombstone. Stale edits merge only within that note.
 Older clients that send no note id can still edit a day and section that holds only one note. An ambiguous legacy
 write is refused with a reload notice, so it cannot modify the wrong note.

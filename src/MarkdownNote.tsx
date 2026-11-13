@@ -86,6 +86,18 @@ export interface SectionCommand {
 
 const SectionCommandContext = createContext<SectionCommand | null>(null);
 
+/** Wraps a section's heading and body with something beside it, such as its commentary rail. */
+export type SectionAside = (heading: string, content: ReactNode) => ReactNode;
+const SectionAsideContext = createContext<SectionAside | null>(null);
+
+/** The plain text of rendered Markdown children, for naming a section. */
+function textOf(node: ReactNode): string {
+    if (typeof node === 'string' || typeof node === 'number') return String(node);
+    if (Array.isArray(node)) return node.map(textOf).join('');
+    if (isValidElement<{ children?: ReactNode }>(node)) return textOf(node.props.children);
+    return '';
+}
+
 /** Counts the `## ` headings that become collapsible sections. */
 export function countNoteSections(body: string): number {
     return body.match(/^## \S/gm)?.length ?? 0;
@@ -93,6 +105,7 @@ export function countNoteSections(body: string): number {
 
 function CollapsibleSection({ children }: { children?: ReactNode }) {
     const command = useContext(SectionCommandContext);
+    const aside = useContext(SectionAsideContext);
     const [expanded, setExpanded] = useState(command?.expanded ?? true);
     const [appliedSeq, setAppliedSeq] = useState(command?.seq ?? 0);
     if (command && command.seq !== appliedSeq) {
@@ -108,8 +121,8 @@ function CollapsibleSection({ children }: { children?: ReactNode }) {
         return <section>{children}</section>;
     }
 
-    return (
-        <section className="markdown-section">
+    const content = (
+        <>
             <h2 className="markdown-section-heading" id={headingId}>
                 <button
                     type="button"
@@ -124,6 +137,11 @@ function CollapsibleSection({ children }: { children?: ReactNode }) {
             <div id={regionId} role="region" aria-labelledby={headingId} hidden={!expanded}>
                 {body}
             </div>
+        </>
+    );
+    return (
+        <section className="markdown-section">
+            {aside ? aside(textOf(heading.props.children), content) : content}
         </section>
     );
 }
@@ -198,6 +216,7 @@ export function MarkdownNoteBody({
     className = 'markdown-body',
     onBodyChange,
     sectionCommand = null,
+    sectionAside = null,
 }: {
     body: string;
     className?: string;
@@ -205,48 +224,57 @@ export function MarkdownNoteBody({
     onBodyChange?: (body: string) => void;
     /** Expands or collapses every section when its `seq` changes. */
     sectionCommand?: SectionCommand | null;
+    /** Renders each `## ` section through this, for example to add a commentary rail. */
+    sectionAside?: SectionAside | null;
 }) {
     return (
-        <SectionCommandContext.Provider value={sectionCommand}>
-            <div className={className}>
-                <ReactMarkdown
-                    remarkPlugins={[remarkGfm, remarkBreaks, remarkNoteSections]}
-                    urlTransform={allowedMarkdownUrl}
-                    components={{
-                        li: ({ node, className: itemClass, children }) => (
-                            <MarkdownListItem node={node} className={itemClass} body={body} onBodyChange={onBodyChange}>
-                                {children}
-                            </MarkdownListItem>
-                        ),
-                        a: ({ href, children }) => {
-                            const safeHref = allowedMarkdownUrl(href ?? '', 'href');
-                            if (oneDriveImageUrl(safeHref)) {
-                                return (
-                                    <OneDriveThumbnail
-                                        href={safeHref}
-                                        label={
-                                            typeof children === 'string'
-                                                ? children
-                                                : Children.toArray(children).join('')
-                                        }
-                                    />
-                                );
-                            }
-                            return safeHref ? (
-                                <a href={safeHref} target="_blank" rel="noopener noreferrer">
+        <SectionAsideContext.Provider value={sectionAside}>
+            <SectionCommandContext.Provider value={sectionCommand}>
+                <div className={className}>
+                    <ReactMarkdown
+                        remarkPlugins={[remarkGfm, remarkBreaks, remarkNoteSections]}
+                        urlTransform={allowedMarkdownUrl}
+                        components={{
+                            li: ({ node, className: itemClass, children }) => (
+                                <MarkdownListItem
+                                    node={node}
+                                    className={itemClass}
+                                    body={body}
+                                    onBodyChange={onBodyChange}
+                                >
                                     {children}
-                                </a>
-                            ) : (
-                                <span>{children}</span>
-                            );
-                        },
-                        section: CollapsibleSection,
-                    }}
-                >
-                    {body}
-                </ReactMarkdown>
-            </div>
-        </SectionCommandContext.Provider>
+                                </MarkdownListItem>
+                            ),
+                            a: ({ href, children }) => {
+                                const safeHref = allowedMarkdownUrl(href ?? '', 'href');
+                                if (oneDriveImageUrl(safeHref)) {
+                                    return (
+                                        <OneDriveThumbnail
+                                            href={safeHref}
+                                            label={
+                                                typeof children === 'string'
+                                                    ? children
+                                                    : Children.toArray(children).join('')
+                                            }
+                                        />
+                                    );
+                                }
+                                return safeHref ? (
+                                    <a href={safeHref} target="_blank" rel="noopener noreferrer">
+                                        {children}
+                                    </a>
+                                ) : (
+                                    <span>{children}</span>
+                                );
+                            },
+                            section: CollapsibleSection,
+                        }}
+                    >
+                        {body}
+                    </ReactMarkdown>
+                </div>
+            </SectionCommandContext.Provider>
+        </SectionAsideContext.Provider>
     );
 }
 

@@ -1,4 +1,4 @@
-import { expect, test, closeDialog } from './fixtures';
+import { expect, test, closeDialog, openEditor } from './fixtures';
 
 test('uses The Workbench for the site and installed app', async ({ page, request }) => {
     await page.goto('/ideas');
@@ -267,7 +267,7 @@ test.describe('touch dialog placement', () => {
             await page.setViewportSize(viewport);
             for (const editor of editors) {
                 await page.goto(editor.path);
-                await page.getByRole('button', { name: editor.open, exact: true }).first().tap();
+                await openEditor(page, editor.open, 'tap');
                 const dialog = page.getByRole('dialog');
                 const details = await dialog.getByRole('textbox', { name: 'Details', exact: true }).boundingBox();
                 if (!details) throw new Error(`${editor.open} details field is missing.`);

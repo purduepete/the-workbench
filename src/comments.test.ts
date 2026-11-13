@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import { z } from 'zod';
+import { commentaryId, sectionKey, sectionKeys, WHOLE_NOTE } from './commentary';
 import type { JournalCommentSave, ServerJournalComment } from '../shared/contracts';
 import { resolveCommentSave } from '../shared/journal';
 import {
@@ -91,5 +93,26 @@ describe('comment outbox', () => {
         });
         expect(state.outbox.map((change) => change.baseVersion)).toEqual([1]);
         expect(state.server).toHaveLength(1);
+    });
+});
+
+describe('section commentary keys', () => {
+    it('gives every device the same valid id for a note section', () => {
+        const id = commentaryId(NOTE, 'questions');
+        expect(id).toBe(commentaryId(NOTE, 'questions'));
+        expect(id).not.toBe(commentaryId(NOTE, 'my qualifications'));
+        expect(id).not.toBe(commentaryId(COMMENT, 'questions'));
+        expect(commentaryId(NOTE, WHOLE_NOTE)).not.toBe(id);
+        expect(z.uuid().safeParse(id).success).toBe(true);
+    });
+
+    it('names sections the way they read and skips fenced code', () => {
+        expect(sectionKey('  **Praveen**  1:1 ')).toBe('praveen 1:1');
+        expect(sectionKey('[Plan](https://example.com) `v2`')).toBe('plan v2');
+        expect(sectionKeys('Intro\n## My qualifications\ntext\n```\n## not a section\n```\n## Questions')).toEqual([
+            'my qualifications',
+            'questions',
+        ]);
+        expect(sectionKeys('No sections here')).toEqual([]);
     });
 });

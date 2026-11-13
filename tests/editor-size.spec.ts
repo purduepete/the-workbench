@@ -1,4 +1,4 @@
-import { expect, test, closeDialog } from './fixtures';
+import { expect, test, closeDialog, openEditor } from './fixtures';
 
 const editors = [
     { path: '/ideas', open: 'New idea' },
@@ -13,7 +13,7 @@ test('desktop editors maximize to the viewport, remember the choice and restore'
     for (const editor of editors) {
         await page.goto(editor.path);
         await page.evaluate(() => localStorage.removeItem('the-workbench.editor-maximized'));
-        await page.getByRole('button', { name: editor.open, exact: true }).first().click();
+        await openEditor(page, editor.open);
         const dialog = page.getByRole('dialog');
         const normal = await dialog.boundingBox();
         if (!normal) throw new Error(`${editor.open} editor is missing.`);
@@ -59,7 +59,7 @@ test('desktop editors maximize to the viewport, remember the choice and restore'
 
         // The choice is remembered for the next editor.
         await closeDialog(dialog);
-        await page.getByRole('button', { name: editor.open, exact: true }).first().click();
+        await openEditor(page, editor.open);
         await expect(dialog.getByRole('button', { name: 'Restore editor size', exact: true })).toBeVisible();
         await dialog.getByRole('button', { name: 'Restore editor size', exact: true }).click();
         await expect(dialog.getByRole('button', { name: 'Maximize editor', exact: true })).toBeVisible();

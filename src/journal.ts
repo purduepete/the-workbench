@@ -6,9 +6,9 @@ export const NOTE_FILTER_STORAGE_KEY = 'the-workbench.note-filter';
 export function readNoteFilter(): NoteFilter {
     try {
         const saved = window.localStorage.getItem(NOTE_FILTER_STORAGE_KEY);
-        return saved === 'home' || saved === 'work' || saved === 'unclassified' ? saved : 'all';
+        return saved === 'home' || saved === 'global' ? saved : 'work';
     } catch {
-        return 'all';
+        return 'work';
     }
 }
 

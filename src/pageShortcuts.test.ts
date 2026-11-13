@@ -60,14 +60,16 @@ describe('saved filters', () => {
         return values;
     };
 
-    it('remembers the notes filter and falls back to All for unknown values', () => {
+    it('remembers the notes filter and falls back to Work for unknown or retired values', () => {
         const values = storage();
-        expect(readNoteFilter()).toBe('all');
-        expect(writeNoteFilter('work')).toBeNull();
-        expect(values[NOTE_FILTER_STORAGE_KEY]).toBe('work');
         expect(readNoteFilter()).toBe('work');
-        values[NOTE_FILTER_STORAGE_KEY] = 'garbage';
-        expect(readNoteFilter()).toBe('all');
+        expect(writeNoteFilter('global')).toBeNull();
+        expect(values[NOTE_FILTER_STORAGE_KEY]).toBe('global');
+        expect(readNoteFilter()).toBe('global');
+        for (const retired of ['all', 'unclassified', 'garbage']) {
+            values[NOTE_FILTER_STORAGE_KEY] = retired;
+            expect(readNoteFilter()).toBe('work');
+        }
     });
 
     it('remembers the ideas solution filter', () => {
@@ -89,7 +91,7 @@ describe('saved filters', () => {
                 },
             },
         });
-        expect(readNoteFilter()).toBe('all');
+        expect(readNoteFilter()).toBe('work');
         expect(readSolutionFilter()).toBe('all');
         expect(writeNoteFilter('home')).toContain('could not be saved');
         expect(writeSolutionFilter('none')).toContain('could not be saved');

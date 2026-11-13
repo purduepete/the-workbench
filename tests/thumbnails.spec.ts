@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process';
 import type { ChildProcess } from 'node:child_process';
 import { expect, test } from '@playwright/test';
+import { openEditor } from './fixtures';
 
 const origin = 'http://127.0.0.1:4193';
 test.use({ serviceWorkers: 'block' });
@@ -31,7 +32,7 @@ test.afterAll(async () => {
 
 for (const editor of [
     { path: '/ideas', open: 'New idea', save: 'Save idea', title: true },
-    { path: '/notes', open: 'New note', save: 'Save entry', title: false },
+    { path: '/notes', open: 'New note', save: 'Save note', title: false },
     { path: '/notes', open: 'Global note', save: 'Save note', title: true },
     { path: '/tasks', open: 'New task', save: 'Save task', title: true },
 ]) {
@@ -79,7 +80,7 @@ for (const editor of [
             route.fulfill({ body: imageBody, contentType: 'image/png' })
         );
         await page.goto(`${origin}${editor.path}`);
-        await page.getByRole('button', { name: editor.open, exact: true }).click();
+        await openEditor(page, editor.open);
         const dialog = page.getByRole('dialog');
         if (editor.title) await dialog.locator('input[name="title"]').fill(`Thumbnail ${editor.open}`);
         const body = '[Reference photo](https://onedrive.live.com/?id=abc!123)';
@@ -94,7 +95,10 @@ for (const editor of [
         }
         await dialog.getByRole('button', { name: editor.save, exact: true }).click();
         if (editor.open === 'Global note')
-            await page.getByRole('button', { name: 'Global notes', exact: true }).click();
+            await page
+                .getByRole('group', { name: 'Filter notes', exact: true })
+                .getByRole('button', { name: 'Global', exact: true })
+                .click();
         const thumbnail = page.getByRole('img', { name: 'Reference photo' }).last();
         await expect(thumbnail).toBeVisible();
         await expect.poll(() => thumbnail.evaluate((image: HTMLImageElement) => image.naturalWidth)).toBeGreaterThan(0);

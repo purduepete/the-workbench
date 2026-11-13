@@ -1,4 +1,4 @@
-import { expect, test } from './fixtures';
+import { expect, openEditor, test } from './fixtures';
 
 for (const theme of ['midnight', 'light']) {
     test(`idea and note tags share formatting in ${theme}`, async ({ page }) => {
@@ -7,15 +7,19 @@ for (const theme of ['midnight', 'light']) {
         const styles = [];
         for (const [path, opener, title, save, card] of [
             ['/ideas', 'New idea', 'Idea title', 'Save idea', '.idea-card'],
-            ['/notes', 'Global note', 'Title', 'Save note', '.global-note-card'],
+            ['/notes', 'Global note', 'Title (optional)', 'Save note', '.global-note-card'],
         ]) {
             await page.goto(path);
-            await page.getByRole('button', { name: opener, exact: true }).click();
+            await openEditor(page, opener);
             const dialog = page.getByRole('dialog');
             await dialog.getByLabel(title, { exact: true }).fill(`Tag format ${theme}`);
             await dialog.locator('input[name="tags"]').fill('example');
             await dialog.getByRole('button', { name: save, exact: true }).click();
-            if (path === '/notes') await page.getByRole('button', { name: 'Global notes', exact: true }).click();
+            if (path === '/notes')
+                await page
+                    .getByRole('group', { name: 'Filter notes', exact: true })
+                    .getByRole('button', { name: 'Global', exact: true })
+                    .click();
             const tag = page
                 .locator(card)
                 .filter({ hasText: `Tag format ${theme}` })
