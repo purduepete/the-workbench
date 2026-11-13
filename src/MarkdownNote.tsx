@@ -87,7 +87,11 @@ export interface SectionCommand {
 const SectionCommandContext = createContext<SectionCommand | null>(null);
 
 /** Wraps a section's heading and body with something beside it, such as its commentary rail. */
-export type SectionAside = (heading: string, content: ReactNode) => ReactNode;
+export type SectionAside = (
+    heading: string,
+    content: ReactNode,
+    section: { expanded: boolean; setExpanded: (expanded: boolean) => void }
+) => ReactNode;
 const SectionAsideContext = createContext<SectionAside | null>(null);
 
 /** The plain text of rendered Markdown children, for naming a section. */
@@ -141,7 +145,7 @@ function CollapsibleSection({ children }: { children?: ReactNode }) {
     );
     return (
         <section className="markdown-section">
-            {aside ? aside(textOf(heading.props.children), content) : content}
+            {aside ? aside(textOf(heading.props.children), content, { expanded, setExpanded }) : content}
         </section>
     );
 }

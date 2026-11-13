@@ -950,29 +950,38 @@ test('section commentary opens from a rail in each section, and from one rail on
     const paneBox = await pane.boundingBox();
     if (!paneBox) throw new Error('Pane is missing.');
     // Open on desktop: the arrow stays at the right, the pane sits just left of it with its top level with the
-    // heading, and the bar runs down the pane's left edge.
-    const [openArrow, openRailNow, openHeading] = await Promise.all([
+    // heading, the dot stays between the pane and the arrow, and a grabber sits at the pane's upper left.
+    const grip = card.getByRole('button', { name: 'Resize commentary for Questions', exact: true });
+    const [openArrow, openDot, openHeading, gripBox] = await Promise.all([
         heading.locator('svg').boundingBox(),
         card.getByRole('button', { name: 'Commentary for Questions', exact: true }).boundingBox(),
         heading.boundingBox(),
+        grip.boundingBox(),
     ]);
     expect(Math.abs(openArrow!.x - arrowBox.x)).toBeLessThanOrEqual(1);
     expect(paneBox.x + paneBox.width).toBeLessThanOrEqual(openArrow!.x);
     expect(Math.abs(paneBox.y - openHeading!.y)).toBeLessThanOrEqual(2);
-    expect(openRailNow!.x + openRailNow!.width).toBeLessThanOrEqual(paneBox.x + 1);
-    expect(paneBox.x - (openRailNow!.x + openRailNow!.width)).toBeLessThanOrEqual(2);
+    expect(openDot!.x).toBeGreaterThanOrEqual(paneBox.x + paneBox.width - 1);
+    expect(openDot!.x + openDot!.width).toBeLessThanOrEqual(openArrow!.x + 1);
+    expect(gripBox!.x + gripBox!.width).toBeLessThanOrEqual(paneBox.x + 1);
+    expect(Math.abs(gripBox!.y - paneBox.y)).toBeLessThanOrEqual(1);
     await expect(pane).toHaveCSS('scrollbar-width', 'thin');
 
-    // Dragging the rail sets the pane width.
-    const openRail = card.getByRole('button', { name: 'Commentary for Questions', exact: true });
-    const handle = await openRail.boundingBox();
-    if (!handle) throw new Error('Rail is missing.');
-    await page.mouse.move(handle.x + handle.width / 2, handle.y + 10);
+    // Dragging the grabber sets the pane width.
+    const handle = gripBox!;
+    await page.mouse.move(handle.x + handle.width / 2, handle.y + 5);
     await page.mouse.down();
-    await page.mouse.move(handle.x - 120, handle.y + 10, { steps: 6 });
+    await page.mouse.move(handle.x - 120, handle.y + 5, { steps: 6 });
     await page.mouse.up();
     expect((await pane.boundingBox())!.width).toBeGreaterThan(paneBox.width + 80);
     await expect(pane).toBeVisible();
+
+    // Collapsing the section closes its commentary, and opening the commentary expands the section again.
+    await heading.click();
+    await expect(pane).toHaveCount(0);
+    await card.getByRole('button', { name: 'Commentary for Questions', exact: true }).click();
+    await expect(pane).toBeVisible();
+    await expect(heading).toHaveAttribute('aria-expanded', 'true');
 
     const plain = page.locator('.journal-card').filter({ hasText: plainTitle });
     await plain.getByRole('button', { name: `Add commentary for ${plainTitle}`, exact: true }).click();
@@ -987,7 +996,7 @@ test('section commentary opens from a rail in each section, and from one rail on
     await page.reload();
     const reloaded = page.locator('.journal-card').filter({ hasText: prep });
     await reloaded.getByRole('button', { name: 'Expand all sections', exact: true }).click();
-    await reloaded.getByRole('button', { name: 'Commentary for Questions', exact: true }).click();
+    // Expanding a section opens its saved commentary.
     await expect(reloaded.getByRole('complementary').locator('strong')).toHaveText('reporting');
     // Emptying commentary deletes it.
     await reloaded.getByRole('button', { name: 'Edit commentary', exact: true }).click();

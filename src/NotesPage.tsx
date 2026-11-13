@@ -439,11 +439,13 @@ export function NotesPage({
                 sectionCommand={sectionCommand}
                 sectionAside={
                     sectioned
-                        ? (sectionHeading, content) => (
+                        ? (sectionHeading, content, section) => (
                               <CommentaryAside
                                   key={sectionKey(sectionHeading)}
                                   {...commentaryProps(sectionKey(sectionHeading), sectionHeading)}
                                   anchor="heading"
+                                  sectionExpanded={section.expanded}
+                                  onSectionExpand={section.setExpanded}
                               >
                                   {content}
                               </CommentaryAside>

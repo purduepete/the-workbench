@@ -2989,3 +2989,195 @@ div.markdown-task-text {
 .commentary-layout[data-open='true'] > .commentary-pane[data-closing] {
     animation: commentary-conceal 0.24s cubic-bezier(0.4, 0, 1, 1) both;
 }
+
+/* A closed rail is a small dot; the open rail keeps its full-height bar for resizing. */
+.commentary-layout[data-open='false'] .commentary-rail .commentary-rail-bar,
+.commentary-layout[data-open='false'] .commentary-rail:hover .commentary-rail-bar {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    transition:
+        transform 0.18s ease,
+        background-color 0.18s ease;
+}
+
+.commentary-layout[data-open='false'] .commentary-rail:hover .commentary-rail-bar {
+    background: var(--accent);
+    transform: scale(1.3);
+}
+
+/* An open comment is resized from a small 3 by 3 dot grabber at its upper left. */
+@media (min-width: 761px) {
+    .commentary-layout[data-open='true'][data-anchor] .commentary-rail {
+        align-self: start;
+        align-items: flex-start;
+        height: auto;
+        min-height: 0;
+        padding: 0;
+    }
+
+    .commentary-layout[data-open='true'][data-anchor] .commentary-rail .commentary-rail-bar,
+    .commentary-layout[data-open='true'][data-anchor] .commentary-rail:hover .commentary-rail-bar {
+        width: 12px;
+        height: 12px;
+        min-height: 0;
+        background: radial-gradient(circle, var(--muted) 1px, transparent 1.4px) 0 0 / 4px 4px;
+        transition: none;
+    }
+
+    .commentary-layout[data-open='true'][data-anchor] .commentary-rail:hover .commentary-rail-bar {
+        background-image: radial-gradient(circle, var(--accent) 1px, transparent 1.4px);
+    }
+}
+
+/* A faint outline frames the grabber's dots. */
+@media (min-width: 761px) {
+    .commentary-layout[data-open='true'][data-anchor] .commentary-rail .commentary-rail-bar,
+    .commentary-layout[data-open='true'][data-anchor] .commentary-rail:hover .commentary-rail-bar {
+        box-sizing: content-box;
+        width: 10px;
+        height: 10px;
+        padding: 1px;
+        background-size: 3.5px 3.5px;
+        background-image: radial-gradient(circle, var(--muted) 0.9px, transparent 1.2px);
+        border: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+        background-origin: content-box;
+        background-clip: content-box;
+    }
+}
+
+@media (min-width: 761px) {
+    .commentary-layout[data-open='true'][data-anchor] .commentary-rail:hover .commentary-rail-bar {
+        background-image: radial-gradient(circle, var(--accent) 0.9px, transparent 1.2px);
+    }
+}
+
+/* The closed dot sits on the chevron's center line. */
+.commentary-layout[data-anchor='heading'][data-open='false'] .commentary-rail {
+    height: 26px;
+}
+
+/* In a section the dot stays beside the arrow while the comment is open, and the grabber sits at the comment's upper
+   left. */
+.commentary-grip {
+    display: none;
+}
+
+@media (min-width: 761px) {
+    .commentary-layout[data-anchor='heading'][data-open='true'] {
+        grid-template-columns: minmax(0, 1fr) 14px minmax(200px, var(--commentary-width, 320px)) 40px;
+    }
+
+    .commentary-layout[data-anchor='heading'][data-open='true'] .commentary-main > .commentary-rail {
+        position: absolute;
+        top: 0;
+        right: 22px;
+        width: 14px;
+        height: 28px;
+        min-height: 0;
+        align-self: auto;
+        align-items: center;
+        padding: 0;
+        cursor: pointer;
+    }
+
+    .commentary-layout[data-anchor='heading'][data-open='true']
+        .commentary-main
+        > .commentary-rail
+        .commentary-rail-bar,
+    .commentary-layout[data-anchor='heading'][data-open='true']
+        .commentary-main
+        > .commentary-rail:hover
+        .commentary-rail-bar {
+        box-sizing: border-box;
+        width: 7px;
+        height: 7px;
+        min-height: 0;
+        padding: 0;
+        border: 0;
+        border-radius: 50%;
+        background: var(--accent);
+        transition: background-color 0.18s ease;
+    }
+
+    .commentary-grip {
+        display: flex;
+        grid-row: 1 / 4;
+        grid-column: 2;
+        align-self: start;
+        justify-content: center;
+        width: 14px;
+        padding: 0;
+        border: 0;
+        background: transparent;
+        cursor: col-resize;
+        touch-action: none;
+    }
+
+    .commentary-grip:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: -2px;
+    }
+
+    .commentary-grip-dots {
+        width: 10px;
+        height: 10px;
+        padding: 1px;
+        border: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+        background: radial-gradient(circle, var(--muted) 0.9px, transparent 1.2px) 0 0 / 3.5px 3.5px;
+        background-origin: content-box;
+        background-clip: content-box;
+        box-sizing: content-box;
+    }
+
+    .commentary-grip:hover .commentary-grip-dots {
+        background-image: radial-gradient(circle, var(--accent) 0.9px, transparent 1.2px);
+    }
+}
+
+/* Without sections the dot stays at the content's upper right while the comment is open, with the grabber at the
+   comment's upper left. */
+@media (min-width: 761px) {
+    .commentary-layout[data-anchor='edge'][data-open='true'] {
+        grid-template-columns: minmax(0, 1fr) 14px minmax(200px, var(--commentary-width, 320px)) 14px;
+    }
+
+    .commentary-layout[data-anchor='edge'][data-open='true'] > .commentary-main {
+        grid-row: 1;
+        grid-column: 1;
+    }
+
+    .commentary-layout[data-anchor='edge'][data-open='true'] > .commentary-grip {
+        grid-row: 1;
+        grid-column: 2;
+    }
+
+    .commentary-layout[data-anchor='edge'][data-open='true'] > .commentary-pane {
+        grid-row: 1;
+        grid-column: 3;
+    }
+
+    .commentary-layout[data-anchor='edge'][data-open='true'] > .commentary-rail {
+        grid-row: 1;
+        grid-column: 4;
+        align-self: stretch;
+        align-items: flex-start;
+        height: auto;
+        min-height: 34px;
+        padding: 6px 0 0;
+        cursor: pointer;
+    }
+
+    .commentary-layout[data-anchor='edge'][data-open='true'] > .commentary-rail .commentary-rail-bar,
+    .commentary-layout[data-anchor='edge'][data-open='true'] > .commentary-rail:hover .commentary-rail-bar {
+        box-sizing: border-box;
+        width: 7px;
+        height: 7px;
+        min-height: 0;
+        padding: 0;
+        border: 0;
+        border-radius: 50%;
+        background: var(--accent);
+        transition: background-color 0.18s ease;
+    }
+}

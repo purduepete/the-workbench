@@ -1,4 +1,4 @@
-import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useEffectEvent, useId, useLayoutEffect, useRef, useState } from 'react';
 import type { CSSProperties, KeyboardEvent, PointerEvent, ReactNode } from 'react';
 import { Eye, Pencil, Trash2 } from 'lucide-react';
 import { commentLimits } from '../shared/contracts';
@@ -40,6 +40,9 @@ interface CommentaryAsideProps {
     onRemove: (id: string) => string | null;
     /** `heading` puts the bar in a section heading, just left of its arrow; `edge` puts it at the content's upper right. */
     anchor?: 'heading' | 'edge';
+    /** Whether the section this commentary belongs to is expanded; omitted for a note without sections. */
+    sectionExpanded?: boolean;
+    onSectionExpand?: (expanded: boolean) => void;
     children: ReactNode;
 }
 
@@ -55,6 +58,8 @@ export function CommentaryAside({
     onSave,
     onRemove,
     anchor = 'edge',
+    sectionExpanded,
+    onSectionExpand,
     children,
 }: CommentaryAsideProps) {
     const [open, setOpen] = useState(false);
@@ -99,8 +104,10 @@ export function CommentaryAside({
         };
     }, [open, anchor]);
 
+    // A newly opened pane takes focus after its reveal, so focusing the editor never stalls the animation.
+    const revealing = useRef(false);
     useEffect(() => {
-        if (editing) inputRef.current?.focus({ preventScroll: true });
+        if (editing && !revealing.current) inputRef.current?.focus({ preventScroll: true });
     }, [editing]);
 
     const commit = () => {
@@ -125,27 +132,48 @@ export function CommentaryAside({
         window.clearTimeout(closeTimer.current);
         setClosing(false);
         setOpen(false);
+        setEditing(false);
     };
 
     useEffect(() => () => window.clearTimeout(closeTimer.current), []);
 
-    const toggle = () => {
-        if (open && !closing) {
-            if (editing) showView();
-            setClosing(true);
-            // Backstop in case the animation never runs, such as a hidden tab.
-            closeTimer.current = window.setTimeout(finishClose, 500);
-            return;
-        }
+    const openPane = () => {
         if (closing) {
             window.clearTimeout(closeTimer.current);
             setClosing(false);
             return;
         }
+        if (open) return;
+        revealing.current = true;
         setOpen(true);
         if (comment) setEditing(false);
         else startEditing();
+        // Opening a comment opens its section too.
+        if (sectionExpanded === false) onSectionExpand?.(true);
     };
+
+    const closePane = () => {
+        if (!open || closing) return;
+        // Save now, but keep the editor showing until the fade-out ends.
+        if (editing) commit();
+        setClosing(true);
+        // Backstop in case the animation never runs, such as a hidden tab.
+        closeTimer.current = window.setTimeout(finishClose, 500);
+    };
+
+    const toggle = () => (open && !closing ? closePane() : openPane());
+
+    // Expanding a section opens its saved comment, and collapsing it closes the comment.
+    const onSectionChange = useEffectEvent((expanded: boolean) => {
+        if (!expanded) closePane();
+        else if (comment) openPane();
+    });
+    const lastExpanded = useRef(sectionExpanded);
+    useEffect(() => {
+        if (sectionExpanded === undefined || sectionExpanded === lastExpanded.current) return;
+        lastExpanded.current = sectionExpanded;
+        onSectionChange(sectionExpanded);
+    }, [sectionExpanded]);
 
     /** Dragging the bar left by some distance widens the pane by the same distance. */
     const sizeTo = (clientX: number, start: { x: number; width: number }) => {
@@ -169,14 +197,7 @@ export function CommentaryAside({
         if (!state.moved && Math.abs(event.clientX - state.x) < 5) return;
         if (!state.moved) {
             state.moved = true;
-            if (closing) {
-                window.clearTimeout(closeTimer.current);
-                setClosing(false);
-            } else if (!open) {
-                setOpen(true);
-                if (comment) setEditing(false);
-                else startEditing();
-            }
+            openPane();
         }
         sizeTo(event.clientX, state);
     };
@@ -233,6 +254,22 @@ export function CommentaryAside({
             <span className="commentary-rail-bar" aria-hidden="true" />
         </button>
     );
+    // The dot stays in place to close the comment, so resizing moves to its own grabber.
+    const grip = open && (
+        <button
+            type="button"
+            className="commentary-grip"
+            aria-label={`Resize commentary for ${label}`}
+            onClick={() => (dragged.current = false)}
+            onPointerDown={onPointerDown}
+            onPointerMove={onPointerMove}
+            onPointerUp={onPointerUp}
+            onPointerCancel={() => (drag.current = null)}
+            onKeyDown={onRailKey}
+        >
+            <span className="commentary-grip-dots" aria-hidden="true" />
+        </button>
+    );
     return (
         <div
             ref={layoutRef}
@@ -251,6 +288,7 @@ export function CommentaryAside({
                 {anchor === 'heading' && rail}
             </div>
             {anchor === 'edge' && rail}
+            {grip}
             {open && (
                 <aside
                     id={paneId}
@@ -258,7 +296,12 @@ export function CommentaryAside({
                     data-closing={closing || undefined}
                     aria-label={`Commentary for ${label}`}
                     onAnimationEnd={(event) => {
-                        if (closing && event.target === event.currentTarget) finishClose();
+                        if (event.target !== event.currentTarget) return;
+                        if (closing) finishClose();
+                        else if (revealing.current) {
+                            revealing.current = false;
+                            if (editing) inputRef.current?.focus({ preventScroll: true });
+                        }
                     }}
                 >
                     <button
