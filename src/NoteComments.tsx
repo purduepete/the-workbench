@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import type { CSSProperties, KeyboardEvent, PointerEvent, ReactNode } from 'react';
 import { Eye, Pencil, Trash2 } from 'lucide-react';
 import { commentLimits } from '../shared/contracts';
@@ -58,6 +58,9 @@ export function CommentaryAside({
     children,
 }: CommentaryAsideProps) {
     const [open, setOpen] = useState(false);
+    // A closing pane stays mounted until its fade-out ends.
+    const [closing, setClosing] = useState(false);
+    const closeTimer = useRef(0);
     const [editing, setEditing] = useState(false);
     const [draft, setDraft] = useState('');
     const [width, setWidth] = useState(readWidth);
@@ -67,7 +70,34 @@ export function CommentaryAside({
     const modeRef = useRef<HTMLButtonElement>(null);
     const drag = useRef<{ x: number; width: number; moved: boolean } | null>(null);
     const dragged = useRef(false);
+    const dragFrame = useRef(0);
+    const pendingWidth = useRef<number | null>(null);
     const paneId = `commentary-${useId()}`;
+    const [sectionHeight, setSectionHeight] = useState<number | null>(null);
+
+    // An open bar matches the height of its comment, whether the section is expanded or collapsed.
+    useLayoutEffect(() => {
+        const layout = layoutRef.current;
+        if (!open || anchor !== 'heading' || !layout) {
+            setSectionHeight(null);
+            return;
+        }
+        const pane = layout.querySelector(':scope > .commentary-pane');
+        if (!pane) return;
+        let frame = 0;
+        const measure = () => setSectionHeight(Math.round(pane.getBoundingClientRect().height));
+        measure();
+        // One update per frame, so the bar follows the comment without jitter while text reflows.
+        const observer = new ResizeObserver(() => {
+            cancelAnimationFrame(frame);
+            frame = requestAnimationFrame(measure);
+        });
+        observer.observe(pane);
+        return () => {
+            cancelAnimationFrame(frame);
+            observer.disconnect();
+        };
+    }, [open, anchor]);
 
     useEffect(() => {
         if (editing) inputRef.current?.focus({ preventScroll: true });
@@ -91,10 +121,25 @@ export function CommentaryAside({
         setEditing(false);
     };
 
+    const finishClose = () => {
+        window.clearTimeout(closeTimer.current);
+        setClosing(false);
+        setOpen(false);
+    };
+
+    useEffect(() => () => window.clearTimeout(closeTimer.current), []);
+
     const toggle = () => {
-        if (open) {
+        if (open && !closing) {
             if (editing) showView();
-            setOpen(false);
+            setClosing(true);
+            // Backstop in case the animation never runs, such as a hidden tab.
+            closeTimer.current = window.setTimeout(finishClose, 500);
+            return;
+        }
+        if (closing) {
+            window.clearTimeout(closeTimer.current);
+            setClosing(false);
             return;
         }
         setOpen(true);
@@ -106,7 +151,10 @@ export function CommentaryAside({
     const sizeTo = (clientX: number, start: { x: number; width: number }) => {
         const rect = layoutRef.current?.getBoundingClientRect();
         const max = Math.max(MIN_WIDTH, (rect?.width ?? 1000) * 0.7);
-        setWidth(Math.min(max, Math.max(MIN_WIDTH, start.width + start.x - clientX)));
+        const next = Math.min(max, Math.max(MIN_WIDTH, start.width + start.x - clientX));
+        pendingWidth.current = next;
+        cancelAnimationFrame(dragFrame.current);
+        dragFrame.current = requestAnimationFrame(() => setWidth(next));
     };
 
     const onPointerDown = (event: PointerEvent<HTMLButtonElement>) => {
@@ -121,7 +169,10 @@ export function CommentaryAside({
         if (!state.moved && Math.abs(event.clientX - state.x) < 5) return;
         if (!state.moved) {
             state.moved = true;
-            if (!open) {
+            if (closing) {
+                window.clearTimeout(closeTimer.current);
+                setClosing(false);
+            } else if (!open) {
                 setOpen(true);
                 if (comment) setEditing(false);
                 else startEditing();
@@ -133,12 +184,16 @@ export function CommentaryAside({
     const onPointerUp = () => {
         if (drag.current?.moved) {
             dragged.current = true;
-            setWidth((value) => {
-                writeWidth(value);
-                return value;
-            });
+            // Apply the last drag position now, so the saved width is the one under the pointer.
+            cancelAnimationFrame(dragFrame.current);
+            const final = pendingWidth.current;
+            if (final !== null) {
+                setWidth(final);
+                writeWidth(final);
+            }
         }
         drag.current = null;
+        pendingWidth.current = null;
     };
 
     const onRailKey = (event: KeyboardEvent<HTMLButtonElement>) => {
@@ -160,8 +215,8 @@ export function CommentaryAside({
             className="commentary-rail"
             data-has-commentary={Boolean(comment)}
             aria-label={`${state} for ${label}`}
-            aria-expanded={open}
-            aria-controls={open ? paneId : undefined}
+            aria-expanded={open && !closing}
+            aria-controls={open && !closing ? paneId : undefined}
             onClick={() => {
                 if (dragged.current) {
                     dragged.current = false;
@@ -184,7 +239,12 @@ export function CommentaryAside({
             className="commentary-layout"
             data-open={open}
             data-anchor={anchor}
-            style={{ '--commentary-width': `${width}px` } as CSSProperties}
+            style={
+                {
+                    '--commentary-width': `${width}px`,
+                    ...(sectionHeight === null ? {} : { '--section-height': `${sectionHeight}px` }),
+                } as CSSProperties
+            }
         >
             <div className="commentary-main">
                 {children}
@@ -192,7 +252,15 @@ export function CommentaryAside({
             </div>
             {anchor === 'edge' && rail}
             {open && (
-                <aside id={paneId} className="commentary-pane" aria-label={`Commentary for ${label}`}>
+                <aside
+                    id={paneId}
+                    className="commentary-pane"
+                    data-closing={closing || undefined}
+                    aria-label={`Commentary for ${label}`}
+                    onAnimationEnd={(event) => {
+                        if (closing && event.target === event.currentTarget) finishClose();
+                    }}
+                >
                     <button
                         ref={modeRef}
                         type="button"

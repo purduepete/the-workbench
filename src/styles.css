@@ -2905,3 +2905,87 @@ div.markdown-task-text {
         grid-column: 3;
     }
 }
+
+@media (min-width: 761px) {
+    .commentary-layout[data-anchor='heading'][data-open='true'] .commentary-rail {
+        align-self: start;
+        height: var(--section-height, auto);
+    }
+
+    .commentary-layout[data-anchor='heading'][data-open='true'] .commentary-rail .commentary-rail-bar,
+    .commentary-layout[data-anchor='heading'][data-open='true'] .commentary-rail:hover .commentary-rail-bar {
+        height: var(--section-height, 30px);
+        min-height: 0;
+    }
+}
+
+/* A comment taller than its section adds space below the section, not inside its heading or body rows. */
+@media (min-width: 761px) {
+    .commentary-layout[data-anchor='heading'][data-open='true'] {
+        grid-template-rows: auto auto 1fr;
+    }
+
+    .commentary-layout[data-anchor='heading'][data-open='true'] > .commentary-pane {
+        grid-row: 1 / 4;
+    }
+}
+
+/* The reduced-motion rule gives every element a tiny transition; on this grid it freezes the column sizes, so the
+   pane would ignore resizing. */
+.commentary-layout {
+    transition-property: none !important;
+}
+
+@media (min-width: 761px) {
+    /* The bar spans the same rows as the comment, so its height never stretches the section's own rows. */
+    .commentary-layout[data-anchor='heading'][data-open='true'] .commentary-rail {
+        grid-row: 1 / 4;
+    }
+}
+
+/* The open bar eases to the comment's height instead of jumping. */
+.commentary-layout[data-anchor='heading'][data-open='true'] .commentary-rail .commentary-rail-bar {
+    transition:
+        height 0.42s cubic-bezier(0.22, 1, 0.36, 1),
+        background-color 0.18s ease;
+}
+
+/* Closing a pane snaps the bar back to its small size; only an open bar eases its height. */
+.commentary-layout[data-anchor='heading'][data-open='false'] .commentary-rail .commentary-rail-bar {
+    transition: background-color 0.18s ease;
+}
+
+/* The pane fades and unfolds from the bar on open, and fades back toward it on close. */
+@keyframes commentary-reveal {
+    from {
+        opacity: 0;
+        transform: translateX(-12px);
+        clip-path: inset(0 0 100% 0);
+    }
+
+    to {
+        opacity: 1;
+        transform: none;
+        clip-path: inset(0 0 0 0);
+    }
+}
+
+@keyframes commentary-conceal {
+    from {
+        opacity: 1;
+        transform: none;
+    }
+
+    to {
+        opacity: 0;
+        transform: translateX(-12px);
+    }
+}
+
+.commentary-layout[data-open='true'] > .commentary-pane {
+    animation: commentary-reveal 0.42s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.commentary-layout[data-open='true'] > .commentary-pane[data-closing] {
+    animation: commentary-conceal 0.24s cubic-bezier(0.4, 0, 1, 1) both;
+}
