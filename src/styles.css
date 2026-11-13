@@ -2616,3 +2616,79 @@ div.markdown-task-text {
     text-overflow: ellipsis;
     white-space: nowrap;
 }
+
+/* Dated follow-up comments under an expanded daily note. */
+.note-comments {
+    display: grid;
+    gap: 8px;
+    margin-top: 12px;
+    padding: 10px 12px;
+    border-left: 3px solid var(--accent);
+    background: var(--accent-soft);
+}
+
+.note-comments-heading {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: 0;
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 650;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.note-comment-list {
+    display: grid;
+    gap: 10px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.note-comment {
+    display: grid;
+    gap: 2px;
+    min-width: 0;
+}
+
+.note-comment-meta {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    color: var(--quiet);
+    font-size: 11px;
+}
+
+.note-comment-actions {
+    display: flex;
+    gap: 2px;
+}
+
+.note-comment-body {
+    color: var(--text);
+}
+
+.note-comment-form {
+    display: grid;
+    gap: 6px;
+}
+
+.note-comment-input {
+    width: 100%;
+    min-height: 0;
+    resize: vertical;
+    font: inherit;
+}
+
+.note-comment-buttons {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+.note-comment-buttons button {
+    min-height: 32px;
+}

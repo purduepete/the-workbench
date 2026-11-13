@@ -91,8 +91,16 @@ describe('note categories', () => {
         const store = new MemoryIdeasStore();
         const first = (await store.applyJournal(journalSave({ id: randomUUID(), title: 'Standup', category: 'work' })))
             .entry!;
-        const second = (await store.applyJournal(journalSave({ id: randomUUID(), body: 'Later', category: 'work' })))
-            .entry!;
+        const second = (
+            await store.applyJournal(
+                journalSave({
+                    id: randomUUID(),
+                    body: 'Later',
+                    category: 'work',
+                    updatedAt: '2026-11-04T21:00:00.000Z',
+                })
+            )
+        ).entry!;
         expect(first.id).not.toBe(second.id);
         expect((await store.listJournal()).map((entry) => [entry.title, entry.body])).toEqual([
             ['Standup', 'Daily details'],

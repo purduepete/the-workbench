@@ -261,3 +261,52 @@ export type JournalQuery = z.infer<typeof journalQuerySchema>;
 export const themePreferenceSchema = z.object({ theme: z.enum(['system', 'light', 'midnight']) }).strict();
 
 export const THEME_COOKIE = 'the-workbench.theme';
+
+export const commentLimits = { body: 20_000 } as const;
+
+/** One dated comment added under a daily note after it was written. */
+export const journalCommentMutationSchema = z.discriminatedUnion('kind', [
+    z
+        .object({
+            kind: z.literal('save'),
+            mutationId: z.uuid(),
+            id: z.uuid(),
+            noteId: z.uuid(),
+            baseVersion: z.number().int().min(0),
+            body: z.string().trim().min(1).max(commentLimits.body),
+            updatedAt: isoTimestamp,
+            editedLabel: z.string().regex(/^\d{2}\/\d{2}\/\d{4} \d{2}:\d{2}$/),
+        })
+        .strict(),
+    z
+        .object({
+            kind: z.literal('delete'),
+            mutationId: z.uuid(),
+            id: z.uuid(),
+            baseVersion: z.number().int().min(1),
+        })
+        .strict(),
+]);
+
+export type JournalCommentMutation = z.infer<typeof journalCommentMutationSchema>;
+export type JournalCommentSave = Extract<JournalCommentMutation, { kind: 'save' }>;
+
+export interface ServerJournalComment {
+    id: string;
+    noteId: string;
+    body: string;
+    deleted: boolean;
+    createdAt: string;
+    updatedAt: string;
+    version: number;
+}
+
+export interface JournalCommentReceipt {
+    outcome: JournalOutcome;
+    id: string;
+    resultVersion: number;
+}
+
+export interface JournalCommentMutationResponse extends JournalCommentReceipt {
+    comment: ServerJournalComment | null;
+}

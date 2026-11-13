@@ -127,3 +127,38 @@ export const toJournalEntry = (row: ServerJournalEntry): JournalEntry => ({
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
 });
+
+/** Weeks shown with their own dates; notes before them go under one Older group. */
+export const RECENT_WEEKS = 4;
+
+export interface NoteGroupView {
+    /** A week's Monday, or `older`. */
+    key: string;
+    title: string;
+    entries: JournalEntry[];
+    days: DayGroup[];
+}
+
+/** The group a day lands in: its week when within the recent weeks, otherwise `older`. */
+export function noteGroupKey(entryDate: string, today: string, recentWeeks = RECENT_WEEKS): string {
+    const [year, month, day] = weekStart(today).split('-').map(Number);
+    const cutoff = localDateKey(new Date(year, month - 1, day - 7 * (recentWeeks - 1), 12));
+    const start = weekStart(entryDate);
+    return start >= cutoff ? start : 'older';
+}
+
+/** Recent weeks newest first, then one Older group holding every earlier day. */
+export function groupRecentWeeks(entries: JournalEntry[], today: string, recentWeeks = RECENT_WEEKS): NoteGroupView[] {
+    const groups: NoteGroupView[] = [];
+    let older: NoteGroupView | undefined;
+    for (const week of groupByWeek(entries)) {
+        if (noteGroupKey(week.weekStart, today, recentWeeks) !== 'older') {
+            groups.push({ key: week.weekStart, title: `Week of ${formatEntryDate(week.weekStart)}`, ...week });
+            continue;
+        }
+        older ??= { key: 'older', title: 'Older', entries: [], days: [] };
+        older.entries.push(...week.entries);
+        older.days.push(...week.days);
+    }
+    return older ? [...groups, older] : groups;
+}

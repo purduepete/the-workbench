@@ -67,10 +67,16 @@ test('a day holds several titled notes that move between sections and delete one
     await create('Home', '', 'Groceries to buy');
 
     const day = page.getByRole('region', { name: 'Notes for 11/06/2026' });
+    const headings = () =>
+        day.locator('.journal-day-toggle').evaluateAll((nodes) => nodes.map((node) => node.getAttribute('aria-label')));
     await expect(day.locator('.journal-card')).toHaveCount(3);
-    await expect(day.locator('.journal-day-toggle')).toHaveText(['Standup', 'Retro', 'Groceries to buy']);
+    // An open untitled note does not repeat its first line in the heading.
+    await expect(
+        day.locator('.journal-card').filter({ hasText: 'Groceries to buy' }).locator('.journal-note-title')
+    ).toHaveText('');
+    await expect.poll(headings).toEqual(['Standup', 'Retro', 'Groceries to buy']);
     await filter.getByRole('button', { name: 'Work', exact: true }).click();
-    await expect(day.locator('.journal-day-toggle')).toHaveText(['Standup', 'Retro']);
+    await expect.poll(headings).toEqual(['Standup', 'Retro']);
 
     await day.getByRole('button', { name: 'Edit Retro', exact: true }).click();
     await expect(title).toHaveValue('Retro');
@@ -78,16 +84,16 @@ test('a day holds several titled notes that move between sections and delete one
     await category.getByRole('button', { name: 'Home', exact: true }).click();
     await title.fill('Retro at home');
     await dialog.getByRole('button', { name: 'Save entry', exact: true }).click();
-    await expect(day.locator('.journal-day-toggle')).toHaveText(['Standup']);
+    await expect.poll(headings).toEqual(['Standup']);
     await filter.getByRole('button', { name: 'Home', exact: true }).click();
-    await expect(day.locator('.journal-day-toggle')).toHaveText(['Retro at home', 'Groceries to buy']);
+    await expect.poll(headings).toEqual(['Retro at home', 'Groceries to buy']);
 
     await filter.getByRole('button', { name: 'All', exact: true }).click();
     await day.getByRole('button', { name: 'Edit Standup', exact: true }).click();
     await dialog.getByRole('button', { name: 'Delete note', exact: true }).click();
     await dialog.getByRole('button', { name: 'Confirm delete', exact: true }).click();
     await expect(dialog).toHaveCount(0);
-    await expect(day.locator('.journal-day-toggle')).toHaveText(['Retro at home', 'Groceries to buy']);
+    await expect.poll(headings).toEqual(['Retro at home', 'Groceries to buy']);
 
     // The day's own add button opens a new note for that day in the filtered section.
     await filter.getByRole('button', { name: 'Home', exact: true }).click();
@@ -97,7 +103,7 @@ test('a day holds several titled notes that move between sections and delete one
     await expect(body).toHaveValue('');
     await body.fill('Evening walk');
     await dialog.getByRole('button', { name: 'Save entry', exact: true }).click();
-    await expect(day.locator('.journal-day-toggle')).toHaveText(['Retro at home', 'Groceries to buy', 'Evening walk']);
+    await expect.poll(headings).toEqual(['Retro at home', 'Groceries to buy', 'Evening walk']);
     await expect(page.getByRole('status')).toHaveText('Synced');
     const journal = await (await page.request.get('/api/journal')).json();
     const live = journal.entries.filter(

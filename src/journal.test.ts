@@ -4,7 +4,15 @@ import { describe, expect, it } from 'vitest';
 import { entryDateSchema, journalLimits } from '../shared/contracts';
 import type { JournalSave, NoteCategory, ServerJournalEntry } from '../shared/contracts';
 import { resolveSave, unionTags } from '../shared/journal';
-import { filterEntries, formatEntryDate, groupByWeek, localDateKey, noteHeading, weekStart } from './journal';
+import {
+    filterEntries,
+    formatEntryDate,
+    groupByWeek,
+    groupRecentWeeks,
+    localDateKey,
+    noteHeading,
+    weekStart,
+} from './journal';
 import type { JournalEntry } from './journal';
 import { acknowledge, localEntries, markAttempted, queueDelete, queueSave, releaseAttempt } from './journalSync';
 import type { JournalOutboxEntry, JournalState } from './journalSync';
@@ -127,6 +135,21 @@ describe('journal dates', () => {
             [DATE, ['Earlier', 'Later']],
             ['2026-10-28', ['Yesterday']],
         ]);
+    });
+
+    it('shows the current and 3 previous weeks by date and puts earlier days under Older', () => {
+        // Today is Thursday 11/12; the fourth week back starts Monday 10/19.
+        const groups = groupRecentWeeks(
+            ['2026-11-12', '2026-11-03', '2026-10-19', '2026-10-18', '2026-09-01'].map((date) => entry(date)),
+            '2026-11-12'
+        );
+        expect(groups.map((group) => [group.key, group.title, group.days.map((day) => day.entryDate)])).toEqual([
+            ['2026-11-09', 'Week of 11/09/2026', ['2026-11-12']],
+            ['2026-11-02', 'Week of 11/02/2026', ['2026-11-03']],
+            ['2026-10-19', 'Week of 10/19/2026', ['2026-10-19']],
+            ['older', 'Older', ['2026-10-18', '2026-09-01']],
+        ]);
+        expect(groupRecentWeeks([entry('2026-11-12')], '2026-11-12').map((group) => group.key)).toEqual(['2026-11-09']);
     });
 
     it('names a note by its title, then its first line', () => {

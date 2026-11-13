@@ -1,10 +1,12 @@
-import { journalLimits } from './contracts.js';
+import { commentLimits, journalLimits } from './contracts.js';
 import type {
     GlobalNoteSave,
+    JournalCommentSave,
     JournalOutcome,
     JournalSave,
     NoteCategory,
     ServerGlobalNote,
+    ServerJournalComment,
     ServerJournalEntry,
 } from './contracts.js';
 
@@ -160,4 +162,21 @@ export function resolveGlobalSave(current: CurrentGlobalNote | null, save: Globa
         tags,
         bump,
     };
+}
+
+export type CommentSaveDecision =
+    | { outcome: Extract<JournalOutcome, 'created' | 'updated' | 'merged'>; body: string; bump: boolean }
+    | { outcome: 'overflow' };
+
+/** Same rule as daily notes: a current edit replaces, a stale edit is appended under a dated separator. */
+export function resolveCommentSave(
+    current: Pick<ServerJournalComment, 'body' | 'deleted' | 'version'> | null,
+    save: JournalCommentSave
+): CommentSaveDecision {
+    if (!current || current.deleted) return { outcome: 'created', body: save.body, bump: true };
+    if (save.baseVersion === current.version) return { outcome: 'updated', body: save.body, bump: true };
+    if (current.body.includes(save.body)) return { outcome: 'merged', body: current.body, bump: false };
+    const body = `${current.body}\n\n--- Edit from ${save.editedLabel} ---\n${save.body}`;
+    if (body.length > commentLimits.body) return { outcome: 'overflow' };
+    return { outcome: 'merged', body, bump: true };
 }

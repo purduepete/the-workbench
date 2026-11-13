@@ -153,7 +153,7 @@ Global notes have titles and tags, are not tied to a date, and appear above the 
 each weekly group can be collapsed independently. The search box and tag filter cover both types of notes. Global note
 titles are required, but the body can be empty.
 
-Only the current week starts expanded; older weeks and global notes start collapsed. Modals close from an X in the upper-right corner,
+Daily notes group by week for the current week and the 3 before it; every earlier day goes in one Older group, still split by date. Only the current week starts expanded; other weeks, Older and global notes start collapsed. Modals close from an X in the upper-right corner,
 to the right of the maximize button when there is one, and open with an opacity-only fade.
 A day can hold any number of daily notes. Each week lists its days newest first, and each day lists its notes in the
 order they were written under a date heading with a + button that adds another note for that day. Each note has an
@@ -163,6 +163,11 @@ collapsed. Collapsing a note hides its details, tags and Edit control while keep
 An open note with two or more `##` sections shows a two-icon pill, just left of its section label,
 that expands or collapses every section at once; each section still opens and closes on its own. Daily note sections
 start collapsed; sections in ideas, tasks, global notes and editor previews start open.
+
+An expanded daily note ends with a Comments pane for follow-up commentary added later. Each comment is stamped with
+the local time it was added (mm/dd/yyyy HH:mm), renders Markdown, and can be edited or deleted on its own without
+opening the note editor; Ctrl or Cmd + Enter adds or saves one. Comments sync and queue offline separately from the
+note, using the same merge rule: a stale edit is appended under a dated separator.
 
 Notes sync offline the same way ideas do, keyed by note id:
 
@@ -277,10 +282,12 @@ and moves the schema to version 5. PostgreSQL stores the Unclassified key as `un
 `007_idea_priority.sql` adds idea priority, sets every existing idea to High and moves the schema to version 6.
 `008_multiple_daily_notes.sql` gives every daily note a UUID key and an empty title, keeps date plus section as an
 index, links each receipt to its note and moves the schema to version 7.
+`009_note_comments.sql` adds daily-note comments and their receipts, grants the runtime role access to both tables
+and moves the schema to version 8.
 Apply pending migrations through
 the reviewed database-change procedure in `Deployment.md` (stop the app, apply them in order as the migrator,
 re-run the `Manage-Postgres.ps1` grant plan, then release). The server reports not ready until all tables
-exist at schema version 7, including daily note ids and titles, receipt note ids and idea priority.
+exist at schema version 8, including daily note ids and titles, receipt note ids, comments and idea priority.
 
 `TEST_DATABASE_URL` runs `tests/journal-postgres.test.ts` against a real database. It drops and recreates `public`, so
 it only runs when the database name ends in `_test`; a disposable container is enough:

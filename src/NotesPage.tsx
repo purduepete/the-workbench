@@ -23,7 +23,8 @@ import { formatIdeaTimestamp, parseTags } from './ideas';
 import {
     filterEntries,
     formatEntryDate,
-    groupByWeek,
+    groupRecentWeeks,
+    noteGroupKey,
     noteHeading,
     readNoteFilter,
     weekStart,
@@ -40,6 +41,8 @@ import { useTheme } from './ThemeContext';
 import type { useJournalSync } from './useJournalSync';
 import type { JournalNoteInput } from './journalSync';
 import type { useGlobalNotesSync } from './useGlobalNotesSync';
+import type { useCommentsSync } from './useCommentsSync';
+import { NoteComments } from './NoteComments';
 import { useEditorDismissal } from './useEditorDismissal';
 import { EditorSizeToggle, useEditorSize } from './EditorSize';
 import { DialogCloseButton } from './DialogClose';
@@ -451,6 +454,7 @@ export interface JournalEditTarget {
 export interface NotesPageProps {
     journal: ReturnType<typeof useJournalSync>;
     globalNotes: ReturnType<typeof useGlobalNotesSync>;
+    comments: ReturnType<typeof useCommentsSync>;
     ready: boolean;
     syncBadge: ReactNode;
     today: string;
@@ -501,6 +505,7 @@ function SectionsPill({
 export function NotesPage({
     journal,
     globalNotes,
+    comments,
     ready,
     syncBadge,
     today,
@@ -510,10 +515,11 @@ export function NotesPage({
 }: NotesPageProps) {
     const { storageWarning: themeStorageWarning } = useTheme();
     const [filterNotice, setFilterNotice] = useState<string | null>(null);
-    const notice = journal.notice ?? globalNotes.notice ?? filterNotice;
+    const notice = journal.notice ?? globalNotes.notice ?? comments.notice ?? filterNotice;
     const clearNotice = () => {
         journal.clearNotice();
         globalNotes.clearNotice();
+        comments.clearNotice();
         setFilterNotice(null);
     };
     const [query, setQuery] = useState('');
@@ -536,7 +542,7 @@ export function NotesPage({
         (categoryFilter === 'unclassified' ? category == null : category === categoryFilter);
     const categoryEntries = entries.filter((entry) => matchesCategory(entry.category));
     const visible = filterEntries(categoryEntries, query, selectedTag);
-    const weeks = groupByWeek(visible);
+    const weeks = groupRecentWeeks(visible, today);
     const filtering = Boolean(query || selectedTag || categoryFilter !== 'all');
     const allTags = Array.from(
         new Set([
@@ -581,7 +587,10 @@ export function NotesPage({
                                 ) : (
                                     <ChevronRight size={16} aria-hidden="true" />
                                 )}
-                                <span className="journal-note-title">{heading}</span>
+                                {/* An untitled note previews its first line only while collapsed; open, the body shows it. */}
+                                <span className="journal-note-title">
+                                    {entry.title.trim() || !expanded ? heading : ''}
+                                </span>
                             </span>
                         </button>
                     </h5>
@@ -622,6 +631,13 @@ export function NotesPage({
                             ))}
                         </div>
                     )}
+                    <NoteComments
+                        noteId={entry.id}
+                        heading={heading}
+                        comments={comments.byNote.get(entry.id) ?? []}
+                        onSave={comments.save}
+                        onRemove={comments.remove}
+                    />
                     <div className="idea-card-bottom">
                         <span className="idea-date">
                             <Clock3 size={12} aria-hidden="true" />
@@ -794,14 +810,14 @@ export function NotesPage({
                         {weeks.length > 0 ? (
                             weeks.map((week) => (
                                 <NoteGroup
-                                    key={week.weekStart}
-                                    id={`week-${week.weekStart}`}
-                                    title={`Week of ${formatEntryDate(week.weekStart)}`}
+                                    key={week.key}
+                                    id={`week-${week.key}`}
+                                    title={week.title}
                                     count={week.entries.length}
                                     item="note"
-                                    expanded={expandedWeeks[week.weekStart] ?? week.weekStart === weekStart(today)}
+                                    expanded={expandedWeeks[week.key] ?? week.key === weekStart(today)}
                                     onExpandedChange={(expanded) =>
-                                        setExpandedWeeks((current) => ({ ...current, [week.weekStart]: expanded }))
+                                        setExpandedWeeks((current) => ({ ...current, [week.key]: expanded }))
                                     }
                                 >
                                     {week.days.map((day) => {
@@ -899,7 +915,7 @@ export function NotesPage({
                         }
                         setQuery('');
                         setSelectedTag(null);
-                        setExpandedWeeks((current) => ({ ...current, [weekStart(date)]: true }));
+                        setExpandedWeeks((current) => ({ ...current, [noteGroupKey(date, today)]: true }));
                         requestAnimationFrame(() =>
                             dayRefs.current.get(date)?.scrollIntoView({
                                 block: 'start',

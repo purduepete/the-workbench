@@ -5,6 +5,9 @@ import type {
     GlobalNoteMutation,
     GlobalNoteMutationResponse,
     GlobalNoteReceipt,
+    JournalCommentMutation,
+    JournalCommentMutationResponse,
+    JournalCommentReceipt,
     JournalMutation,
     JournalMutationResponse,
     JournalReceipt,
@@ -13,6 +16,7 @@ import type {
     MutationResponse,
     ServerIdea,
     ServerGlobalNote,
+    ServerJournalComment,
     ServerJournalEntry,
     NoteCategory,
 } from '../shared/contracts.js';
@@ -20,6 +24,7 @@ import { limits } from '../shared/contracts.js';
 import { defaultPriority } from '../shared/status.js';
 import {
     JournalOverflowError,
+    resolveCommentSave,
     resolveGlobalSave,
     resolveJournalCategory,
     resolveLegacyNote,
@@ -28,7 +33,7 @@ import {
 import type { CurrentEntry } from '../shared/journal.js';
 import type { ServerTask, TaskMutation, TaskMutationResponse, TaskOutcome } from '../shared/tasks.js';
 
-export const SCHEMA_VERSION = 7;
+export const SCHEMA_VERSION = 8;
 
 export interface IdeasStore {
     list(): Promise<ServerIdea[]>;
@@ -43,6 +48,9 @@ export interface IdeasStore {
     applyJournal(mutation: JournalMutation): Promise<JournalMutationResponse>;
     listGlobalNotes(): Promise<ServerGlobalNote[]>;
     applyGlobalNote(mutation: GlobalNoteMutation): Promise<GlobalNoteMutationResponse>;
+    /** Every daily-note comment, tombstones included, oldest first. */
+    listComments(): Promise<ServerJournalComment[]>;
+    applyComment(mutation: JournalCommentMutation): Promise<JournalCommentMutationResponse>;
     listTasks(): Promise<ServerTask[]>;
     applyTask(mutation: TaskMutation): Promise<TaskMutationResponse>;
 }
@@ -54,6 +62,8 @@ const copyEntry = (entry: ServerJournalEntry): ServerJournalEntry => ({ ...entry
 const compareJournal = (a: ServerJournalEntry, b: ServerJournalEntry) =>
     b.entryDate.localeCompare(a.entryDate) || a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id);
 const copyGlobalNote = (note: ServerGlobalNote): ServerGlobalNote => ({ ...note, tags: [...note.tags] });
+const compareComments = (a: ServerJournalComment, b: ServerJournalComment) =>
+    a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id);
 
 type TaskReceipt = Pick<TaskMutationResponse, 'outcome' | 'taskDate'>;
 const sortTasks = (tasks: ServerTask[]) =>
@@ -139,7 +149,54 @@ export class MemoryIdeasStore implements IdeasStore {
     private readonly globalNoteReceipts = new Map<string, GlobalNoteReceipt>();
     private readonly tasks = new Map<string, ServerTask>();
     private readonly taskReceipts = new Map<string, TaskReceipt>();
+    private readonly comments = new Map<string, ServerJournalComment>();
+    private readonly commentReceipts = new Map<string, JournalCommentReceipt>();
     failing = false;
+
+    async listComments(): Promise<ServerJournalComment[]> {
+        this.check();
+        return [...this.comments.values()].map((comment) => ({ ...comment })).sort(compareComments);
+    }
+
+    async applyComment(mutation: JournalCommentMutation): Promise<JournalCommentMutationResponse> {
+        this.check();
+        const receipt = this.commentReceipts.get(mutation.mutationId) ?? this.writeComment(mutation);
+        this.commentReceipts.set(mutation.mutationId, receipt);
+        const comment = this.comments.get(receipt.id);
+        return { ...receipt, comment: comment ? { ...comment } : null };
+    }
+
+    private writeComment(mutation: JournalCommentMutation): JournalCommentReceipt {
+        const current = this.comments.get(mutation.id);
+        if (mutation.kind === 'delete') {
+            if (!current || current.deleted || current.version !== mutation.baseVersion)
+                return { outcome: 'kept', id: mutation.id, resultVersion: current?.version ?? 0 };
+            const version = current.version + 1;
+            this.comments.set(mutation.id, {
+                ...current,
+                body: '',
+                deleted: true,
+                updatedAt: new Date().toISOString(),
+                version,
+            });
+            return { outcome: 'deleted', id: mutation.id, resultVersion: version };
+        }
+        const decision = resolveCommentSave(current ?? null, mutation);
+        if (decision.outcome === 'overflow') throw new JournalOverflowError();
+        if (!decision.bump) return { outcome: decision.outcome, id: mutation.id, resultVersion: current!.version };
+        const version = (current?.version ?? 0) + 1;
+        const revived = !current || current.deleted;
+        this.comments.set(mutation.id, {
+            id: mutation.id,
+            noteId: current && !current.deleted ? current.noteId : mutation.noteId,
+            body: decision.body,
+            deleted: false,
+            createdAt: revived ? mutation.updatedAt : current.createdAt,
+            updatedAt: mutation.updatedAt,
+            version,
+        });
+        return { outcome: decision.outcome, id: mutation.id, resultVersion: version };
+    }
 
     async listTasks(): Promise<ServerTask[]> {
         this.check();
@@ -427,6 +484,28 @@ interface JournalRow {
     version: number;
 }
 
+interface CommentRow {
+    id: string;
+    note_id: string;
+    body: string;
+    deleted: boolean;
+    created_at: Date;
+    updated_at: Date;
+    version: number;
+}
+
+const commentColumns = 'id, note_id, body, deleted, created_at, updated_at, version';
+
+const toComment = (row: CommentRow): ServerJournalComment => ({
+    id: row.id,
+    noteId: row.note_id,
+    body: row.body,
+    deleted: row.deleted,
+    createdAt: row.created_at.toISOString(),
+    updatedAt: row.updated_at.toISOString(),
+    version: row.version,
+});
+
 interface GlobalNoteRow {
     id: string;
     title: string;
@@ -616,6 +695,8 @@ export class PostgresIdeasStore implements IdeasStore {
         await this.pool.query('SELECT mutation_id, category, note_id FROM public.journal_mutations LIMIT 1');
         await this.pool.query('SELECT id FROM public.global_notes LIMIT 1');
         await this.pool.query('SELECT mutation_id FROM public.global_note_mutations LIMIT 1');
+        await this.pool.query('SELECT id, note_id FROM public.journal_comments LIMIT 1');
+        await this.pool.query('SELECT mutation_id, comment_id FROM public.journal_comment_mutations LIMIT 1');
         await this.pool.query('SELECT id FROM public.tasks LIMIT 1');
         await this.pool.query('SELECT mutation_id FROM public.task_mutations LIMIT 1');
     }
@@ -642,6 +723,110 @@ export class PostgresIdeasStore implements IdeasStore {
             [receipt.id]
         );
         return { ...receipt, entry: row.rows[0] ? toJournalEntry(row.rows[0]) : null };
+    }
+
+    async listComments(): Promise<ServerJournalComment[]> {
+        const result = await this.pool.query<CommentRow>(
+            `SELECT ${commentColumns} FROM public.journal_comments ORDER BY created_at, id`
+        );
+        return result.rows.map(toComment);
+    }
+
+    async applyComment(mutation: JournalCommentMutation): Promise<JournalCommentMutationResponse> {
+        let receipt: JournalCommentReceipt;
+        try {
+            receipt = await this.commentTransaction(mutation);
+        } catch (error) {
+            if (!isDuplicateReceipt(error, 'journal_comment_mutations_pkey')) throw error;
+            const prior = await this.commentReceipt(this.pool, mutation.mutationId);
+            if (!prior) throw error;
+            receipt = prior;
+        }
+        const row = await this.pool.query<CommentRow>(
+            `SELECT ${commentColumns} FROM public.journal_comments WHERE id = $1`,
+            [receipt.id]
+        );
+        return { ...receipt, comment: row.rows[0] ? toComment(row.rows[0]) : null };
+    }
+
+    private async commentReceipt(db: Pool | PoolClient, mutationId: string): Promise<JournalCommentReceipt | null> {
+        const result = await db.query<{
+            outcome: JournalCommentReceipt['outcome'];
+            comment_id: string;
+            result_version: number;
+        }>(
+            `SELECT outcome, comment_id, result_version
+             FROM public.journal_comment_mutations WHERE mutation_id = $1`,
+            [mutationId]
+        );
+        const row = result.rows[0];
+        return row ? { outcome: row.outcome, id: row.comment_id, resultVersion: row.result_version } : null;
+    }
+
+    private async writeComment(client: PoolClient, mutation: JournalCommentMutation): Promise<JournalCommentReceipt> {
+        const current = (
+            await client.query<CommentRow>(
+                `SELECT ${commentColumns} FROM public.journal_comments WHERE id = $1 FOR UPDATE`,
+                [mutation.id]
+            )
+        ).rows[0];
+        if (mutation.kind === 'delete') {
+            if (!current || current.deleted || current.version !== mutation.baseVersion)
+                return { outcome: 'kept', id: mutation.id, resultVersion: current?.version ?? 0 };
+            const deleted = await client.query<{ version: number }>(
+                `UPDATE public.journal_comments
+                 SET body = '', deleted = TRUE, updated_at = CURRENT_TIMESTAMP, version = version + 1
+                 WHERE id = $1 RETURNING version`,
+                [mutation.id]
+            );
+            return { outcome: 'deleted', id: mutation.id, resultVersion: deleted.rows[0].version };
+        }
+        const decision = resolveCommentSave(current ? toComment(current) : null, mutation);
+        if (decision.outcome === 'overflow') throw new JournalOverflowError();
+        if (!current) {
+            await client.query(
+                `INSERT INTO public.journal_comments (id, note_id, body, deleted, created_at, updated_at, version)
+                 VALUES ($1, $2, $3, FALSE, $4, $4, 1)`,
+                [mutation.id, mutation.noteId, decision.body, mutation.updatedAt]
+            );
+            return { outcome: 'created', id: mutation.id, resultVersion: 1 };
+        }
+        if (!decision.bump) return { outcome: decision.outcome, id: mutation.id, resultVersion: current.version };
+        const updated = await client.query<{ version: number }>(
+            `UPDATE public.journal_comments
+             SET body = $2, deleted = FALSE, updated_at = $3, version = version + 1,
+                 note_id = CASE WHEN deleted THEN $4 ELSE note_id END,
+                 created_at = CASE WHEN deleted THEN $3 ELSE created_at END
+             WHERE id = $1 RETURNING version`,
+            [mutation.id, decision.body, mutation.updatedAt, mutation.noteId]
+        );
+        return { outcome: decision.outcome, id: mutation.id, resultVersion: updated.rows[0].version };
+    }
+
+    private async commentTransaction(mutation: JournalCommentMutation): Promise<JournalCommentReceipt> {
+        const client = await this.pool.connect();
+        try {
+            await client.query('BEGIN');
+            // One writer per comment before the receipt check: a concurrent retry then sees the first receipt,
+            // and two devices cannot both insert a new comment id.
+            await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`comment:${mutation.id}`]);
+            const prior = await this.commentReceipt(client, mutation.mutationId);
+            const receipt = prior ?? (await this.writeComment(client, mutation));
+            if (!prior) {
+                await client.query(
+                    `INSERT INTO public.journal_comment_mutations (mutation_id, comment_id, outcome, result_version)
+                     VALUES ($1, $2, $3, $4)`,
+                    [mutation.mutationId, receipt.id, receipt.outcome, receipt.resultVersion]
+                );
+            }
+            await client.query('COMMIT');
+            return receipt;
+        } catch (error) {
+            await client.query('ROLLBACK').catch(() => undefined);
+            throw error;
+        } finally {
+            client.release();
+        }
     }
 
     async listGlobalNotes(): Promise<ServerGlobalNote[]> {

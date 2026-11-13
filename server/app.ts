@@ -4,6 +4,7 @@ import path from 'node:path';
 import {
     ideaQuerySchema,
     globalNoteMutationSchema,
+    journalCommentMutationSchema,
     globalNoteQuerySchema,
     journalMutationSchema,
     journalQuerySchema,
@@ -140,6 +141,25 @@ export function createApp(options: {
             return;
         }
         res.json(await options.store.applyJournal(parsed.data));
+    });
+    app.get('/api/journal/comments', async (req, res) => {
+        const query = globalNoteQuerySchema.safeParse(req.query);
+        if (!query.success) {
+            res.status(400).json({ error: 'Use includeDeleted=true to include deleted comments.' });
+            return;
+        }
+        const comments = (await options.store.listComments()).filter(
+            (comment) => query.data.includeDeleted === 'true' || !comment.deleted
+        );
+        res.json({ comments });
+    });
+    app.post('/api/journal/comments/mutations', async (req, res) => {
+        const parsed = journalCommentMutationSchema.safeParse(req.body);
+        if (!parsed.success) {
+            res.status(400).json({ error: 'The change is not a valid comment update.' });
+            return;
+        }
+        res.json(await options.store.applyComment(parsed.data));
     });
     app.get('/api/global-notes', async (req, res) => {
         const query = globalNoteQuerySchema.safeParse(req.query);

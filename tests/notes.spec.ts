@@ -883,3 +883,60 @@ for (const { theme, width } of [
         expect(overflow).toBeLessThanOrEqual(0);
     });
 }
+
+test('comments are added, edited and deleted under a daily note, online and offline', async ({ page, context }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.goto('/notes');
+    await page.getByRole('button', { name: 'New note', exact: true }).click();
+    const dialog = page.getByRole('dialog');
+    await dialog.locator('input[name="title"]').fill('Commented note');
+    await dialog.locator('textarea[name="body"]').fill('Original details');
+    await dialog.getByRole('button', { name: 'Save entry', exact: true }).click();
+    await expect(dialog).toHaveCount(0);
+
+    const card = page.locator('.journal-card').filter({ hasText: 'Commented note' });
+    const pane = card.getByRole('region', { name: 'Comments on Commented note' });
+    const box = pane.getByRole('textbox', { name: 'Add a comment to Commented note' });
+    const add = pane.getByRole('button', { name: 'Add comment', exact: true });
+    await expect(add).toBeDisabled();
+    await box.fill('First follow-up');
+    await add.click();
+    await expect(box).toHaveValue('');
+    await box.fill('Second follow-up');
+    await box.press('Control+Enter');
+    const items = pane.locator('.note-comment-body');
+    await expect(items).toHaveText(['First follow-up', 'Second follow-up']);
+    await expect(pane.locator('.note-comment-meta time').first()).toHaveText(/^\d{2}\/\d{2}\/\d{4} \d{2}:\d{2}$/);
+    await expect(card.locator('.journal-body').first()).toHaveText('Original details');
+
+    await pane
+        .getByRole('button', { name: /^Edit comment from / })
+        .first()
+        .click();
+    const edit = pane.getByRole('textbox', { name: 'Edit comment', exact: true });
+    await edit.fill('First follow-up, revised');
+    await pane.getByRole('button', { name: 'Save comment', exact: true }).click();
+    await expect(items).toHaveText(['First follow-up, revised', 'Second follow-up']);
+
+    await pane
+        .getByRole('button', { name: /^Delete comment from / })
+        .last()
+        .click();
+    await pane.getByRole('button', { name: 'Confirm delete comment', exact: true }).click();
+    await expect(items).toHaveText(['First follow-up, revised']);
+    await expect(page.getByRole('status').first()).toHaveText('Synced');
+
+    await context.setOffline(true);
+    await box.fill('Written offline');
+    await add.click();
+    await expect(items).toHaveText(['First follow-up, revised', 'Written offline']);
+    await context.setOffline(false);
+    await expect(page.getByRole('status').first()).toHaveText('Synced', { timeout: 45_000 });
+    await page.reload();
+    await expect(items).toHaveText(['First follow-up, revised', 'Written offline']);
+    const { comments } = await (await page.request.get('/api/journal/comments')).json();
+    expect(comments.map((comment: { body: string }) => comment.body)).toEqual(
+        expect.arrayContaining(['First follow-up, revised', 'Written offline'])
+    );
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(0);
+});

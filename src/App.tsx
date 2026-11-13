@@ -13,6 +13,7 @@ import { useFirstLoad } from './useFirstLoad';
 import { useIdeasSync } from './useIdeasSync';
 import { useJournalSync } from './useJournalSync';
 import { useGlobalNotesSync } from './useGlobalNotesSync';
+import { useCommentsSync } from './useCommentsSync';
 import { useTasksSync } from './useTasksSync';
 import { TasksPage } from './TasksPage';
 import type { TaskEditorTarget } from './TasksPage';
@@ -34,6 +35,7 @@ export function App() {
     const sync = useIdeasSync();
     const journal = useJournalSync();
     const globalNotes = useGlobalNotesSync();
+    const comments = useCommentsSync();
     const tasks = useTasksSync();
     const solutionsState = useSolutions();
     const [cachedAtEntry] = useState(sync.ready);
@@ -77,14 +79,23 @@ export function App() {
     const ideasReady = sync.ready && (cachedAtEntry || solutionsState.ready);
     const onNotes = displayed === '/notes';
     const onTasks = displayed === '/tasks';
-    const pageStatus = onTasks ? tasks.status : onNotes ? worstStatus(journal.status, globalNotes.status) : sync.status;
+    const pageStatus = onTasks
+        ? tasks.status
+        : onNotes
+          ? worstStatus(journal.status, globalNotes.status, comments.status)
+          : sync.status;
     useFirstLoad(
         onTasks ? tasks.ready : onNotes ? journal.ready && globalNotes.ready : ideasReady,
         pageStatus === 'offline' || pageStatus === 'paused'
     );
 
     const refreshBusy =
-        sync.refreshing || journal.refreshing || globalNotes.refreshing || tasks.refreshing || headerRefreshing;
+        sync.refreshing ||
+        journal.refreshing ||
+        globalNotes.refreshing ||
+        comments.refreshing ||
+        tasks.refreshing ||
+        headerRefreshing;
     const refreshAll = async () => {
         if (refreshBusy) return;
         setHeaderRefreshing(true);
@@ -93,6 +104,7 @@ export function App() {
                 sync.refresh(),
                 journal.refresh(),
                 globalNotes.refresh(),
+                comments.refresh(),
                 tasks.refresh(),
                 solutionsState.refresh(),
             ]);
@@ -103,8 +115,8 @@ export function App() {
 
     const syncBadge = (
         <SyncBadge
-            status={worstStatus(sync.status, journal.status, globalNotes.status, tasks.status)}
-            waiting={sync.waiting + journal.waiting + globalNotes.waiting + tasks.waiting}
+            status={worstStatus(sync.status, journal.status, globalNotes.status, comments.status, tasks.status)}
+            waiting={sync.waiting + journal.waiting + globalNotes.waiting + comments.waiting + tasks.waiting}
         />
     );
     const routeIndex = pages.findIndex((page) => page.route === route);
@@ -214,6 +226,7 @@ export function App() {
                         <NotesPage
                             journal={journal}
                             globalNotes={globalNotes}
+                            comments={comments}
                             ready={journal.ready}
                             syncBadge={syncBadge}
                             today={localDateKey()}

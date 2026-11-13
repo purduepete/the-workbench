@@ -84,6 +84,9 @@ describe.skipIf(!enabled)('PostgresIdeasStore journal against a real database', 
         await pool.query(
             await readFile(new URL('../deploy/postgresql/008_multiple_daily_notes.sql', import.meta.url), 'utf8')
         );
+        await pool.query(
+            await readFile(new URL('../deploy/postgresql/009_note_comments.sql', import.meta.url), 'utf8')
+        );
         store = new PostgresIdeasStore(pool);
     });
 
@@ -145,6 +148,48 @@ describe.skipIf(!enabled)('PostgresIdeasStore journal against a real database', 
             },
         });
         expect(response).toMatchObject({ outcome: 'updated', idea: { title: 'Old client edit', priority: 'medium' } });
+    });
+
+    it('adds, edits, merges, retries and deletes comments on a daily note', async () => {
+        const noteId = randomUUID();
+        const id = randomUUID();
+        const comment = (baseVersion: number, body: string, updatedAt = '2026-03-04T10:00:00.000Z') => ({
+            kind: 'save' as const,
+            mutationId: randomUUID(),
+            id,
+            noteId,
+            baseVersion,
+            body,
+            updatedAt,
+            editedLabel: '03/04/2026 02:00',
+        });
+        const first = comment(0, 'Follow-up one');
+        expect(await store.applyComment(first)).toMatchObject({
+            outcome: 'created',
+            comment: { noteId, body: 'Follow-up one', version: 1, createdAt: '2026-03-04T10:00:00.000Z' },
+        });
+        // A retried mutation returns its first receipt without writing again.
+        expect(await store.applyComment(first)).toMatchObject({ outcome: 'created', resultVersion: 1 });
+        expect(await store.applyComment(comment(1, 'Edited', '2026-03-04T11:00:00.000Z'))).toMatchObject({
+            outcome: 'updated',
+            comment: { body: 'Edited', version: 2, createdAt: '2026-03-04T10:00:00.000Z' },
+        });
+        expect(await store.applyComment(comment(1, 'Stale'))).toMatchObject({
+            outcome: 'merged',
+            comment: { body: 'Edited\n\n--- Edit from 03/04/2026 02:00 ---\nStale', version: 3 },
+        });
+        expect(
+            await store.applyComment({ kind: 'delete', mutationId: randomUUID(), id, baseVersion: 1 })
+        ).toMatchObject({ outcome: 'kept' });
+        expect(
+            await store.applyComment({ kind: 'delete', mutationId: randomUUID(), id, baseVersion: 3 })
+        ).toMatchObject({ outcome: 'deleted', comment: { deleted: true, body: '' } });
+        expect((await store.listComments()).filter((value) => value.noteId === noteId)).toMatchObject([
+            { id, deleted: true, version: 4 },
+        ]);
+        await expect(
+            pool.query("UPDATE public.journal_comments SET body = repeat('x', 20001) WHERE id = $1", [id])
+        ).rejects.toThrow(/check constraint/);
     });
 
     it('is ready after all migrations', async () => {
