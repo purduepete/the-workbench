@@ -174,13 +174,13 @@ for (const theme of ['midnight', 'light']) {
         await dialog.locator('input[name="tags"]').fill('health, Family');
         await dialog.getByRole('button', { name: 'Save entry' }).click();
         await expect(dialog).toBeHidden();
-        await expect(page.getByText(body)).toBeVisible();
+        await expect(page.getByRole('paragraph').filter({ hasText: body })).toBeVisible();
         await expect(page.getByText(/^Week of \d{2}\/\d{2}\/\d{4}$/)).toBeVisible();
         await expect(page.getByRole('status').first()).toHaveText('Synced');
 
         await page.reload();
         await expect(page).toHaveURL(/\/notes$/);
-        await expect(page.getByText(body)).toBeVisible();
+        await expect(page.getByRole('paragraph').filter({ hasText: body })).toBeVisible();
         const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
         expect(overflow).toBeLessThanOrEqual(0);
 
@@ -193,7 +193,7 @@ for (const theme of ['midnight', 'light']) {
     });
 }
 
-test('calendar opens an existing entry and a blank entry for another day', async ({ page }) => {
+test('calendar scrolls to a day with notes and opens a new note for an empty day', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto('/notes');
     const now = new Date();
@@ -206,7 +206,7 @@ test('calendar opens an existing entry and a blank entry for another day', async
     const todayEntry = page.getByRole('dialog');
     await todayEntry.locator('textarea[name="body"]').fill('Calendar existing-day entry');
     await todayEntry.getByRole('button', { name: 'Save entry' }).click();
-    await expect(page.getByText('Calendar existing-day entry')).toBeVisible();
+    await expect(page.getByRole('paragraph').filter({ hasText: 'Calendar existing-day entry' })).toBeVisible();
 
     await page.getByRole('button', { name: 'Calendar', exact: true }).click();
     const calendar = page.getByRole('dialog', { name: 'Choose a day' });
@@ -226,18 +226,18 @@ test('calendar opens an existing entry and a blank entry for another day', async
         'aria-pressed',
         'true'
     );
-    await expect(page.getByRole('dialog', { name: `Entry for ${todayLabel}` })).toHaveCount(0);
-    // A single click on a day opens it.
+    await expect(page.getByRole('dialog', { name: /^New note for / })).toHaveCount(0);
+    // A day that has notes scrolls to them instead of opening an editor.
     await calendar.getByRole('button', { name: todayLabel, exact: true }).click();
-    await expect(page.getByRole('dialog').locator('textarea[name="body"]')).toHaveValue('Calendar existing-day entry');
-    await closeDialog(page.getByRole('dialog'));
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    await expect(page.getByRole('region', { name: `Notes for ${todayLabel}` })).toBeInViewport();
 
     await page.getByRole('button', { name: 'Calendar', exact: true }).click();
     const secondCalendar = page.getByRole('dialog', { name: 'Choose a day' });
     const emptyDay = secondCalendar.getByRole('button', { name: yesterdayLabel, exact: true });
     await expect(emptyDay).toHaveAttribute('data-has-entry', 'false');
     await emptyDay.click();
-    await expect(page.getByRole('dialog', { name: `Entry for ${yesterdayLabel}` })).toBeVisible();
+    await expect(page.getByRole('dialog', { name: `New note for ${yesterdayLabel}` })).toBeVisible();
     await expect(page.getByRole('dialog').locator('textarea[name="body"]')).toHaveValue('');
 });
 
@@ -390,7 +390,7 @@ test('daily note sections expand and collapse together from the date header', as
         .fill('## Standup\nNotes one\n\n## Planning\nNotes two\n\n## Follow-up\nNotes three');
     await editor.getByRole('button', { name: 'Save entry', exact: true }).click();
     await expect(editor).toHaveCount(0);
-    const card = page.locator('.journal-card').first();
+    const card = page.locator('.journal-card').filter({ hasText: 'Notes three' });
     const sections = card.locator('.markdown-section-heading button');
     await expect(sections).toHaveCount(3);
     const pill = card.getByRole('group', { name: /^Sections for / });
@@ -479,7 +479,10 @@ test('journal notes preview Markdown safely and preserve edits when saved', asyn
     await dialog.getByRole('button', { name: 'Save entry' }).click();
     await expect(dialog).toBeHidden();
     // Saved daily notes start with their sections collapsed.
-    const savedSection = page.locator('.journal-card').getByRole('button', { name: 'First section' });
+    const savedSection = page
+        .locator('.journal-card')
+        .filter({ hasText: 'Cross-section' })
+        .getByRole('button', { name: 'First section' });
     await expect(savedSection).toHaveAttribute('aria-expanded', 'false');
     await savedSection.click();
     await expect(page.getByRole('link', { name: 'Cross-section' })).toHaveAttribute(
@@ -522,12 +525,13 @@ for (const { theme, width } of [
 
         await page.getByRole('button', { name: 'New note', exact: true }).click();
         dialog = page.getByRole('dialog');
+        await dialog.locator('input[name="title"]').fill(title);
         await dialog.locator('textarea[name="body"]').fill(markdown);
         await dialog.getByRole('button', { name: 'Preview', exact: true }).click();
         await expectMarkdownListMarkers(dialog.locator('.markdown-editor-preview'));
         await dialog.getByRole('button', { name: 'Save entry' }).click();
         await expect(dialog).toBeHidden();
-        await expectMarkdownListMarkers(page.locator('.journal-card').first());
+        await expectMarkdownListMarkers(page.locator('.journal-card').filter({ hasText: title }));
     });
 }
 
@@ -744,7 +748,7 @@ test('modal opening fades without moving the page and calendar swaps keep the ba
     expect(frames.scrollAfter).toBe(frames.scrollBefore);
     await closeDialog(page.getByRole('dialog'));
     await page.getByRole('button', { name: 'Calendar', exact: true }).click();
-    await page.getByRole('dialog').locator('.calendar-day[aria-pressed="true"]').click();
+    await page.getByRole('dialog').locator('.calendar-day[data-has-entry="false"]').first().click();
     const entry = page.getByRole('dialog');
     await expect(entry).toHaveAttribute('data-replacing', 'true');
     expect(await entry.evaluate((element) => getComputedStyle(element, '::backdrop').animationName)).toBe('none');
@@ -774,11 +778,11 @@ for (const { theme, width } of [
                 const changes = [
                     {
                         path: '/api/journal/mutations',
-                        value: { entryDate: today, body: recentBody },
+                        value: { id: crypto.randomUUID(), entryDate: today, body: recentBody },
                     },
                     {
                         path: '/api/journal/mutations',
-                        value: { entryDate: oldDay, body: olderBody },
+                        value: { id: crypto.randomUUID(), entryDate: oldDay, body: olderBody },
                     },
                     {
                         path: '/api/global-notes/mutations',
@@ -839,16 +843,16 @@ for (const { theme, width } of [
         await olderToggle.click();
         await expect(globalCard).toBeVisible();
         await expect(olderCard).toBeVisible();
-        const recentDayToggle = recentCard.getByRole('button', { name: /^Daily note for / });
-        const olderDayToggle = olderCard.getByRole('button', { name: /^Daily note for / });
+        const recentDayToggle = recentCard.locator('.journal-day-toggle');
+        const olderDayToggle = olderCard.locator('.journal-day-toggle');
         await expect(recentDayToggle).toHaveAttribute('aria-expanded', 'true');
         await expect(olderDayToggle).toHaveAttribute('aria-expanded', 'false');
         await expect(recentCard.locator('.journal-body')).toBeVisible();
         await expect(olderCard.locator('.journal-body')).toBeHidden();
-        await expect(olderCard.getByRole('button', { name: /^Edit entry for / })).toBeHidden();
+        await expect(olderCard.getByRole('button', { name: /^Edit / })).toBeHidden();
         await olderDayToggle.press('Enter');
         await expect(olderCard.locator('.journal-body')).toBeVisible();
-        await expect(olderCard.getByRole('button', { name: /^Edit entry for / })).toBeVisible();
+        await expect(olderCard.getByRole('button', { name: /^Edit / })).toBeVisible();
         await recentDayToggle.press('Space');
         await expect(recentCard.locator('.journal-body')).toBeHidden();
         await expect(olderCard.locator('.journal-body')).toBeVisible();

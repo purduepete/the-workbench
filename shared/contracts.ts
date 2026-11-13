@@ -104,7 +104,7 @@ export const ideaQuerySchema = z.object({
 });
 
 /** One cap for the editor, the API and the table, so a merged entry always stays editable. */
-export const journalLimits = { body: 200_000, tag: 40, tags: 64 } as const;
+export const journalLimits = { title: 140, body: 200_000, tag: 40, tags: 64 } as const;
 
 const isCalendarDate = (value: string) => {
     const [year, month, day] = value.split('-').map(Number);
@@ -112,7 +112,7 @@ const isCalendarDate = (value: string) => {
     return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
 };
 
-/** A local calendar day, `YYYY-MM-DD`. Together with category it identifies a journal entry. */
+/** A local calendar day, `YYYY-MM-DD`. A day can hold any number of daily notes. */
 export const entryDateSchema = z
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/)
@@ -127,9 +127,12 @@ export const journalMutationSchema = z.discriminatedUnion('kind', [
         .object({
             kind: z.literal('save'),
             mutationId: z.uuid(),
+            /** The note's identity. Clients from before multiple daily notes omit it; see resolveLegacyNote. */
+            id: z.uuid().optional(),
             entryDate: entryDateSchema,
             /** The version this edit was based on; 0 when the device had not seen the entry. */
             baseVersion: z.number().int().min(0),
+            title: z.string().trim().max(journalLimits.title).optional(),
             body: z.string().trim().min(1).max(journalLimits.body),
             tags: journalTagsSchema,
             category: noteCategorySchema.optional(),
@@ -142,6 +145,7 @@ export const journalMutationSchema = z.discriminatedUnion('kind', [
         .object({
             kind: z.literal('delete'),
             mutationId: z.uuid(),
+            id: z.uuid().optional(),
             entryDate: entryDateSchema,
             baseVersion: z.number().int().min(1),
             category: noteCategorySchema.optional(),
@@ -153,7 +157,10 @@ export type JournalMutation = z.infer<typeof journalMutationSchema>;
 export type JournalSave = Extract<JournalMutation, { kind: 'save' }>;
 
 export interface ServerJournalEntry {
+    id: string;
     entryDate: string;
+    /** Empty when the note has no title; the card then shows its first line. */
+    title: string;
     body: string;
     tags: string[];
     category?: NoteCategory;
@@ -168,6 +175,8 @@ export type JournalOutcome = 'created' | 'updated' | 'merged' | 'deleted' | 'kep
 
 export interface JournalReceipt {
     outcome: JournalOutcome;
+    /** The note the mutation landed on; for a legacy mutation the server chose it. */
+    id: string;
     entryDate: string;
     category?: NoteCategory;
     resultVersion: number;

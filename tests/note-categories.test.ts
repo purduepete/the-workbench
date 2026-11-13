@@ -62,7 +62,7 @@ describe('note categories', () => {
         });
         expect(deleted.entry).toMatchObject({ category: 'work', deleted: true });
         expect((await store.listJournal()).filter((entry) => !entry.deleted)).toHaveLength(2);
-        await expect(apply({ body: 'Legacy ambiguous edit' })).rejects.toThrow(/multiple note sections/);
+        await expect(apply({ body: 'Legacy ambiguous edit' })).rejects.toThrow(/more than one note/);
     });
 
     it('preserves the section for a legacy save when the day still has only one entry', async () => {
@@ -75,14 +75,47 @@ describe('note categories', () => {
     it('queues Home/Work offline and retains categories under old queued edits', async () => {
         const store = new MemoryIdeasStore();
         const daily = (await store.applyJournal(journalSave({ category: 'work' }))).entry!;
-        let journal = queueSave({ server: [daily], outbox: [] }, daily.entryDate, 'Old queued edit', []);
+        const input = { id: daily.id, entryDate: daily.entryDate, title: '', tags: [], category: 'work' as const };
+        let journal = queueSave({ server: [daily], outbox: [] }, { ...input, body: 'Old queued edit' });
         expect(localEntries(journal)[0].category).toBe('work');
-        journal = queueSave(journal, daily.entryDate, 'New edit', [], new Date(), 'home');
+        journal = queueSave(journal, { ...input, id: randomUUID(), body: 'New edit', category: 'home' });
         expect(localEntries(journal).map((entry) => [entry.category, entry.body])).toEqual([
             ['work', 'Old queued edit'],
             ['home', 'New edit'],
         ]);
         expect(journal.outbox).toHaveLength(2);
         expect(journal.outbox[1]).toMatchObject({ category: 'home', baseVersion: 0 });
+    });
+
+    it('keeps several notes in one day and section, each edited and deleted by id', async () => {
+        const store = new MemoryIdeasStore();
+        const first = (await store.applyJournal(journalSave({ id: randomUUID(), title: 'Standup', category: 'work' })))
+            .entry!;
+        const second = (await store.applyJournal(journalSave({ id: randomUUID(), body: 'Later', category: 'work' })))
+            .entry!;
+        expect(first.id).not.toBe(second.id);
+        expect((await store.listJournal()).map((entry) => [entry.title, entry.body])).toEqual([
+            ['Standup', 'Daily details'],
+            ['', 'Later'],
+        ]);
+        const edited = await store.applyJournal(
+            journalSave({ id: second.id, baseVersion: 1, title: 'Retro', body: 'Edited', category: 'work' })
+        );
+        expect(edited).toMatchObject({ id: second.id, outcome: 'updated', entry: { title: 'Retro', body: 'Edited' } });
+        await store.applyJournal({
+            kind: 'delete',
+            mutationId: randomUUID(),
+            id: first.id,
+            entryDate: first.entryDate,
+            baseVersion: 1,
+        });
+        expect((await store.listJournal()).filter((entry) => !entry.deleted).map((entry) => entry.id)).toEqual([
+            second.id,
+        ]);
+        await expect(store.applyJournal(journalSave({ baseVersion: 1, category: 'home' }))).resolves.toBeTruthy();
+        await expect(store.applyJournal(journalSave({ id: randomUUID(), category: 'work' }))).resolves.toBeTruthy();
+        await expect(store.applyJournal(journalSave({ baseVersion: 1, category: 'work' }))).rejects.toThrow(
+            /more than one note/
+        );
     });
 });

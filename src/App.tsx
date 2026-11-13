@@ -4,6 +4,7 @@ import { Lightbulb, ListTodo, NotebookPen, Plus, RefreshCw } from 'lucide-react'
 import { IdeasPage } from './IdeasPage';
 import { localDateKey } from './journal';
 import { NotesPage } from './NotesPage';
+import type { JournalEditTarget } from './NotesPage';
 import { SyncBadge, worstStatus } from './SyncBadge';
 import { THEME_ICONS, useTheme } from './ThemeContext';
 import { ThemeMenu } from './ThemeMenu';
@@ -51,7 +52,7 @@ export function App() {
     // The page on screen lags the route while the old page fades out.
     const [shown, setShown] = useState(route);
     const [editingIdea, setEditingIdea] = useState<Idea | null | undefined>(undefined);
-    const [editingDate, setEditingDate] = useState<string | undefined>(undefined);
+    const [editingNote, setEditingNote] = useState<JournalEditTarget | undefined>(undefined);
     const [editingTask, setEditingTask] = useState<TaskEditorTarget | undefined>();
     const [headerRefreshing, setHeaderRefreshing] = useState(false);
 
@@ -60,7 +61,7 @@ export function App() {
         // Back and forward can change pages under an open dialog; close it.
         setDialogRoute(route);
         setEditingIdea(undefined);
-        setEditingDate(undefined);
+        setEditingNote(undefined);
         if (route !== '/tasks') setEditingTask(undefined);
     }
 
@@ -158,7 +159,7 @@ export function App() {
                                 type="button"
                                 className="primary-button control-height"
                                 aria-label="New note"
-                                onClick={() => setEditingDate(localDateKey())}
+                                onClick={() => setEditingNote({ id: crypto.randomUUID(), entryDate: localDateKey() })}
                             >
                                 <Plus size={16} aria-hidden="true" />
                                 <span className="button-label">New note</span>
@@ -216,8 +217,8 @@ export function App() {
                             ready={journal.ready}
                             syncBadge={syncBadge}
                             today={localDateKey()}
-                            editingDate={editingDate}
-                            setEditingDate={setEditingDate}
+                            editingNote={editingNote}
+                            setEditingNote={setEditingNote}
                             onDraftProtectionChange={setProtectedDraft}
                         />
                     ) : (

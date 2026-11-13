@@ -21,19 +21,44 @@ export function writeNoteFilter(filter: NoteFilter): string | null {
     }
 }
 
-/** A journal entry as the page shows it: the confirmed row with any queued change on top. */
+/** A daily note as the page shows it: the confirmed row with any queued change on top. */
 export interface JournalEntry {
+    id: string;
     entryDate: string;
+    title: string;
     body: string;
     tags: string[];
     category?: NoteCategory;
+    createdAt: string;
     updatedAt: string;
+}
+
+/** The note's title, or its first line without Markdown markers when it has none. */
+export function noteHeading(entry: Pick<JournalEntry, 'title' | 'body'>): string {
+    if (entry.title.trim()) return entry.title.trim();
+    const line = entry.body
+        .split('\n')
+        .map((value) => value.replace(/^\s*(#{1,6}\s+|[-*+]\s+(\[[ xX]\]\s+)?|\d+\.\s+|>\s*)/, '').trim())
+        .find(Boolean);
+    const text = (line ?? '')
+        .replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1')
+        .replace(/[*_`]/g, '')
+        .trim();
+    return text.slice(0, 140) || 'Untitled note';
+}
+
+export interface DayGroup {
+    entryDate: string;
+    /** Notes in the order they were written. */
+    entries: JournalEntry[];
 }
 
 export interface WeekGroup {
     /** Monday of the week, `YYYY-MM-DD`. */
     weekStart: string;
     entries: JournalEntry[];
+    /** Newest day first. */
+    days: DayGroup[];
 }
 
 const pad = (part: number) => String(part).padStart(2, '0');
@@ -57,15 +82,24 @@ export function weekStart(entryDate: string): string {
     return localDateKey(date);
 }
 
-/** Newest week first, newest day first inside each week. */
+/** Newest week first, newest day first inside each week, and each day's notes in the order they were written. */
 export function groupByWeek(entries: JournalEntry[]): WeekGroup[] {
-    const sorted = [...entries].sort((a, b) => b.entryDate.localeCompare(a.entryDate));
+    const sorted = [...entries].sort(
+        (a, b) =>
+            b.entryDate.localeCompare(a.entryDate) || a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id)
+    );
     const groups: WeekGroup[] = [];
     for (const entry of sorted) {
         const start = weekStart(entry.entryDate);
-        const last = groups.at(-1);
-        if (last?.weekStart === start) last.entries.push(entry);
-        else groups.push({ weekStart: start, entries: [entry] });
+        let week = groups.at(-1);
+        if (week?.weekStart !== start) {
+            week = { weekStart: start, entries: [], days: [] };
+            groups.push(week);
+        }
+        week.entries.push(entry);
+        const day = week.days.at(-1);
+        if (day?.entryDate === entry.entryDate) day.entries.push(entry);
+        else week.days.push({ entryDate: entry.entryDate, entries: [entry] });
     }
     return groups;
 }
@@ -77,15 +111,19 @@ export function filterEntries(entries: JournalEntry[], query: string, selectedTa
         (entry) =>
             (!tag || entry.tags.some((value) => value.toLocaleLowerCase() === tag)) &&
             (!normalizedQuery ||
+                entry.title.toLocaleLowerCase().includes(normalizedQuery) ||
                 entry.body.toLocaleLowerCase().includes(normalizedQuery) ||
                 entry.tags.some((value) => value.toLocaleLowerCase().includes(normalizedQuery)))
     );
 }
 
 export const toJournalEntry = (row: ServerJournalEntry): JournalEntry => ({
+    id: row.id,
     entryDate: row.entryDate,
+    title: row.title,
     body: row.body,
     tags: [...row.tags],
     category: row.category,
+    createdAt: row.createdAt,
     updatedAt: row.updatedAt,
 });

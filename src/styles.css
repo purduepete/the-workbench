@@ -2554,3 +2554,65 @@ div.markdown-task-text {
     background-color: var(--accent);
     color: var(--accent-contrast);
 }
+
+.journal-meta-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: end;
+    gap: 12px 16px;
+}
+
+.journal-meta-row > .field-group {
+    margin: 0;
+}
+
+.journal-title-field {
+    flex: 1 1 240px;
+    min-width: 0;
+}
+
+.journal-meta-row {
+    margin-top: 16px;
+}
+
+/* Several notes can share a day: the date heads the group and each note is its own card. */
+.journal-day {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    min-width: 0;
+    gap: 8px;
+    scroll-margin-top: calc(90px + var(--safe-area-top));
+}
+
+.journal-day + .journal-day {
+    margin-top: 6px;
+}
+
+.journal-day-heading {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 28px;
+}
+
+.journal-day-heading h4 {
+    margin: 0;
+    font-size: 13px;
+    font-weight: 650;
+    color: var(--muted);
+}
+
+.journal-day-heading .journal-day-add {
+    width: 28px;
+    height: 28px;
+    min-height: 28px;
+    margin-left: auto;
+    padding: 0;
+}
+
+.journal-note-title {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}

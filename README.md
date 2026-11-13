@@ -155,26 +155,28 @@ titles are required, but the body can be empty.
 
 Only the current week starts expanded; older weeks and global notes start collapsed. Modals close from an X in the upper-right corner,
 to the right of the maximize button when there is one, and open with an opacity-only fade.
-Each daily note also collapses independently from its date header. Today starts expanded; every other day starts
-collapsed. Collapsing a day hides its details, tags and Edit control while keeping its date and section visible.
-An open day whose note has two or more `##` sections shows a two-icon pill, just left of its section and Today labels,
+A day can hold any number of daily notes. Each week lists its days newest first, and each day lists its notes in the
+order they were written under a date heading with a + button that adds another note for that day. Each note has an
+optional title (up to 140 characters); without one, the card shows the note's first line.
+Each note collapses independently from its heading. Today's notes start expanded; other days start
+collapsed. Collapsing a note hides its details, tags and Edit control while keeping its heading and section visible.
+An open note with two or more `##` sections shows a two-icon pill, just left of its section label,
 that expands or collapses every section at once; each section still opens and closes on its own. Daily note sections
 start collapsed; sections in ideas, tasks, global notes and editor previews start open.
 
-Notes sync offline the same way ideas do, keyed by date and section instead of an id:
+Notes sync offline the same way ideas do, keyed by note id:
 
 Daily entries have a Home or Work category. The Notes page filters daily entries
 by All, Home, Work or Unclassified, including calendar markers and daily-entry tags.
 Global notes have no category and appear only under All.
 New notes use the selected category filter, or Home when viewing All.
-Each daily editor's Home, Work and Unclassified buttons open independent content and tags.
-Switching sections preserves unsaved drafts and shows a blank editor when that section has no entry.
-Save entry saves every edited section; Delete removes only the selected section.
-The calendar and New note button open the selected section for that date.
+The daily editor edits one note: its section, title, details and tags. Changing the section moves that note.
+New note opens a new note for today; clicking a calendar day with no notes opens a new note for that day, and a day
+that has notes scrolls to it. Saving an existing note with empty details asks once, then deletes it.
 Existing entries stay in their saved section; uncategorized entries stay Unclassified.
-Each section has its own version, offline queue and tombstone. Stale edits merge only within that section.
-Older clients that omit category can still edit a day with only one section. An ambiguous legacy write
-is refused with a reload notice, so it cannot modify the wrong section.
+Each note has its own version, offline queue and tombstone. Stale edits merge only within that note.
+Older clients that send no note id can still edit a day and section that holds only one note. An ambiguous legacy
+write is refused with a reload notice, so it cannot modify the wrong note.
 
 - An edit based on the current version replaces the entry.
 - An edit based on an old version is appended below the current text under `--- Edit from mm/dd/yyyy HH:mm ---`, and
@@ -273,10 +275,12 @@ and moves the schema to version 4 without assigning categories to existing notes
 `006_daily_note_sections.sql` preserves those entries and receipts, uses date plus section as the journal key,
 and moves the schema to version 5. PostgreSQL stores the Unclassified key as `unclassified`; the API returns `null`.
 `007_idea_priority.sql` adds idea priority, sets every existing idea to High and moves the schema to version 6.
+`008_multiple_daily_notes.sql` gives every daily note a UUID key and an empty title, keeps date plus section as an
+index, links each receipt to its note and moves the schema to version 7.
 Apply pending migrations through
 the reviewed database-change procedure in `Deployment.md` (stop the app, apply them in order as the migrator,
 re-run the `Manage-Postgres.ps1` grant plan, then release). The server reports not ready until all tables
-exist at schema version 6, including the daily-entry and receipt section columns and idea priority.
+exist at schema version 7, including daily note ids and titles, receipt note ids and idea priority.
 
 `TEST_DATABASE_URL` runs `tests/journal-postgres.test.ts` against a real database. It drops and recreates `public`, so
 it only runs when the database name ends in `_test`; a disposable container is enough:

@@ -1,6 +1,6 @@
 import type { JournalMutation, JournalMutationResponse, NoteCategory, ServerJournalEntry } from '../shared/contracts';
 import { noteCategorySchema } from '../shared/contracts';
-import { journalEntryKey, resolveJournalCategory } from '../shared/journal';
+import { resolveJournalCategory } from '../shared/journal';
 import { formatIdeaTimestamp } from './ideas';
 import { toJournalEntry } from './journal';
 import type { JournalEntry } from './journal';
@@ -16,79 +16,92 @@ export interface JournalState {
     outbox: JournalOutboxEntry[];
 }
 
+export interface JournalNoteInput {
+    id: string;
+    entryDate: string;
+    title: string;
+    body: string;
+    tags: string[];
+    category: NoteCategory;
+}
+
 export const emptyJournalState = (): JournalState => ({ server: [], outbox: [] });
 
 const uuid = () => globalThis.crypto.randomUUID();
 
-const categoryFor = (state: JournalState, entryDate: string, category?: NoteCategory) =>
-    resolveJournalCategory(
-        category,
-        state.server.filter((row) => row.entryDate === entryDate)
-    );
-const serverVersion = (state: JournalState, entryDate: string, category: NoteCategory) =>
-    state.server.find((row) => journalEntryKey(row.entryDate, row.category) === journalEntryKey(entryDate, category))
-        ?.version ?? 0;
+/**
+ * The note a queued change belongs to. Changes queued before multiple daily notes have no id; they belong to the one
+ * live note in their day and section, the same rule the server applies.
+ */
+function changeId(state: JournalState, change: JournalOutboxEntry): string {
+    if (change.id) return change.id;
+    const sameDay = state.server.filter((row) => row.entryDate === change.entryDate);
+    let category: NoteCategory;
+    try {
+        category = resolveJournalCategory(change.category, sameDay);
+    } catch {
+        return `legacy:${change.entryDate}`;
+    }
+    const live = sameDay.filter((row) => !row.deleted && (row.category ?? null) === category);
+    return live.length === 1 ? live[0].id : `legacy:${change.entryDate}:${category ?? 'unclassified'}`;
+}
 
-/** The entries to show: the confirmed rows with every queued change applied on top. */
+const serverRow = (state: JournalState, id: string) => state.server.find((row) => row.id === id);
+
+/** The notes to show: the confirmed rows with every queued change applied on top. */
 export function localEntries(state: JournalState): JournalEntry[] {
-    const entries = new Map(
-        state.server
-            .filter((row) => !row.deleted)
-            .map((row) => [journalEntryKey(row.entryDate, row.category), toJournalEntry(row)])
-    );
+    const entries = new Map(state.server.filter((row) => !row.deleted).map((row) => [row.id, toJournalEntry(row)]));
     for (const change of state.outbox) {
-        const category = categoryFor(state, change.entryDate, change.category);
-        const key = journalEntryKey(change.entryDate, category);
-        if (change.kind === 'delete') entries.delete(key);
-        else
-            entries.set(key, {
-                entryDate: change.entryDate,
-                body: change.body,
-                tags: [...change.tags],
-                category,
-                updatedAt: change.updatedAt,
-            });
+        const id = changeId(state, change);
+        if (change.kind === 'delete') {
+            entries.delete(id);
+            continue;
+        }
+        const previous = entries.get(id) ?? (serverRow(state, id) ? toJournalEntry(serverRow(state, id)!) : null);
+        entries.set(id, {
+            id,
+            entryDate: previous?.entryDate ?? change.entryDate,
+            title: change.title ?? previous?.title ?? '',
+            body: change.body,
+            tags: [...change.tags],
+            category: change.category === undefined ? previous?.category : change.category,
+            createdAt: previous && !serverRow(state, id)?.deleted ? previous.createdAt : change.updatedAt,
+            updatedAt: change.updatedAt,
+        });
     }
     return [...entries.values()];
 }
 
-export function queueSave(
-    state: JournalState,
-    entryDate: string,
-    body: string,
-    tags: string[],
-    now = new Date(),
-    category?: NoteCategory
-) {
-    category = categoryFor(state, entryDate, category);
-    const key = journalEntryKey(entryDate, category);
+export function queueSave(state: JournalState, note: JournalNoteInput, now = new Date()): JournalState {
     const updatedAt = now.toISOString();
     const editedLabel = formatIdeaTimestamp(updatedAt);
-    const pendingIndex = state.outbox.findLastIndex(
-        (change) => journalEntryKey(change.entryDate, categoryFor(state, change.entryDate, change.category)) === key
-    );
+    const pendingIndex = state.outbox.findLastIndex((change) => changeId(state, change) === note.id);
     const pending = state.outbox[pendingIndex];
-    // Unsent saves for the same day and section collapse into one request.
+    // Unsent saves for the same note collapse into one request.
     if (pending && !pending.attempted && pending.kind === 'save') {
         const outbox = [...state.outbox];
         outbox[pendingIndex] = {
             ...pending,
-            body,
-            tags: [...tags],
+            id: note.id,
+            title: note.title,
+            body: note.body,
+            tags: [...note.tags],
+            category: note.category,
             updatedAt,
             editedLabel,
-            category,
         };
         return { ...state, outbox };
     }
     const change: JournalOutboxEntry = {
         kind: 'save',
         mutationId: uuid(),
-        entryDate,
-        baseVersion: serverVersion(state, entryDate, category),
-        body,
-        tags: [...tags],
-        category,
+        id: note.id,
+        entryDate: serverRow(state, note.id)?.entryDate ?? note.entryDate,
+        baseVersion: serverRow(state, note.id)?.version ?? 0,
+        title: note.title,
+        body: note.body,
+        tags: [...note.tags],
+        category: note.category,
         updatedAt,
         editedLabel,
         attempted: false,
@@ -96,27 +109,23 @@ export function queueSave(
     return { ...state, outbox: [...state.outbox, change] };
 }
 
-export function queueDelete(state: JournalState, entryDate: string, category?: NoteCategory): JournalState {
-    category = categoryFor(state, entryDate, category);
-    const key = journalEntryKey(entryDate, category);
-    const matches = (change: JournalOutboxEntry) =>
-        journalEntryKey(change.entryDate, categoryFor(state, change.entryDate, change.category)) === key;
+export function queueDelete(state: JournalState, id: string, entryDate: string): JournalState {
+    const matches = (change: JournalOutboxEntry) => changeId(state, change) === id;
     const kept = state.outbox.filter((change) => !matches(change) || change.attempted);
-    const row = state.server.find((value) => journalEntryKey(value.entryDate, value.category) === key);
+    const row = serverRow(state, id);
     const inFlight = kept.some(matches);
-    // A day that never reached the server only needs its queued saves removed.
+    // A note that never reached the server only needs its queued saves removed.
     if ((!row || row.deleted) && !inFlight) return { ...state, outbox: kept };
     const change: JournalOutboxEntry = {
         kind: 'delete',
         mutationId: uuid(),
-        entryDate,
-        category,
+        id,
+        entryDate: row?.entryDate ?? entryDate,
         baseVersion: Math.max(1, row?.version ?? 1),
         attempted: false,
     };
     return { ...state, outbox: [...kept, change] };
 }
-
 export function markAttempted(state: JournalState, mutationId: string): JournalState {
     return {
         ...state,
@@ -144,29 +153,27 @@ export function releaseAttempt(state: JournalState, mutationId: string): Journal
 export function acknowledge(state: JournalState, mutationId: string, response: JournalMutationResponse): JournalState {
     const acked = state.outbox.find((change) => change.mutationId === mutationId);
     if (!acked) return state;
-    const category =
-        response.category !== undefined
-            ? response.category
-            : response.entry?.category !== undefined
-              ? response.entry.category
-              : categoryFor(state, acked.entryDate, acked.category);
-    const key = journalEntryKey(response.entryDate, category);
-    const server = state.server.filter((row) => journalEntryKey(row.entryDate, row.category) !== key);
+    const ackedKey = changeId(state, acked);
+    const server = state.server.filter((row) => row.id !== response.id);
     if (response.entry) server.push(response.entry);
     // After a merge or a kept entry, later changes stay stale on purpose and merge again on the server.
     const rebase = response.outcome === 'created' || response.outcome === 'updated' || response.outcome === 'deleted';
     const outbox = state.outbox
         .filter((change) => change.mutationId !== mutationId)
-        .map((change) =>
-            rebase &&
-            !change.attempted &&
-            journalEntryKey(change.entryDate, categoryFor(state, change.entryDate, change.category)) === key
-                ? { ...change, baseVersion: Math.max(change.kind === 'delete' ? 1 : 0, response.resultVersion) }
-                : change
-        );
+        .map((change) => {
+            const key = changeId(state, change);
+            if (key !== response.id && key !== ackedKey) return change;
+            // A queued change from before note ids takes the id the server chose, so it keeps following the note.
+            const adopted = change.attempted || change.id ? change : { ...change, id: response.id };
+            return rebase && !adopted.attempted
+                ? {
+                      ...adopted,
+                      baseVersion: Math.max(adopted.kind === 'delete' ? 1 : 0, response.resultVersion),
+                  }
+                : adopted;
+        });
     return { server, outbox };
 }
-
 /** Replaces the confirmed rows after a full fetch. Queued changes stay on top. */
 export function replaceServer(state: JournalState, entries: ServerJournalEntry[]): JournalState {
     return { ...state, server: entries };
@@ -199,12 +206,17 @@ const isJournalState = (value: unknown): value is JournalState =>
             typeof change.attempted === 'boolean'
     );
 
-export function readJournalState(): { state: JournalState; error: string | null } {
+export function readJournalState(): { state: JournalState; error: string | null; refetch?: boolean } {
     try {
         const saved = window.localStorage.getItem(JOURNAL_STORAGE_KEY);
         if (saved === null) return { state: emptyJournalState(), error: null };
         const parsed: unknown = JSON.parse(saved);
-        if (isJournalState(parsed)) return { state: parsed, error: null };
+        if (isJournalState(parsed)) {
+            // Rows saved before notes had ids are dropped and fetched again; queued changes stay.
+            const current = parsed.server.every((row) => typeof row.id === 'string' && typeof row.title === 'string');
+            if (current) return { state: parsed, error: null };
+            return { state: { server: [], outbox: parsed.outbox }, error: null, refetch: true };
+        }
         return {
             state: emptyJournalState(),
             error: 'Saved notes could not be read because the stored data has an unexpected format.',

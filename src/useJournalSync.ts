@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { JournalMutationResponse, NoteCategory, ServerJournalEntry } from '../shared/contracts';
+import type { JournalMutationResponse, ServerJournalEntry } from '../shared/contracts';
 import {
     acknowledge,
     dropEntry,
@@ -13,7 +13,7 @@ import {
     replaceServer,
     writeJournalState,
 } from './journalSync';
-import type { JournalState } from './journalSync';
+import type { JournalNoteInput, JournalState } from './journalSync';
 import { formatEntryDate } from './journal';
 import type { SyncStatus } from './useIdeasSync';
 import { syncFetch } from './syncFetch';
@@ -38,7 +38,7 @@ export function useJournalSync() {
     );
     // Without a saved copy, an empty list means "not fetched yet", so the page waits for the first sync.
     const [ready, setReady] = useState(() => {
-        if (initial.error) return false;
+        if (initial.error || initial.refetch) return false;
         try {
             return window.localStorage.getItem(JOURNAL_STORAGE_KEY) !== null;
         } catch {
@@ -86,7 +86,7 @@ export function useJournalSync() {
                     if (response.status === 400) {
                         commit(dropEntry(stateRef.current, change.mutationId));
                         setNotice(
-                            `The server rejected a change to the entry for ${formatEntryDate(change.entryDate)}, so it was not saved.`
+                            `The server rejected a change to a note for ${formatEntryDate(change.entryDate)}, so it was not saved.`
                         );
                         continue;
                     }
@@ -99,7 +99,7 @@ export function useJournalSync() {
                         // Nothing was written, so the change is unfrozen and stays queued. A shorter save replaces it.
                         commit(releaseAttempt(stateRef.current, change.mutationId));
                         setNotice(
-                            `The entry for ${formatEntryDate(change.entryDate)} was also edited on another device, and combining both versions would pass the length limit. Your change is kept on this device. Shorten the entry, then save again.`
+                            `A note for ${formatEntryDate(change.entryDate)} was also edited on another device, and combining both versions would pass the length limit. Your change is kept on this device. Shorten the note, then save again.`
                         );
                         throw new SyncPaused();
                     }
@@ -108,7 +108,7 @@ export function useJournalSync() {
                     commit(acknowledge(stateRef.current, change.mutationId, result));
                     if (result.outcome === 'kept' && change.kind === 'delete') {
                         setNotice(
-                            `The entry for ${formatEntryDate(change.entryDate)} changed on another device, so it was kept.`
+                            `A note for ${formatEntryDate(change.entryDate)} changed on another device, so it was kept.`
                         );
                     }
                 }
@@ -198,19 +198,7 @@ export function useJournalSync() {
         refreshing: phase === 'syncing',
         refresh: sync,
         clearNotice: () => setNotice(null),
-        save: (entryDate: string, body: string, tags: string[], category?: NoteCategory) =>
-            change(queueSave(stateRef.current, entryDate, body, tags, new Date(), category)),
-        saveSections: (entryDate: string, sections: { body: string; tags: string[]; category: NoteCategory }[]) =>
-            change(
-                sections.reduce(
-                    (next, section) =>
-                        section.body
-                            ? queueSave(next, entryDate, section.body, section.tags, new Date(), section.category)
-                            : queueDelete(next, entryDate, section.category),
-                    stateRef.current
-                )
-            ),
-        remove: (entryDate: string, category?: NoteCategory) =>
-            change(queueDelete(stateRef.current, entryDate, category)),
+        save: (note: JournalNoteInput) => change(queueSave(stateRef.current, note)),
+        remove: (id: string, entryDate: string) => change(queueDelete(stateRef.current, id, entryDate)),
     };
 }

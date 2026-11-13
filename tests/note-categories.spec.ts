@@ -1,5 +1,4 @@
 import { expect, test } from '@playwright/test';
-import { closeDialog } from './fixtures';
 import { spawn } from 'node:child_process';
 import type { ChildProcess } from 'node:child_process';
 
@@ -45,35 +44,74 @@ test('global notes appear only under All', async ({ page }) => {
     await expect(global).toBeVisible();
 });
 
-test('deleting one section retains unsaved changes in another section', async ({ page }) => {
+test('a day holds several titled notes that move between sections and delete one at a time', async ({ page }) => {
     await page.emulateMedia({ reducedMotion: 'reduce' });
-    await page.clock.setFixedTime(new Date('2026-11-06T12:00:00-08:00'));
+    await page.clock.install({ time: new Date('2026-11-06T12:00:00-08:00') });
     await page.goto('/notes');
-    await page.getByRole('button', { name: 'New note', exact: true }).click();
+    const filter = page.getByRole('group', { name: 'Filter notes', exact: true });
     const dialog = page.getByRole('dialog');
     const category = dialog.getByRole('group', { name: 'Note category', exact: true });
+    const title = dialog.locator('input[name="title"]');
     const body = dialog.locator('textarea[name="body"]');
-    await body.fill('Home to delete');
-    await category.getByRole('button', { name: 'Work', exact: true }).click();
-    await body.fill('Work to keep');
-    await dialog.getByRole('button', { name: 'Save entry', exact: true }).click();
-    const work = page.locator('.journal-card').filter({ hasText: 'Work to keep' });
-    await work.getByRole('button', { name: /^Edit entry / }).click();
-    await body.fill('Unsaved work to keep');
+    const create = async (section: string, heading: string, details: string) => {
+        await page.getByRole('button', { name: 'New note', exact: true }).click();
+        await expect(dialog.getByRole('heading', { name: 'New note for 11/06/2026' })).toBeVisible();
+        await category.getByRole('button', { name: section, exact: true }).click();
+        await title.fill(heading);
+        await body.fill(details);
+        await dialog.getByRole('button', { name: 'Save entry', exact: true }).click();
+        await expect(dialog).toHaveCount(0);
+    };
+    await create('Work', 'Standup', 'Standup details');
+    await create('Work', 'Retro', 'Retro details');
+    await create('Home', '', 'Groceries to buy');
+
+    const day = page.getByRole('region', { name: 'Notes for 11/06/2026' });
+    await expect(day.locator('.journal-card')).toHaveCount(3);
+    await expect(day.locator('.journal-day-toggle')).toHaveText(['Standup', 'Retro', 'Groceries to buy']);
+    await filter.getByRole('button', { name: 'Work', exact: true }).click();
+    await expect(day.locator('.journal-day-toggle')).toHaveText(['Standup', 'Retro']);
+
+    await day.getByRole('button', { name: 'Edit Retro', exact: true }).click();
+    await expect(title).toHaveValue('Retro');
+    await expect(body).toHaveValue('Retro details');
     await category.getByRole('button', { name: 'Home', exact: true }).click();
-    await dialog.getByRole('button', { name: 'Delete entry', exact: true }).click();
-    await dialog.getByRole('button', { name: 'Confirm delete', exact: true }).click();
-    await expect(dialog).toBeVisible();
-    await expect(body).toHaveValue('');
-    await category.getByRole('button', { name: 'Work', exact: true }).click();
-    await expect(body).toHaveValue('Unsaved work to keep');
+    await title.fill('Retro at home');
     await dialog.getByRole('button', { name: 'Save entry', exact: true }).click();
-    await expect(work).toContainText('Unsaved work to keep');
-    await expect(page.locator('.journal-card').filter({ hasText: 'Home to delete' })).toHaveCount(0);
+    await expect(day.locator('.journal-day-toggle')).toHaveText(['Standup']);
+    await filter.getByRole('button', { name: 'Home', exact: true }).click();
+    await expect(day.locator('.journal-day-toggle')).toHaveText(['Retro at home', 'Groceries to buy']);
+
+    await filter.getByRole('button', { name: 'All', exact: true }).click();
+    await day.getByRole('button', { name: 'Edit Standup', exact: true }).click();
+    await dialog.getByRole('button', { name: 'Delete note', exact: true }).click();
+    await dialog.getByRole('button', { name: 'Confirm delete', exact: true }).click();
+    await expect(dialog).toHaveCount(0);
+    await expect(day.locator('.journal-day-toggle')).toHaveText(['Retro at home', 'Groceries to buy']);
+
+    // The day's own add button opens a new note for that day in the filtered section.
+    await filter.getByRole('button', { name: 'Home', exact: true }).click();
+    await day.getByRole('button', { name: 'Add a note for 11/06/2026', exact: true }).click();
+    await expect(dialog.getByRole('heading', { name: 'New note for 11/06/2026' })).toBeVisible();
+    await expect(category.getByRole('button', { name: 'Home', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    await expect(body).toHaveValue('');
+    await body.fill('Evening walk');
+    await dialog.getByRole('button', { name: 'Save entry', exact: true }).click();
+    await expect(day.locator('.journal-day-toggle')).toHaveText(['Retro at home', 'Groceries to buy', 'Evening walk']);
+    await expect(page.getByRole('status')).toHaveText('Synced');
+    const journal = await (await page.request.get('/api/journal')).json();
+    const live = journal.entries.filter(
+        (entry: { entryDate: string; deleted: boolean }) => entry.entryDate === '2026-11-06' && !entry.deleted
+    );
+    expect(live.map((entry: { title: string; category: string | null }) => [entry.title, entry.category])).toEqual([
+        ['Retro at home', 'home'],
+        ['', 'home'],
+        ['', 'home'],
+    ]);
 });
 
 for (const theme of ['midnight', 'light']) {
-    test(`daily sections retain separate content and tags online and offline in ${theme}`, async ({
+    test(`daily notes keep their sections, titles and tags online and offline in ${theme}`, async ({
         page,
         context,
     }) => {
@@ -103,13 +141,13 @@ for (const theme of ['midnight', 'light']) {
         }
         await expect(actions.getByRole('button')).toHaveText(['Global note', 'Calendar']);
         expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);
+
         await filter.getByRole('button', { name: 'Work', exact: true }).click();
         await page.getByRole('button', { name: 'New note', exact: true }).click();
         const dialog = page.getByRole('dialog');
         const category = dialog.getByRole('group', { name: 'Note category', exact: true });
-        await expect(dialog.getByRole('textbox', { name: 'Details', exact: true })).toBeVisible();
+        await expect(dialog.getByRole('textbox', { name: 'Details', exact: true })).toBeFocused();
         const section = dialog.locator('.field-label').filter({ hasText: /^Section$/ });
-        await expect(section).toBeVisible();
         const sectionBox = await section.boundingBox();
         const categoryBox = await category.boundingBox();
         if (!sectionBox || !categoryBox) throw new Error('Daily note section controls are missing.');
@@ -118,93 +156,86 @@ for (const theme of ['midnight', 'light']) {
             'aria-pressed',
             'true'
         );
+        const title = dialog.locator('input[name="title"]');
         const body = dialog.locator('textarea[name="body"]');
         const tags = dialog.locator('input[name="tags"]');
+        const save = () => dialog.getByRole('button', { name: 'Save entry', exact: true }).click();
         const select = async (name: string) => category.getByRole('button', { name, exact: true }).click();
-        await body.fill(`Daily work ${theme}`);
+
+        await title.fill(`Work plan ${theme}`);
         await tags.fill('work-tag');
+        await save();
+        await expect(dialog.getByRole('alert')).toHaveText('Write details before saving this note.');
+        await body.fill(`Daily work ${theme}`);
+        await save();
+        await expect(dialog).toHaveCount(0);
+        await page.getByRole('button', { name: 'New note', exact: true }).click();
         await select('Home');
-        await expect(body).toHaveValue('');
-        await expect(tags).toHaveValue('');
-        await tags.fill('home-tag');
-        await dialog.getByRole('button', { name: 'Save entry', exact: true }).click();
-        await expect(dialog.getByRole('alert')).toHaveText('Write details for Home before saving its tags.');
         await body.fill(`Daily home ${theme}`);
+        await tags.fill('home-tag');
+        await save();
+        await page.getByRole('button', { name: 'New note', exact: true }).click();
         await select('Unclassified');
-        await expect(body).toHaveValue('');
-        await expect(tags).toHaveValue('');
         await body.fill(`Daily other ${theme}`);
         await tags.fill('other-tag');
-        await select('Work');
-        await expect(body).toHaveValue(`Daily work ${theme}`);
-        await expect(tags).toHaveValue('work-tag');
-        await dialog.getByRole('button', { name: 'Preview', exact: true }).click();
-        await expect(dialog.locator('.markdown-editor-preview')).toHaveText(`Daily work ${theme}`);
-        await select('Home');
-        await expect(body).toHaveValue(`Daily home ${theme}`);
-        await expect(tags).toHaveValue('home-tag');
-        await dialog.getByRole('button', { name: 'Save entry', exact: true }).click();
-        const daily = page.locator('.journal-card').filter({ hasText: `Daily work ${theme}` });
+        await save();
+
+        const daily = page.locator('.journal-card').filter({ hasText: `Work plan ${theme}` });
         const home = page.locator('.journal-card').filter({ hasText: `Daily home ${theme}` });
         await expect(daily).toBeVisible();
+        await expect(home).toHaveCount(0);
         await filter.getByRole('button', { name: 'Home', exact: true }).click();
         await expect(daily).toHaveCount(0);
         await expect(home).toBeVisible();
         await filter.getByRole('button', { name: 'All', exact: true }).click();
         const cards = page.locator('.journal-card');
         await expect(cards.filter({ hasText: new RegExp(`Daily (work|home|other) ${theme}`) })).toHaveCount(3);
-        const ids = await cards.locator('[id]').evaluateAll((nodes) => nodes.map((node) => node.id));
+        const ids = await page.locator('.journal-week [id]').evaluateAll((nodes) => nodes.map((node) => node.id));
         expect(new Set(ids).size).toBe(ids.length);
         await expect(page.getByRole('status')).toHaveText('Synced');
 
         await context.setOffline(true);
-        await filter.getByRole('button', { name: 'Work', exact: true }).click();
-        await expect(daily).toBeVisible();
-        await daily.getByRole('button', { name: /^Edit entry / }).click();
-        await expect(body).toHaveValue(`Daily work ${theme}`);
+        await daily.getByRole('button', { name: `Edit Work plan ${theme}`, exact: true }).click();
+        await expect(title).toHaveValue(`Work plan ${theme}`);
+        await expect(tags).toHaveValue('work-tag');
         await body.fill(`Daily work ${theme} offline`);
-        await select('Home');
-        await expect(body).toHaveValue(`Daily home ${theme}`);
-        await body.fill(`Daily home ${theme} offline`);
-        await select('Work');
-        await expect(body).toHaveValue(`Daily work ${theme} offline`);
-        await select('Unclassified');
-        await expect(body).toHaveValue(`Daily other ${theme}`);
-        await dialog.getByRole('button', { name: 'Save entry', exact: true }).click();
+        await save();
         await expect(daily).toContainText(`Daily work ${theme} offline`);
-        await filter.getByRole('button', { name: 'Home', exact: true }).click();
-        await expect(daily).toHaveCount(0);
-        await expect(home).toContainText(`Daily home ${theme} offline`);
+        await page.getByRole('button', { name: 'New note', exact: true }).click();
+        await select('Work');
+        await title.fill(`Offline extra ${theme}`);
+        await body.fill(`Second work note ${theme}`);
+        await save();
+        await expect(page.locator('.journal-card').filter({ hasText: `Offline extra ${theme}` })).toBeVisible();
         await context.setOffline(false);
         await expect(page.getByRole('status')).toHaveText('Synced');
         await page.reload();
-        await expect(filter.getByRole('button', { name: 'Home', exact: true })).toHaveAttribute('aria-pressed', 'true');
-        await home.getByRole('button', { name: /^Edit entry / }).click();
-        await expect(body).toHaveValue(`Daily home ${theme} offline`);
-        await expect(tags).toHaveValue('home-tag');
-        await select('Work');
-        await expect(body).toHaveValue(`Daily work ${theme} offline`);
-        await expect(tags).toHaveValue('work-tag');
-        await select('Home');
-        await dialog.getByRole('button', { name: 'Delete entry', exact: true }).click();
-        await dialog.getByRole('button', { name: 'Confirm delete', exact: true }).click();
+
+        // Emptying the details of a saved note deletes it after a confirmation.
+        await home.getByRole('button', { name: `Edit Daily home ${theme}`, exact: true }).click();
+        await body.fill('');
+        await save();
+        await expect(dialog.getByRole('alert')).toHaveText('This note has no details. Save again to delete it.');
+        await save();
         await expect(home).toHaveCount(0);
-        await page.getByRole('button', { name: 'New note', exact: true }).click();
-        await expect(body).toHaveValue('');
-        await expect(tags).toHaveValue('');
-        await select('Work');
-        await expect(body).toHaveValue(`Daily work ${theme} offline`);
-        await closeDialog(dialog);
         await expect(page.getByRole('status')).toHaveText('Synced');
+
         const journal = await (await page.request.get('/api/journal')).json();
-        expect(
-            journal.entries.find((entry: { body: string }) => entry.body === `Daily work ${theme} offline`)
-        ).toMatchObject({ category: 'work', tags: ['work-tag'], version: 2 });
-        expect(journal.entries.find((entry: { body: string }) => entry.body === `Daily other ${theme}`)).toMatchObject({
-            category: null,
-            tags: ['other-tag'],
-            version: 1,
+        const find = (body: string) => journal.entries.find((entry: { body: string }) => entry.body === body);
+        expect(find(`Daily work ${theme} offline`)).toMatchObject({
+            title: `Work plan ${theme}`,
+            category: 'work',
+            tags: ['work-tag'],
+            version: 2,
         });
+        expect(find(`Second work note ${theme}`)).toMatchObject({ title: `Offline extra ${theme}`, category: 'work' });
+        expect(find(`Daily other ${theme}`)).toMatchObject({ category: null, tags: ['other-tag'], version: 1 });
+        expect(
+            journal.entries.some(
+                (entry: { body: string; deleted: boolean }) =>
+                    entry.body.includes(`Daily home ${theme}`) && !entry.deleted
+            )
+        ).toBe(false);
         expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(0);
     });
 }

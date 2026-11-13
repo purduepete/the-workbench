@@ -2,34 +2,65 @@ process.env.TZ = 'America/Los_Angeles';
 
 import { describe, expect, it } from 'vitest';
 import { entryDateSchema, journalLimits } from '../shared/contracts';
-import type { JournalSave, ServerJournalEntry } from '../shared/contracts';
+import type { JournalSave, NoteCategory, ServerJournalEntry } from '../shared/contracts';
 import { resolveSave, unionTags } from '../shared/journal';
-import { filterEntries, formatEntryDate, groupByWeek, localDateKey, weekStart } from './journal';
+import { filterEntries, formatEntryDate, groupByWeek, localDateKey, noteHeading, weekStart } from './journal';
 import type { JournalEntry } from './journal';
 import { acknowledge, localEntries, markAttempted, queueDelete, queueSave, releaseAttempt } from './journalSync';
-import type { JournalState } from './journalSync';
+import type { JournalOutboxEntry, JournalState } from './journalSync';
 
-const entry = (entryDate: string, body = 'Body', tags: string[] = []): JournalEntry => ({
+const DATE = '2026-10-29';
+const NOTE = '11111111-1111-4111-8111-111111111111';
+const OTHER = '22222222-2222-4222-8222-222222222222';
+
+const entry = (
+    entryDate: string,
+    body = 'Body',
+    tags: string[] = [],
+    extra: Partial<JournalEntry> = {}
+): JournalEntry => ({
+    id: `${entryDate}-${body}`,
     entryDate,
+    title: '',
     body,
     tags,
+    createdAt: '2026-10-29T18:00:00.000Z',
     updatedAt: '2026-10-29T18:00:00.000Z',
+    ...extra,
 });
 
-const row = (entryDate: string, version: number, body = 'Server', deleted = false): ServerJournalEntry => ({
+const row = (
+    entryDate: string,
+    version: number,
+    body = 'Server',
+    deleted = false,
+    id = NOTE,
+    category: NoteCategory = null
+): ServerJournalEntry => ({
+    id,
     entryDate,
+    title: '',
     body,
     tags: [],
+    category,
     deleted,
     createdAt: '2026-10-29T18:00:00.000Z',
     updatedAt: '2026-10-29T18:00:00.000Z',
     version,
 });
 
+const current = (body: string, tags: string[], version: number, deleted = false) => ({
+    title: '',
+    body,
+    tags,
+    deleted,
+    version,
+});
+
 const save = (baseVersion: number, body: string, tags: string[] = []): JournalSave => ({
     kind: 'save',
     mutationId: crypto.randomUUID(),
-    entryDate: '2026-10-29',
+    entryDate: DATE,
     baseVersion,
     body,
     tags,
@@ -37,6 +68,15 @@ const save = (baseVersion: number, body: string, tags: string[] = []): JournalSa
     editedLabel: '10/29/2026 13:05',
 });
 
+const note = (body: string, extra: Partial<Parameters<typeof queueSave>[1]> = {}) => ({
+    id: NOTE,
+    entryDate: DATE,
+    title: '',
+    body,
+    tags: [] as string[],
+    category: null as NoteCategory,
+    ...extra,
+});
 describe('journal dates', () => {
     it('uses the local calendar day, not the UTC day', () => {
         expect(localDateKey(new Date(2026, 9, 31, 23, 59))).toBe('2026-10-31');
@@ -77,36 +117,54 @@ describe('journal dates', () => {
         ]);
     });
 
+    it('groups several notes for one day in the order they were created', () => {
+        const [week] = groupByWeek([
+            entry(DATE, 'Later', [], { createdAt: '2026-10-29T20:00:00.000Z' }),
+            entry(DATE, 'Earlier', [], { createdAt: '2026-10-29T08:00:00.000Z' }),
+            entry('2026-10-28', 'Yesterday'),
+        ]);
+        expect(week.days.map((day) => [day.entryDate, day.entries.map((value) => value.body)])).toEqual([
+            [DATE, ['Earlier', 'Later']],
+            ['2026-10-28', ['Yesterday']],
+        ]);
+    });
+
+    it('names a note by its title, then its first line', () => {
+        expect(noteHeading(entry(DATE, 'Body', [], { title: 'Standup' }))).toBe('Standup');
+        expect(noteHeading(entry(DATE, '## Plan for **today**\nmore'))).toBe('Plan for today');
+        expect(noteHeading(entry(DATE, '[Photo.jpg](https://1drv.ms/i/x) at the park'))).toBe('Photo.jpg at the park');
+        expect(noteHeading(entry(DATE, '   '))).toBe('Untitled note');
+    });
+
     it('searches body and tags and filters by tag without case', () => {
         const entries = [entry('2026-10-26', 'Ran 5 miles', ['Health']), entry('2026-10-27', 'Quiet day', ['home'])];
         expect(filterEntries(entries, 'miles', null).map((value) => value.entryDate)).toEqual(['2026-10-26']);
         expect(filterEntries(entries, 'HOM', null).map((value) => value.entryDate)).toEqual(['2026-10-27']);
         expect(filterEntries(entries, '', 'health').map((value) => value.entryDate)).toEqual(['2026-10-26']);
         expect(filterEntries(entries, 'quiet', 'health')).toEqual([]);
+        const titled = [entry(DATE, 'Body', [], { title: 'Budget review' })];
+        expect(filterEntries(titled, 'budget', null)).toHaveLength(1);
     });
 });
 
 describe('journal merge rule', () => {
     it('creates, replaces on a matching version and restores a tombstone', () => {
         expect(resolveSave(null, save(0, 'New'))).toMatchObject({ outcome: 'created', body: 'New' });
-        const current = { body: 'Old', tags: ['a'], deleted: false, version: 2 };
-        expect(resolveSave(current, save(2, 'New', ['b']))).toMatchObject({
+        const existing = current('Old', ['a'], 2);
+        expect(resolveSave(existing, save(2, 'New', ['b']))).toMatchObject({
             outcome: 'updated',
             body: 'New',
             tags: ['b'],
         });
-        expect(resolveSave({ ...current, deleted: true, body: '' }, save(1, 'Back'))).toMatchObject({
+        expect(resolveSave({ ...existing, deleted: true, body: '' }, save(1, 'Back'))).toMatchObject({
             outcome: 'created',
             body: 'Back',
         });
     });
 
     it('appends a stale save under a dated separator and unions tags', () => {
-        const decision = resolveSave(
-            { body: 'From phone', tags: ['Home'], deleted: false, version: 3 },
-            save(1, 'From laptop', ['home', 'work'])
-        );
-        expect(decision).toEqual({
+        const decision = resolveSave(current('From phone', ['Home'], 3), save(1, 'From laptop', ['home', 'work']));
+        expect(decision).toMatchObject({
             outcome: 'merged',
             body: 'From phone\n\n--- Edit from 10/29/2026 13:05 ---\nFrom laptop',
             tags: ['Home', 'work'],
@@ -115,23 +173,30 @@ describe('journal merge rule', () => {
     });
 
     it('does not duplicate text already in the entry', () => {
-        const current = { body: 'Morning\n\n--- Edit from x ---\nEvening', tags: ['a'], deleted: false, version: 4 };
-        expect(resolveSave(current, save(2, 'Evening', ['A']))).toMatchObject({
+        const existing = current('Morning\n\n--- Edit from x ---\nEvening', ['a'], 4);
+        expect(resolveSave(existing, save(2, 'Evening', ['A']))).toMatchObject({
             outcome: 'merged',
-            body: current.body,
+            body: existing.body,
             bump: false,
         });
     });
 
     it('refuses a merge past the shared limit', () => {
         const long = 'x'.repeat(journalLimits.body - 10);
-        expect(resolveSave({ body: long, tags: [], deleted: false, version: 2 }, save(1, 'More text'))).toEqual({
+        expect(resolveSave(current(long, [], 2), save(1, 'More text'))).toEqual({
             outcome: 'overflow',
         });
         const tags = Array.from({ length: journalLimits.tags }, (_, index) => `t${index}`);
-        expect(resolveSave({ body: 'a', tags, deleted: false, version: 2 }, save(1, 'a', ['extra']))).toEqual({
+        expect(resolveSave(current('a', tags, 2), save(1, 'a', ['extra']))).toEqual({
             outcome: 'overflow',
         });
+    });
+
+    it('keeps a title unless the save brings a new one', () => {
+        const titled = { ...current('Old', [], 2), title: 'Kept' };
+        expect(resolveSave(titled, save(2, 'New'))).toMatchObject({ outcome: 'updated', title: 'Kept' });
+        expect(resolveSave(titled, { ...save(2, 'New'), title: 'Renamed' })).toMatchObject({ title: 'Renamed' });
+        expect(resolveSave(null, { ...save(0, 'New'), title: 'Fresh' })).toMatchObject({ title: 'Fresh' });
     });
 
     it('keeps the first spelling of each tag', () => {
@@ -141,33 +206,52 @@ describe('journal merge rule', () => {
 
 describe('journal outbox', () => {
     const empty: JournalState = { server: [], outbox: [] };
+    const created = (version: number, body: string, id = NOTE) => ({
+        outcome: 'created' as const,
+        id,
+        entryDate: DATE,
+        resultVersion: version,
+        entry: row(DATE, version, body, false, id),
+    });
 
-    it('collapses unsent saves for a day and shows queued changes on top', () => {
-        let state = queueSave(empty, '2026-10-29', 'One', []);
-        state = queueSave(state, '2026-10-29', 'Two', ['x']);
+    it('collapses unsent saves for a note and shows queued changes on top', () => {
+        let state = queueSave(empty, note('One'));
+        state = queueSave(state, note('Two', { title: 'Plan', tags: ['x'] }));
         expect(state.outbox).toHaveLength(1);
-        expect(state.outbox[0]).toMatchObject({ baseVersion: 0, body: 'Two', tags: ['x'] });
+        expect(state.outbox[0]).toMatchObject({ id: NOTE, baseVersion: 0, title: 'Plan', body: 'Two', tags: ['x'] });
         expect(state.outbox[0].kind === 'save' && state.outbox[0].editedLabel).toMatch(
             /^\d{2}\/\d{2}\/\d{4} \d{2}:\d{2}$/
         );
-        expect(localEntries(state).map((value) => value.body)).toEqual(['Two']);
+        expect(localEntries(state).map((value) => [value.title, value.body])).toEqual([['Plan', 'Two']]);
+    });
+
+    it('keeps several notes for the same day and section apart', () => {
+        let state = queueSave(empty, note('Morning'));
+        state = queueSave(state, note('Evening', { id: OTHER }));
+        expect(state.outbox.map((change) => change.id)).toEqual([NOTE, OTHER]);
+        expect(localEntries(state).map((value) => value.body)).toEqual(['Morning', 'Evening']);
+        state = queueDelete(state, NOTE, DATE);
+        expect(localEntries(state).map((value) => value.body)).toEqual(['Evening']);
     });
 
     it('hides tombstones and queued deletes', () => {
-        const state: JournalState = { server: [row('2026-10-28', 3, '', true), row('2026-10-29', 1)], outbox: [] };
-        expect(localEntries(state).map((value) => value.entryDate)).toEqual(['2026-10-29']);
-        expect(localEntries(queueDelete(state, '2026-10-29'))).toEqual([]);
+        const state: JournalState = {
+            server: [row('2026-10-28', 3, '', true, OTHER), row(DATE, 1)],
+            outbox: [],
+        };
+        expect(localEntries(state).map((value) => value.entryDate)).toEqual([DATE]);
+        expect(localEntries(queueDelete(state, NOTE, DATE))).toEqual([]);
     });
 
-    it('drops an unsent day instead of queuing a delete', () => {
-        const state = queueDelete(queueSave(empty, '2026-10-29', 'Draft', []), '2026-10-29');
+    it('drops an unsent note instead of queuing a delete', () => {
+        const state = queueDelete(queueSave(empty, note('Draft')), NOTE, DATE);
         expect(state.outbox).toEqual([]);
     });
 
     it('queues a delete behind an in-flight first save', () => {
-        let state = queueSave(empty, '2026-10-29', 'Draft', []);
+        let state = queueSave(empty, note('Draft'));
         state = markAttempted(state, state.outbox[0].mutationId);
-        state = queueDelete(state, '2026-10-29');
+        state = queueDelete(state, NOTE, DATE);
         expect(state.outbox.map((change) => [change.kind, change.baseVersion])).toEqual([
             ['save', 0],
             ['delete', 1],
@@ -175,90 +259,77 @@ describe('journal outbox', () => {
     });
 
     it('rebases later changes after a create or update but not after a merge', () => {
-        let state = queueSave(empty, '2026-10-29', 'First', []);
+        let state = queueSave(empty, note('First'));
         state = markAttempted(state, state.outbox[0].mutationId);
-        state = queueSave(state, '2026-10-29', 'Second', []);
+        state = queueSave(state, note('Second'));
         const [first] = state.outbox;
-        const created = acknowledge(state, first.mutationId, {
-            outcome: 'created',
-            entryDate: '2026-10-29',
-            resultVersion: 1,
-            entry: row('2026-10-29', 1, 'First'),
-        });
-        expect(created.outbox.map((change) => change.baseVersion)).toEqual([1]);
-        expect(created.server.map((value) => value.version)).toEqual([1]);
+        const after = acknowledge(state, first.mutationId, created(1, 'First'));
+        expect(after.outbox.map((change) => change.baseVersion)).toEqual([1]);
+        expect(after.server.map((value) => value.version)).toEqual([1]);
 
         const merged = acknowledge(state, first.mutationId, {
+            ...created(4, 'Phone\n\nFirst'),
             outcome: 'merged',
-            entryDate: '2026-10-29',
-            resultVersion: 4,
-            entry: row('2026-10-29', 4, 'Phone\n\nFirst'),
         });
         expect(merged.outbox.map((change) => change.baseVersion)).toEqual([0]);
     });
 
+    it('rebases only changes for the acknowledged note', () => {
+        let state: JournalState = { server: [row(DATE, 2, 'Other note', false, OTHER)], outbox: [] };
+        state = queueSave(state, note('First'));
+        state = markAttempted(state, state.outbox[0].mutationId);
+        state = queueSave(state, note('Second'));
+        state = queueSave(state, note('Other edit', { id: OTHER }));
+        state = acknowledge(state, state.outbox[0].mutationId, created(1, 'First'));
+        expect(state.outbox.map((change) => [change.id, change.baseVersion])).toEqual([
+            [NOTE, 1],
+            [OTHER, 2],
+        ]);
+    });
+
     it('does not rebase an already-attempted frozen journal mutation', () => {
-        let state = queueSave(empty, '2026-10-29', 'First', []);
+        let state = queueSave(empty, note('First'));
         const [first] = state.outbox;
         state = markAttempted(state, first.mutationId);
-        state = queueSave(state, '2026-10-29', 'Second', []);
+        state = queueSave(state, note('Second'));
         const [sent, later] = state.outbox;
         state = markAttempted(state, later.mutationId);
-        const result = acknowledge(state, sent.mutationId, {
-            outcome: 'created',
-            entryDate: '2026-10-29',
-            resultVersion: 1,
-            entry: row('2026-10-29', 1, 'First'),
-        });
+        const result = acknowledge(state, sent.mutationId, created(1, 'First'));
         expect(result.outbox[0]).toMatchObject({ attempted: true, baseVersion: 0 });
     });
 
     it('unfreezes a refused change so the next save replaces it', () => {
-        let state = queueSave(empty, '2026-10-29', 'Too long', []);
+        let state = queueSave(empty, note('Too long'));
         const [change] = state.outbox;
         state = releaseAttempt(markAttempted(state, change.mutationId), change.mutationId);
-        state = queueSave(state, '2026-10-29', 'Shorter', []);
+        state = queueSave(state, note('Shorter'));
         expect(state.outbox).toHaveLength(1);
         expect(state.outbox[0]).toMatchObject({ mutationId: change.mutationId, body: 'Shorter' });
     });
 
-    it('rebases and deletes only the matching section for a day', () => {
-        const date = '2026-10-29';
-        const home = { ...row(date, 7, 'Home'), category: 'home' as const };
-        const work = { ...row(date, 2, 'Work'), category: 'work' as const };
-        let state: JournalState = { server: [home, work], outbox: [] };
-        state = queueSave(state, date, 'First work', [], new Date(), 'work');
-        const first = state.outbox[0];
-        state = markAttempted(state, first.mutationId);
-        state = queueSave(state, date, 'Later work', [], new Date(), 'work');
-        state = queueSave(state, date, 'Later home', [], new Date(), 'home');
-        state = queueSave(state, date, 'Other', [], new Date(), null);
-        state = acknowledge(state, first.mutationId, {
-            outcome: 'updated',
-            entryDate: date,
+    it('maps a change queued before note ids to the one live note in its section', () => {
+        const legacy: JournalOutboxEntry = {
+            kind: 'save',
+            mutationId: crypto.randomUUID(),
+            entryDate: DATE,
+            baseVersion: 3,
+            body: 'Queued offline',
+            tags: [],
             category: 'work',
-            resultVersion: 3,
-            entry: { ...work, body: 'First work', version: 3 },
-        });
-        expect(state.outbox.map((change) => [change.category, change.baseVersion])).toEqual([
-            ['work', 3],
-            ['home', 7],
-            [null, 0],
+            updatedAt: '2026-10-29T20:05:00.000Z',
+            editedLabel: '10/29/2026 13:05',
+            attempted: false,
+        };
+        const state: JournalState = {
+            server: [row(DATE, 3, 'Work', false, NOTE, 'work'), row(DATE, 1, 'Home', false, OTHER, 'home')],
+            outbox: [legacy],
+        };
+        expect(localEntries(state).map((value) => [value.id, value.body])).toEqual([
+            [NOTE, 'Queued offline'],
+            [OTHER, 'Home'],
         ]);
-        const other = state.outbox[2];
-        state = acknowledge(state, other.mutationId, {
-            outcome: 'created',
-            entryDate: date,
-            category: null,
-            resultVersion: 1,
-            entry: { ...row(date, 1, 'Other'), category: null },
-        });
-        expect(state.server).toHaveLength(3);
-        state = queueDelete(state, date, 'home');
-        expect(localEntries(state).map((entry) => entry.category)).toEqual(['work', null]);
-        expect(state.outbox.find((change) => change.kind === 'delete')).toMatchObject({
-            category: 'home',
-            baseVersion: 7,
-        });
+        const next = queueSave(state, note('Newer', { category: 'work' }));
+        expect(next.outbox).toHaveLength(1);
+        expect(next.outbox[0]).toMatchObject({ id: NOTE, body: 'Newer' });
     });
 });

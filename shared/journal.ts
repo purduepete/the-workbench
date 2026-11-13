@@ -8,16 +8,12 @@ import type {
     ServerJournalEntry,
 } from './contracts.js';
 
-export type CurrentEntry = Pick<ServerJournalEntry, 'body' | 'tags' | 'category' | 'deleted' | 'version'>;
+export type CurrentEntry = Pick<ServerJournalEntry, 'title' | 'body' | 'tags' | 'category' | 'deleted' | 'version'>;
 
-export const journalEntryKey = (entryDate: string, category?: NoteCategory) =>
-    `${entryDate}:${category ?? 'unclassified'}`;
-
+/** Thrown when an older client's change names a day and section that now hold more than one note. */
 export class JournalSectionRequiredError extends Error {
     constructor() {
-        super(
-            'This day has multiple note sections. Reload the app and choose Home, Work or Unclassified before saving.'
-        );
+        super('This day has more than one note in this section. Reload the app, then save the note again.');
     }
 }
 
@@ -27,13 +23,30 @@ export function resolveJournalCategory(
     entries: Pick<ServerJournalEntry, 'category'>[]
 ): NoteCategory {
     if (category !== undefined) return category;
-    if (entries.length > 1) throw new JournalSectionRequiredError();
+    if (new Set(entries.map((entry) => entry.category ?? null)).size > 1) throw new JournalSectionRequiredError();
     return entries[0]?.category ?? null;
+}
+
+/**
+ * Picks the note an older client's change (no id) meant: that day and section held at most one note then. A live note
+ * wins over tombstones, the newest tombstone is revived, and an empty slot gets a new id. Never guess between two live
+ * notes.
+ */
+export function resolveLegacyNote(
+    candidates: Pick<ServerJournalEntry, 'id' | 'deleted' | 'updatedAt'>[],
+    newId: () => string
+): string {
+    const live = candidates.filter((entry) => !entry.deleted);
+    if (live.length > 1) throw new JournalSectionRequiredError();
+    if (live[0]) return live[0].id;
+    const newest = [...candidates].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0];
+    return newest?.id ?? newId();
 }
 
 export type SaveDecision =
     | {
           outcome: Extract<JournalOutcome, 'created' | 'updated' | 'merged'>;
+          title: string;
           body: string;
           tags: string[];
           category?: NoteCategory;
@@ -56,14 +69,24 @@ export function unionTags(current: string[], incoming: string[]): string[] {
 
 /**
  * Decides how a save lands. A save based on the current version replaces the entry. A stale save is appended under a
- * dated separator unless its text is already there, so a retried or re-queued edit never duplicates text.
+ * dated separator unless its text is already there, so a retried or re-queued edit never duplicates text. A stale save
+ * keeps the current title unless the note had none. An older client's save (no title) keeps the title.
  */
 export function resolveSave(current: CurrentEntry | null, save: JournalSave): SaveDecision {
+    const incomingTitle = save.title ?? current?.title ?? '';
     if (!current || current.deleted)
-        return { outcome: 'created', body: save.body, tags: save.tags, category: save.category, bump: true };
+        return {
+            outcome: 'created',
+            title: save.title ?? '',
+            body: save.body,
+            tags: save.tags,
+            category: save.category,
+            bump: true,
+        };
     if (save.baseVersion === current.version)
         return {
             outcome: 'updated',
+            title: incomingTitle,
             body: save.body,
             tags: save.tags,
             category: save.category === undefined ? current.category : save.category,
@@ -73,11 +96,11 @@ export function resolveSave(current: CurrentEntry | null, save: JournalSave): Sa
         ? current.body
         : `${current.body}\n\n--- Edit from ${save.editedLabel} ---\n${save.body}`;
     const tags = unionTags(current.tags, save.tags);
+    const title = current.title || incomingTitle;
     if (body.length > journalLimits.body || tags.length > journalLimits.tags) return { outcome: 'overflow' };
-    const changed = body !== current.body || tags.length !== current.tags.length;
-    return { outcome: 'merged', body, tags, category: current.category, bump: changed };
+    const changed = body !== current.body || tags.length !== current.tags.length || title !== current.title;
+    return { outcome: 'merged', title, body, tags, category: current.category, bump: changed };
 }
-
 export class JournalOverflowError extends Error {
     constructor() {
         super('Merging this edit would make the entry longer than the limit.');

@@ -10,6 +10,7 @@ import type { TaskMutation } from '../shared/tasks.js';
 const url = process.env.TEST_DATABASE_URL;
 const enabled = Boolean(url && new URL(url).pathname.endsWith('_test'));
 const legacyReceiptId = randomUUID();
+const orphanReceiptId = randomUUID();
 const existingIdeaId = randomUUID();
 
 const save = (baseVersion: number, body: string): JournalSave => ({
@@ -73,6 +74,15 @@ describe.skipIf(!enabled)('PostgresIdeasStore journal against a real database', 
         );
         await pool.query(
             await readFile(new URL('../deploy/postgresql/007_idea_priority.sql', import.meta.url), 'utf8')
+        );
+        // A kept delete for a day that never had a row leaves a receipt with no note.
+        await pool.query(
+            `INSERT INTO public.journal_mutations (mutation_id, entry_date, outcome, result_version, category)
+             VALUES ($1, '2026-02-02', 'kept', 0, 'home')`,
+            [orphanReceiptId]
+        );
+        await pool.query(
+            await readFile(new URL('../deploy/postgresql/008_multiple_daily_notes.sql', import.meta.url), 'utf8')
         );
         store = new PostgresIdeasStore(pool);
     });
@@ -139,6 +149,60 @@ describe.skipIf(!enabled)('PostgresIdeasStore journal against a real database', 
 
     it('is ready after all migrations', async () => {
         await expect(store.ready()).resolves.toBeUndefined();
+    });
+
+    it('gives each existing daily row its own id and an empty title, and attaches every receipt', async () => {
+        const [retained] = (await store.listJournal()).filter((entry) => entry.entryDate === '2026-01-01');
+        expect(retained).toMatchObject({ title: '', body: 'Retained work', category: 'work', version: 2 });
+        expect(retained.id).toMatch(/^[0-9a-f-]{36}$/);
+        const receipts = await pool.query<{ mutation_id: string; note_id: string | null }>(
+            'SELECT mutation_id, note_id FROM public.journal_mutations'
+        );
+        expect(receipts.rows.find((row) => row.mutation_id === legacyReceiptId)?.note_id).toBe(retained.id);
+        expect(receipts.rows.every((row) => row.note_id)).toBe(true);
+        await expect(
+            pool.query(`UPDATE public.journal_entries SET title = repeat('x', 141) WHERE id = $1`, [retained.id])
+        ).rejects.toThrow(/check constraint/);
+    });
+
+    it('stores several titled notes in one day and section, each saved and deleted by id', async () => {
+        const entryDate = '2026-03-03';
+        const ids = [randomUUID(), randomUUID()];
+        const note = (id: string, title: string, body: string): JournalSave => ({
+            ...save(0, body),
+            id,
+            entryDate,
+            title,
+            category: 'home',
+        });
+        await store.applyJournal(note(ids[0], 'Standup', 'First note'));
+        await store.applyJournal({
+            ...note(ids[1], 'Interview', 'Second note'),
+            updatedAt: new Date(Date.parse(note(ids[0], '', '').updatedAt) + 60_000).toISOString(),
+        });
+        expect((await store.listJournal()).filter((entry) => entry.entryDate === entryDate)).toMatchObject([
+            { id: ids[0], title: 'Standup', body: 'First note' },
+            { id: ids[1], title: 'Interview', body: 'Second note' },
+        ]);
+        expect(await store.applyJournal({ ...note(ids[1], 'Interview prep', 'Edited'), baseVersion: 1 })).toMatchObject(
+            { outcome: 'updated', id: ids[1], entry: { title: 'Interview prep', body: 'Edited' } }
+        );
+        // An older client cannot tell which of the two notes it meant.
+        await expect(store.applyJournal({ ...save(0, 'Old client'), entryDate, category: 'home' })).rejects.toThrow(
+            /more than one note/
+        );
+        expect(
+            await store.applyJournal({
+                kind: 'delete',
+                mutationId: randomUUID(),
+                id: ids[0],
+                entryDate,
+                baseVersion: 1,
+            })
+        ).toMatchObject({ outcome: 'deleted', id: ids[0], entry: { deleted: true, title: '' } });
+        expect(
+            (await store.listJournal()).filter((entry) => entry.entryDate === entryDate && !entry.deleted)
+        ).toMatchObject([{ id: ids[1], body: 'Edited' }]);
     });
 
     it('keeps legacy retry receipts attached to the retained row after adding a new section', async () => {

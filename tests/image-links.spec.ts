@@ -112,7 +112,7 @@ for (const theme of ['midnight', 'light']) {
                 await page.getByRole('button', { name: 'Global notes', exact: true }).click();
             const reopen =
                 editor.open === 'New note'
-                    ? page.getByRole('button', { name: /^Edit entry for / }).first()
+                    ? page.getByRole('button', { name: 'Edit Existing details.', exact: true }).last()
                     : editor.open === 'Global note'
                       ? page.getByRole('button', { name: `Edit Image ${editor.open} ${theme}`, exact: true })
                       : page.getByRole('button', { name: editor.open, exact: true });

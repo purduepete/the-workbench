@@ -17,11 +17,18 @@ import {
 } from 'lucide-react';
 import { globalNoteLimits, journalLimits } from '../shared/contracts';
 import type { NoteCategory } from '../shared/contracts';
-import { journalEntryKey } from '../shared/journal';
 import { categoryLabel, NoteCategories } from './NoteCategories';
 import type { NoteFilter } from './NoteCategories';
 import { formatIdeaTimestamp, parseTags } from './ideas';
-import { filterEntries, formatEntryDate, groupByWeek, readNoteFilter, weekStart, writeNoteFilter } from './journal';
+import {
+    filterEntries,
+    formatEntryDate,
+    groupByWeek,
+    noteHeading,
+    readNoteFilter,
+    weekStart,
+    writeNoteFilter,
+} from './journal';
 import type { JournalEntry } from './journal';
 import { CalendarDialog } from './CalendarDialog';
 import { NoteGroup } from './NoteGroup';
@@ -31,6 +38,7 @@ import { countNoteSections, MarkdownNoteBody, MarkdownNoteEditor } from './Markd
 import type { SectionCommand } from './MarkdownNote';
 import { useTheme } from './ThemeContext';
 import type { useJournalSync } from './useJournalSync';
+import type { JournalNoteInput } from './journalSync';
 import type { useGlobalNotesSync } from './useGlobalNotesSync';
 import { useEditorDismissal } from './useEditorDismissal';
 import { EditorSizeToggle, useEditorSize } from './EditorSize';
@@ -38,19 +46,22 @@ import { DialogCloseButton } from './DialogClose';
 import { useSearchHighlight } from './searchHighlight';
 
 interface JournalDialogProps {
+    id: string;
     entryDate: string;
-    entries: JournalEntry[];
+    note: JournalEntry | undefined;
     initialCategory: NoteCategory;
     onClose: () => void;
-    onSave: (sections: { body: string; tags: string[]; category: NoteCategory }[]) => string | null;
-    onDelete: (category: NoteCategory) => string | null;
+    onSave: (note: JournalNoteInput) => string | null;
+    onDelete: () => string | null;
     onDraftProtectionChange: (protectedDraft: boolean) => void;
     fromCalendar?: boolean;
 }
 
+/** Edits one daily note. A day can hold any number of them. */
 function JournalDialog({
+    id,
     entryDate,
-    entries,
+    note,
     initialCategory,
     onClose,
     onSave,
@@ -61,6 +72,7 @@ function JournalDialog({
     const dialogRef = useRef<HTMLDialogElement>(null);
     const editorSize = useEditorSize();
     const formRef = useRef<HTMLFormElement>(null);
+    const titleRef = useRef<HTMLInputElement>(null);
     const bodyRef = useRef<HTMLTextAreaElement>(null);
     const returnFocusRef = useRef(document.activeElement instanceof HTMLElement ? document.activeElement : null);
     const isAppleTouchDevice =
@@ -69,42 +81,12 @@ function JournalDialog({
     const [formError, setFormError] = useState<string | null>(null);
     const [confirmingDelete, setConfirmingDelete] = useState(false);
     const [confirmingEmpty, setConfirmingEmpty] = useState(false);
-    const [category, setCategory] = useState<NoteCategory>(initialCategory);
-    const [editorRevision, setEditorRevision] = useState(0);
-    const entry = entries.find((value) => (value.category ?? null) === category);
-    const [original, setOriginal] = useState<Record<string, { body: string; tags: string }>>(() =>
-        Object.fromEntries(
-            entries.map((value) => [
-                value.category ?? 'unclassified',
-                { body: value.body, tags: value.tags.join(', ') },
-            ])
-        )
-    );
-    const [drafts, setDrafts] = useState(original);
-    const draft = drafts[category ?? 'unclassified'] ?? { body: '', tags: '' };
+    const [category, setCategory] = useState<NoteCategory>(note ? (note.category ?? null) : initialCategory);
     const dismissal = useEditorDismissal(
         dialogRef,
-        entries.some((value) => Boolean(value.body.trim())),
+        Boolean(note?.title.trim() || note?.body.trim()),
         onDraftProtectionChange
     );
-    const captureDraft = () => {
-        if (!formRef.current) return drafts;
-        const formData = new FormData(formRef.current);
-        const next = {
-            ...drafts,
-            [category ?? 'unclassified']: {
-                body: String(formData.get('body') ?? ''),
-                tags: String(formData.get('tags') ?? ''),
-            },
-        };
-        setDrafts(next);
-        return next;
-    };
-    const editedSections = (values = drafts, baseline = original) =>
-        Object.entries(values).filter(
-            ([section, value]) =>
-                value.body !== (baseline[section]?.body ?? '') || value.tags !== (baseline[section]?.tags ?? '')
-        );
 
     useLayoutEffect(() => {
         const dialog = dialogRef.current;
@@ -126,43 +108,29 @@ function JournalDialog({
 
     const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
-        const edited = editedSections(captureDraft());
-        const tagsWithoutDetails = edited.find(
-            ([section, value]) => !value.body.trim() && value.tags.trim() && !original[section]?.body.trim()
-        );
-        if (tagsWithoutDetails) {
-            const label =
-                tagsWithoutDetails[0] === 'unclassified'
-                    ? 'Unclassified'
-                    : categoryLabel(tagsWithoutDetails[0] === 'home' ? 'home' : 'work');
-            setFormError(`Write details for ${label} before saving its tags.`);
-            return;
-        }
-        const hasContent = edited.some(([, value]) => value.body.trim());
-        const deletesEntry = edited.some(([section, value]) => !value.body.trim() && original[section]?.body.trim());
-        if (!hasContent && !deletesEntry && !entry) {
-            setFormError('Write something before saving this entry.');
-            bodyRef.current?.focus();
-            return;
-        }
-        if (deletesEntry) {
-            if (!confirmingEmpty) {
-                setConfirmingEmpty(true);
-                setFormError('A saved section is empty. Save again to delete that section.');
+        const formData = new FormData(event.currentTarget);
+        const title = String(formData.get('title') ?? '').trim();
+        const body = String(formData.get('body') ?? '').trim();
+        const tags = String(formData.get('tags') ?? '');
+        if (!body) {
+            if (!note) {
+                setFormError(
+                    title || tags.trim()
+                        ? 'Write details before saving this note.'
+                        : 'Write something before saving this note.'
+                );
+                bodyRef.current?.focus();
                 return;
             }
+            if (!confirmingEmpty) {
+                setConfirmingEmpty(true);
+                setFormError('This note has no details. Save again to delete it.');
+                return;
+            }
+            finish(onDelete());
+            return;
         }
-        finish(
-            onSave(
-                edited
-                    .filter(([section, value]) => value.body.trim() || original[section]?.body.trim())
-                    .map(([section, value]) => ({
-                        category: section === 'unclassified' ? null : section === 'home' ? 'home' : 'work',
-                        body: value.body.trim(),
-                        tags: parseTags(value.tags, journalLimits.tags),
-                    }))
-            )
-        );
+        finish(onSave({ id, entryDate, title, body, tags: parseTags(tags, journalLimits.tags), category }));
     };
 
     const handleDelete = () => {
@@ -170,24 +138,7 @@ function JournalDialog({
             setConfirmingDelete(true);
             return;
         }
-        const nextDrafts = captureDraft();
-        const error = onDelete(category);
-        if (error) {
-            setFormError(error);
-            return;
-        }
-        const section = category ?? 'unclassified';
-        const remainingDrafts = { ...nextDrafts };
-        const remainingOriginal = { ...original };
-        delete remainingDrafts[section];
-        delete remainingOriginal[section];
-        setDrafts(remainingDrafts);
-        setOriginal(remainingOriginal);
-        if (editedSections(remainingDrafts, remainingOriginal).length === 0) onClose();
-        else {
-            setConfirmingDelete(false);
-            setEditorRevision((value) => value + 1);
-        }
+        finish(onDelete());
     };
 
     return (
@@ -218,9 +169,12 @@ function JournalDialog({
                 tabIndex={isAppleTouchDevice ? -1 : undefined}
                 onSubmit={handleSubmit}
                 onChange={() => {
-                    const next = captureDraft();
+                    const form = formRef.current;
+                    if (!form) return;
+                    const data = new FormData(form);
+                    setConfirmingEmpty(false);
                     dismissal.setProtectedDraft(
-                        Object.values(next).some((value) => Boolean(value.body.trim() || value.tags.trim()))
+                        ['title', 'body', 'tags'].some((field) => String(data.get(field) ?? '').trim())
                     );
                 }}
             >
@@ -231,44 +185,51 @@ function JournalDialog({
                 <div className="dialog-heading">
                     <div>
                         <p className="eyebrow">Daily note</p>
-                        <h2 id="journal-dialog-title">Entry for {formatEntryDate(entryDate)}</h2>
+                        <h2 id="journal-dialog-title">
+                            {note ? 'Edit note' : 'New note'} for {formatEntryDate(entryDate)}
+                        </h2>
                     </div>
                 </div>
-                <div className="field-group">
-                    <span className="field-label">Section</span>
-                    <NoteCategories
-                        value={category ?? 'unclassified'}
-                        onChange={(value) => {
-                            if (value === 'all') return;
-                            const next = captureDraft();
-                            dismissal.setProtectedDraft(
-                                Object.values(next).some((draft) => Boolean(draft.body.trim() || draft.tags.trim()))
-                            );
-                            setCategory(value === 'unclassified' ? null : value);
-                            setFormError(null);
-                            setConfirmingDelete(false);
-                            setConfirmingEmpty(false);
-                        }}
-                    />
+                <div className="journal-meta-row">
+                    <div className="field-group">
+                        <span className="field-label">Section</span>
+                        <NoteCategories
+                            value={category ?? 'unclassified'}
+                            onChange={(value) => {
+                                if (value === 'all') return;
+                                setCategory(value === 'unclassified' ? null : value);
+                                setFormError(null);
+                            }}
+                        />
+                    </div>
+                    <label className="field-group journal-title-field">
+                        <span className="field-label">Title (optional)</span>
+                        <input
+                            ref={titleRef}
+                            className="field-input"
+                            name="title"
+                            type="text"
+                            maxLength={journalLimits.title}
+                            defaultValue={note?.title ?? ''}
+                        />
+                    </label>
                 </div>
                 <MarkdownNoteEditor
-                    key={`body-${category}-${editorRevision}`}
                     label="Details"
                     bodyRef={bodyRef}
                     name="body"
                     maxLength={journalLimits.body}
-                    defaultValue={draft.body}
+                    defaultValue={note?.body ?? ''}
                     onChange={() => setConfirmingEmpty(false)}
                 />
                 <label className="field-group">
                     <span className="field-label">Tags</span>
                     <input
-                        key={`tags-${category}-${editorRevision}`}
                         className="field-input"
                         name="tags"
                         type="text"
                         maxLength={2000}
-                        defaultValue={draft.tags}
+                        defaultValue={note?.tags.join(', ') ?? ''}
                         aria-describedby="journal-tag-hint"
                     />
                     <span className="field-hint" id="journal-tag-hint">
@@ -281,12 +242,12 @@ function JournalDialog({
                     </p>
                 )}
                 <div className="dialog-footer">
-                    {entry && (
+                    {note && (
                         <button
                             type="button"
                             className="danger-button"
                             data-confirming={confirmingDelete}
-                            aria-label={confirmingDelete ? 'Confirm delete' : 'Delete entry'}
+                            aria-label={confirmingDelete ? 'Confirm delete' : 'Delete note'}
                             onClick={handleDelete}
                             onBlur={() => setConfirmingDelete(false)}
                         >
@@ -303,7 +264,6 @@ function JournalDialog({
         </dialog>
     );
 }
-
 function GlobalNoteDialog({
     note,
     id,
@@ -482,14 +442,20 @@ function GlobalNoteDialog({
     );
 }
 
+/** The daily note being edited. A new note has an id with no saved entry yet. */
+export interface JournalEditTarget {
+    id: string;
+    entryDate: string;
+}
+
 export interface NotesPageProps {
     journal: ReturnType<typeof useJournalSync>;
     globalNotes: ReturnType<typeof useGlobalNotesSync>;
     ready: boolean;
     syncBadge: ReactNode;
     today: string;
-    editingDate: string | undefined;
-    setEditingDate: (entryDate: string | undefined) => void;
+    editingNote: JournalEditTarget | undefined;
+    setEditingNote: (target: JournalEditTarget | undefined) => void;
     onDraftProtectionChange: (protectedDraft: boolean) => void;
 }
 
@@ -538,8 +504,8 @@ export function NotesPage({
     ready,
     syncBadge,
     today,
-    editingDate,
-    setEditingDate,
+    editingNote,
+    setEditingNote,
     onDraftProtectionChange,
 }: NotesPageProps) {
     const { storageWarning: themeStorageWarning } = useTheme();
@@ -560,8 +526,9 @@ export function NotesPage({
     const [calendarOpen, setCalendarOpen] = useState(false);
     const [calendarSelection, setCalendarSelection] = useState(false);
     const [editingGlobalId, setEditingGlobalId] = useState<string | undefined>();
-    const [editingCategory, setEditingCategory] = useState<NoteCategory | undefined>();
-    const [expandedDays, setExpandedDays] = useState<Record<string, boolean>>({});
+    const [expandedNotes, setExpandedNotes] = useState<Record<string, boolean>>({});
+    const [expandedWeeks, setExpandedWeeks] = useState<Record<string, boolean>>({});
+    const dayRefs = useRef(new Map<string, HTMLElement>());
     const [sectionCommands, setSectionCommands] = useState<Record<string, SectionCommand>>({});
     const { entries } = journal;
     const matchesCategory = (category: NoteCategory | undefined) =>
@@ -577,7 +544,8 @@ export function NotesPage({
             ...(categoryFilter === 'all' ? globalNotes.notes.flatMap((note) => note.tags) : []),
         ])
     ).sort((a, b) => a.localeCompare(b));
-    const editingEntries = entries.filter((entry) => entry.entryDate === editingDate);
+    const editingEntry = editingNote && entries.find((entry) => entry.id === editingNote.id);
+    const openNewNote = (entryDate: string) => setEditingNote({ id: window.crypto.randomUUID(), entryDate });
     const globalNote = globalNotes.notes.find((note) => note.id === editingGlobalId);
     const normalizedQuery = query.trim().toLocaleLowerCase();
     const visibleGlobalNotes = (categoryFilter === 'all' ? globalNotes.notes : []).filter(
@@ -590,6 +558,88 @@ export function NotesPage({
     );
     const visibleHasContent = weeks.length > 0 || visibleGlobalNotes.length > 0;
 
+    const renderNote = (entry: JournalEntry) => {
+        const key = entry.id;
+        const heading = noteHeading(entry);
+        const expanded = expandedNotes[key] ?? entry.entryDate === today;
+        const sectionCommand = sectionCommands[key] ?? SECTIONS_COLLAPSED;
+        return (
+            <article key={key} className="idea-card journal-card">
+                <div className="journal-card-head">
+                    <h5 className="journal-date">
+                        <button
+                            type="button"
+                            className="journal-day-toggle idea-card-top"
+                            aria-label={heading}
+                            aria-expanded={expanded}
+                            aria-controls={`note-${key}-details`}
+                            onClick={() => setExpandedNotes((notes) => ({ ...notes, [key]: !expanded }))}
+                        >
+                            <span className="note-group-label">
+                                {expanded ? (
+                                    <ChevronDown size={16} aria-hidden="true" />
+                                ) : (
+                                    <ChevronRight size={16} aria-hidden="true" />
+                                )}
+                                <span className="journal-note-title">{heading}</span>
+                            </span>
+                        </button>
+                    </h5>
+                    {expanded && countNoteSections(entry.body) > 1 && (
+                        <SectionsPill
+                            label={`Sections for ${heading}`}
+                            expanded={sectionCommand.expanded}
+                            onChange={(next) =>
+                                setSectionCommands((commands) => ({
+                                    ...commands,
+                                    [key]: { expanded: next, seq: (commands[key]?.seq ?? 0) + 1 },
+                                }))
+                            }
+                        />
+                    )}
+                    <span className="card-label">{categoryLabel(entry.category)}</span>
+                </div>
+                <div id={`note-${key}-details`} hidden={!expanded}>
+                    <MarkdownNoteBody
+                        body={entry.body}
+                        className="idea-body journal-body markdown-body"
+                        sectionCommand={sectionCommand}
+                        onBodyChange={(body) => journal.save({ ...entry, category: entry.category ?? null, body })}
+                    />
+                    {entry.tags.length > 0 && (
+                        <div className="idea-tags">
+                            {entry.tags.map((tag) => (
+                                <button
+                                    key={tag.toLocaleLowerCase()}
+                                    className="tag-chip tag-filter"
+                                    type="button"
+                                    aria-label={`Filter by ${tag}`}
+                                    onClick={() => setSelectedTag(tag)}
+                                >
+                                    <Tag size={10} aria-hidden="true" />
+                                    {tag}
+                                </button>
+                            ))}
+                        </div>
+                    )}
+                    <div className="idea-card-bottom">
+                        <span className="idea-date">
+                            <Clock3 size={12} aria-hidden="true" />
+                            <time dateTime={entry.updatedAt}>{formatIdeaTimestamp(entry.updatedAt)}</time>
+                        </span>
+                        <button
+                            type="button"
+                            className="edit-button"
+                            aria-label={`Edit ${heading}`}
+                            onClick={() => setEditingNote({ id: entry.id, entryDate: entry.entryDate })}
+                        >
+                            Edit
+                        </button>
+                    </div>
+                </div>
+            </article>
+        );
+    };
     const renderGlobalSection = (notes: GlobalNote[]) =>
         notes.length > 0 && (
             <NoteGroup id="global-notes" title="Global notes" count={notes.length} item="note" isGlobal>
@@ -748,113 +798,42 @@ export function NotesPage({
                                     id={`week-${week.weekStart}`}
                                     title={`Week of ${formatEntryDate(week.weekStart)}`}
                                     count={week.entries.length}
-                                    item="entry"
-                                    defaultExpanded={week.weekStart === weekStart(today)}
+                                    item="note"
+                                    expanded={expandedWeeks[week.weekStart] ?? week.weekStart === weekStart(today)}
+                                    onExpandedChange={(expanded) =>
+                                        setExpandedWeeks((current) => ({ ...current, [week.weekStart]: expanded }))
+                                    }
                                 >
-                                    {week.entries.map((entry) => {
-                                        const key = journalEntryKey(entry.entryDate, entry.category);
-                                        const expanded = expandedDays[key] ?? entry.entryDate === today;
-                                        const sectionCommand = sectionCommands[key] ?? SECTIONS_COLLAPSED;
-                                        const sectionsExpanded = sectionCommand.expanded;
-                                        const dateLabel = formatEntryDate(entry.entryDate);
+                                    {week.days.map((day) => {
+                                        const dateLabel = formatEntryDate(day.entryDate);
                                         return (
-                                            <article key={key} className="idea-card journal-card">
-                                                <div className="journal-card-head">
-                                                    <h4 className="journal-date">
-                                                        <button
-                                                            type="button"
-                                                            className="journal-day-toggle idea-card-top"
-                                                            aria-label={`Daily note for ${dateLabel}`}
-                                                            aria-expanded={expanded}
-                                                            aria-controls={`day-${key}-details`}
-                                                            onClick={() =>
-                                                                setExpandedDays((days) => ({
-                                                                    ...days,
-                                                                    [key]: !expanded,
-                                                                }))
-                                                            }
-                                                        >
-                                                            <span className="note-group-label">
-                                                                {expanded ? (
-                                                                    <ChevronDown size={16} aria-hidden="true" />
-                                                                ) : (
-                                                                    <ChevronRight size={16} aria-hidden="true" />
-                                                                )}
-                                                                <time dateTime={entry.entryDate}>{dateLabel}</time>
-                                                            </span>
-                                                        </button>
+                                            <section
+                                                key={day.entryDate}
+                                                className="journal-day"
+                                                aria-label={`Notes for ${dateLabel}`}
+                                                ref={(element) => {
+                                                    if (element) dayRefs.current.set(day.entryDate, element);
+                                                    else dayRefs.current.delete(day.entryDate);
+                                                }}
+                                            >
+                                                <div className="journal-day-heading">
+                                                    <h4>
+                                                        <time dateTime={day.entryDate}>{dateLabel}</time>
                                                     </h4>
-                                                    {expanded && countNoteSections(entry.body) > 1 && (
-                                                        <SectionsPill
-                                                            label={`Sections for ${dateLabel}`}
-                                                            expanded={sectionsExpanded}
-                                                            onChange={(next) =>
-                                                                setSectionCommands((commands) => ({
-                                                                    ...commands,
-                                                                    [key]: {
-                                                                        expanded: next,
-                                                                        seq: (commands[key]?.seq ?? 0) + 1,
-                                                                    },
-                                                                }))
-                                                            }
-                                                        />
-                                                    )}
-                                                    <span className="card-label">{categoryLabel(entry.category)}</span>
-                                                    {entry.entryDate === today && (
+                                                    {day.entryDate === today && (
                                                         <span className="card-label">Today</span>
                                                     )}
+                                                    <button
+                                                        type="button"
+                                                        className="icon-button journal-day-add"
+                                                        aria-label={`Add a note for ${dateLabel}`}
+                                                        onClick={() => openNewNote(day.entryDate)}
+                                                    >
+                                                        <Plus size={14} aria-hidden="true" />
+                                                    </button>
                                                 </div>
-                                                <div id={`day-${key}-details`} hidden={!expanded}>
-                                                    <MarkdownNoteBody
-                                                        body={entry.body}
-                                                        className="idea-body journal-body markdown-body"
-                                                        sectionCommand={sectionCommand}
-                                                        onBodyChange={(body) =>
-                                                            journal.save(
-                                                                entry.entryDate,
-                                                                body,
-                                                                entry.tags,
-                                                                entry.category
-                                                            )
-                                                        }
-                                                    />
-                                                    {entry.tags.length > 0 && (
-                                                        <div className="idea-tags">
-                                                            {entry.tags.map((tag) => (
-                                                                <button
-                                                                    key={tag.toLocaleLowerCase()}
-                                                                    className="tag-chip tag-filter"
-                                                                    type="button"
-                                                                    aria-label={`Filter by ${tag}`}
-                                                                    onClick={() => setSelectedTag(tag)}
-                                                                >
-                                                                    <Tag size={10} aria-hidden="true" />
-                                                                    {tag}
-                                                                </button>
-                                                            ))}
-                                                        </div>
-                                                    )}
-                                                    <div className="idea-card-bottom">
-                                                        <span className="idea-date">
-                                                            <Clock3 size={12} aria-hidden="true" />
-                                                            <time dateTime={entry.updatedAt}>
-                                                                {formatIdeaTimestamp(entry.updatedAt)}
-                                                            </time>
-                                                        </span>
-                                                        <button
-                                                            type="button"
-                                                            className="edit-button"
-                                                            aria-label={`Edit entry for ${formatEntryDate(entry.entryDate)}`}
-                                                            onClick={() => {
-                                                                setEditingCategory(entry.category ?? null);
-                                                                setEditingDate(entry.entryDate);
-                                                            }}
-                                                        >
-                                                            Edit
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                            </article>
+                                                {day.entries.map((entry) => renderNote(entry))}
+                                            </section>
                                         );
                                     })}
                                 </NoteGroup>
@@ -871,20 +850,20 @@ export function NotesPage({
                 </div>
             )}
 
-            {editingDate !== undefined && (
+            {editingNote !== undefined && (
                 <JournalDialog
-                    key={editingDate}
-                    entryDate={editingDate}
-                    entries={editingEntries}
-                    initialCategory={editingCategory === undefined ? newCategory : editingCategory}
+                    key={editingNote.id}
+                    id={editingNote.id}
+                    entryDate={editingEntry?.entryDate ?? editingNote.entryDate}
+                    note={editingEntry}
+                    initialCategory={newCategory}
                     onClose={() => {
                         setCalendarSelection(false);
-                        setEditingCategory(undefined);
-                        setEditingDate(undefined);
+                        setEditingNote(undefined);
                     }}
                     fromCalendar={calendarSelection}
-                    onSave={(sections) => journal.saveSections(editingDate, sections)}
-                    onDelete={(category) => journal.remove(editingDate, category)}
+                    onSave={(note) => journal.save(note)}
+                    onDelete={() => journal.remove(editingNote.id, editingEntry?.entryDate ?? editingNote.entryDate)}
                     onDraftProtectionChange={onDraftProtectionChange}
                 />
             )}
@@ -912,9 +891,21 @@ export function NotesPage({
                     today={today}
                     onClose={() => setCalendarOpen(false)}
                     onSelect={(date) => {
-                        setCalendarSelection(true);
                         setCalendarOpen(false);
-                        setEditingDate(date);
+                        if (!categoryEntries.some((entry) => entry.entryDate === date)) {
+                            setCalendarSelection(true);
+                            openNewNote(date);
+                            return;
+                        }
+                        setQuery('');
+                        setSelectedTag(null);
+                        setExpandedWeeks((current) => ({ ...current, [weekStart(date)]: true }));
+                        requestAnimationFrame(() =>
+                            dayRefs.current.get(date)?.scrollIntoView({
+                                block: 'start',
+                                behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth',
+                            })
+                        );
                     }}
                 />
             )}
