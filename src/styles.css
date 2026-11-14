@@ -951,7 +951,8 @@ main.page-width {
     gap: 6px;
 }
 
-.dialog-corner-actions + .dialog-heading {
+.dialog-corner-actions + .dialog-heading,
+.idea-form:has(> .dialog-corner-actions) > .dialog-heading {
     padding-right: 84px;
 }
 

@@ -351,9 +351,8 @@ for (const device of [
         await expect(device.touch ? dialog : title).toBeFocused();
         if (device.touch) {
             await expect(page.locator('html')).not.toHaveAttribute('data-idea-input-focused', 'true');
-            // Tab moves into the dialog; the corner buttons come before the title.
-            for (let step = 0; step < 3 && !(await title.evaluate((node) => node === document.activeElement)); step++)
-                await page.keyboard.press('Tab');
+            // One Tab reaches the title; the corner buttons come last.
+            await page.keyboard.press('Tab');
             await expect(title).toBeFocused();
         }
         await title.click();

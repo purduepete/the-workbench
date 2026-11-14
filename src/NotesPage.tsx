@@ -203,10 +203,6 @@ function NoteDialog({
                     dismissal.setProtectedDraft(formEdited(form));
                 }}
             >
-                <div className="dialog-corner-actions">
-                    <EditorSizeToggle maximized={editorSize.maximized} onToggle={editorSize.toggle} />
-                    <DialogCloseButton onClose={onClose} isProtected={dismissal.isProtected} />
-                </div>
                 <div className="dialog-heading">
                     <div>
                         <p className="eyebrow">Note</p>
@@ -274,6 +270,10 @@ function NoteDialog({
                         {formError}
                     </p>
                 )}
+                <div className="dialog-corner-actions">
+                    <EditorSizeToggle maximized={editorSize.maximized} onToggle={editorSize.toggle} />
+                    <DialogCloseButton onClose={onClose} isProtected={dismissal.isProtected} />
+                </div>
                 <div className="dialog-footer">
                     {note && (
                         <button

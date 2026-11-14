@@ -177,10 +177,6 @@ function TaskDialog({
                     dismissal.setProtectedDraft(prefilled || formEdited(formRef.current));
                 }}
             >
-                <div className="dialog-corner-actions">
-                    <EditorSizeToggle maximized={editorSize.maximized} onToggle={editorSize.toggle} />
-                    <DialogCloseButton onClose={onClose} isProtected={dismissal.isProtected} />
-                </div>
                 <div className="dialog-heading">
                     <div>
                         <p className="eyebrow">Task</p>
@@ -227,6 +223,10 @@ function TaskDialog({
                         {error}
                     </p>
                 )}
+                <div className="dialog-corner-actions">
+                    <EditorSizeToggle maximized={editorSize.maximized} onToggle={editorSize.toggle} />
+                    <DialogCloseButton onClose={onClose} isProtected={dismissal.isProtected} />
+                </div>
                 <div className="dialog-footer">
                     {task && (
                         <button

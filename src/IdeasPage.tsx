@@ -290,10 +290,6 @@ function IdeaDialog({
                     dismissal.setProtectedDraft(formEdited(form));
                 }}
             >
-                <div className="dialog-corner-actions">
-                    <EditorSizeToggle maximized={editorSize.maximized} onToggle={editorSize.toggle} />
-                    <DialogCloseButton onClose={onClose} isProtected={dismissal.isProtected} />
-                </div>
                 <div className="dialog-heading">
                     <div>
                         <p className="eyebrow">Idea</p>
@@ -373,6 +369,10 @@ function IdeaDialog({
                         {formError}
                     </p>
                 )}
+                <div className="dialog-corner-actions">
+                    <EditorSizeToggle maximized={editorSize.maximized} onToggle={editorSize.toggle} />
+                    <DialogCloseButton onClose={onClose} isProtected={dismissal.isProtected} />
+                </div>
                 <div className="dialog-footer">
                     {idea && (
                         <button
