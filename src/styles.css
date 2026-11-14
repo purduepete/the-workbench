@@ -2568,7 +2568,7 @@ div.markdown-task-text {
     display: block;
     width: 100%;
     min-height: 84px;
-    resize: vertical;
+    resize: none;
     font:
         13px/1.5 ui-monospace,
         'Cascadia Mono',
@@ -3245,4 +3245,37 @@ div.markdown-task-text {
         clip-path: inset(50%);
         white-space: nowrap;
     }
+}
+
+/* A grip under the comment editor drags its height; iPad Safari has no native textarea resize handle. */
+.commentary-height-grip {
+    display: flex;
+    height: 14px;
+    align-items: center;
+    justify-content: center;
+    cursor: ns-resize;
+    touch-action: none;
+}
+
+.commentary-height-grip > span {
+    width: 32px;
+    height: 3px;
+    border-radius: 2px;
+    background: var(--border);
+    transition: background-color 0.18s ease;
+}
+
+.commentary-height-grip:hover > span,
+.commentary-height-grip:focus-visible > span {
+    background: var(--accent);
+}
+
+.commentary-height-grip:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: -2px;
+}
+
+/* A dragged-tall editor makes the pane grow instead of scrolling the grip out of reach. */
+.commentary-pane:has(.commentary-height-grip) {
+    max-height: none;
 }

@@ -110,6 +110,11 @@ export function CommentaryAside({
         if (editing && !revealing.current) inputRef.current?.focus({ preventScroll: true });
     }, [editing]);
 
+    // Height set by dragging the grip under the editor; iPad Safari has no native textarea resize handle.
+    const [inputHeight, setInputHeight] = useState<number | null>(null);
+    const heightDrag = useRef<{ y: number; height: number } | null>(null);
+    const sizeInput = (next: number) => setInputHeight(Math.min(600, Math.max(84, Math.round(next))));
+
     const commit = () => {
         const body = draft.trim();
         if (body === (comment?.body ?? '')) return;
@@ -145,6 +150,7 @@ export function CommentaryAside({
         }
         if (open) return;
         revealing.current = true;
+        setInputHeight(null);
         setOpen(true);
         if (comment) setEditing(false);
         else startEditing();
@@ -323,6 +329,7 @@ export function CommentaryAside({
                                 id={`${paneId}-input`}
                                 ref={inputRef}
                                 className="field-input commentary-input"
+                                style={inputHeight === null ? undefined : { height: inputHeight }}
                                 maxLength={commentLimits.body}
                                 value={draft}
                                 onChange={(event) => setDraft(event.target.value)}
@@ -342,6 +349,40 @@ export function CommentaryAside({
                                     }
                                 }}
                             />
+                            <div
+                                className="commentary-height-grip"
+                                role="separator"
+                                aria-orientation="horizontal"
+                                aria-label="Resize commentary height"
+                                aria-valuemin={84}
+                                aria-valuemax={600}
+                                aria-valuenow={inputHeight ?? 84}
+                                tabIndex={0}
+                                onPointerDown={(event) => {
+                                    if (event.button !== 0) return;
+                                    // Keep focus (and the iPad keyboard) in the editor while dragging.
+                                    event.preventDefault();
+                                    heightDrag.current = {
+                                        y: event.clientY,
+                                        height: inputRef.current?.offsetHeight ?? 84,
+                                    };
+                                    event.currentTarget.setPointerCapture(event.pointerId);
+                                }}
+                                onPointerMove={(event) => {
+                                    const start = heightDrag.current;
+                                    if (start) sizeInput(start.height + event.clientY - start.y);
+                                }}
+                                onPointerUp={() => (heightDrag.current = null)}
+                                onPointerCancel={() => (heightDrag.current = null)}
+                                onKeyDown={(event) => {
+                                    if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
+                                    event.preventDefault();
+                                    const current = inputRef.current?.offsetHeight ?? 84;
+                                    sizeInput(current + (event.key === 'ArrowDown' ? 24 : -24));
+                                }}
+                            >
+                                <span aria-hidden="true" />
+                            </div>
                         </>
                     ) : comment ? (
                         <MarkdownNoteBody body={comment.body} className="markdown-body commentary-body" />
