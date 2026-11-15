@@ -593,9 +593,14 @@ export function MarkdownNoteEditor({
                     </button>
                 </div>
                 {mode === 'edit' && (
-                    <button type="button" className="secondary-button markdown-add-section" onClick={insertSection}>
+                    <button
+                        type="button"
+                        className="secondary-button markdown-add-section"
+                        aria-label="Add section"
+                        onClick={insertSection}
+                    >
                         <Plus size={14} aria-hidden="true" />
-                        Add section
+                        <span className="editor-action-full">Add section</span>
                     </button>
                 )}
                 {mode === 'edit' && <ImageLinkEditor bodyRef={bodyRef} />}

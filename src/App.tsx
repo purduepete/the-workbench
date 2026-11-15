@@ -151,7 +151,7 @@ export function App() {
                                 }}
                             >
                                 <Icon size={14} aria-hidden="true" />
-                                {label}
+                                <span className="page-nav-label">{label}</span>
                             </a>
                         ))}
                     </nav>

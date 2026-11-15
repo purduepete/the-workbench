@@ -105,6 +105,7 @@ export function ImageLinkEditor({ bodyRef }: { bodyRef: RefObject<HTMLTextAreaEl
                 ref={triggerRef}
                 type="button"
                 className="secondary-button"
+                aria-label="Add image link"
                 aria-expanded={open}
                 aria-controls={id}
                 onClick={() => {
@@ -116,7 +117,7 @@ export function ImageLinkEditor({ bodyRef }: { bodyRef: RefObject<HTMLTextAreaEl
                 }}
             >
                 <ImagePlus size={14} aria-hidden="true" />
-                Add image link
+                <span className="editor-action-full">Add image link</span>
             </button>
             {open && (
                 <div

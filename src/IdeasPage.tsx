@@ -310,7 +310,7 @@ function IdeaDialog({
                     defaultValue={initialIdea?.title ?? ''}
                     required
                 />
-                <div className="editor-chips">
+                <div className="editor-chips idea-editor-chips">
                     <SelectField
                         ariaLabel="Solution"
                         icon={Boxes}

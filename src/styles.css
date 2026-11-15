@@ -1851,15 +1851,21 @@ div.markdown-task-text {
 }
 
 .markdown-editor-toolbar {
-    display: flex;
+    display: grid;
+    grid-template-columns: minmax(0, 128px) auto auto;
     align-items: center;
     justify-content: space-between;
-    flex-wrap: wrap;
-    gap: 10px;
+    gap: 8px;
 }
 
-.markdown-editor-toolbar .image-link-editor:has(.image-link-fields) {
-    flex-basis: 100%;
+.markdown-editor-toolbar > .image-link-editor {
+    display: contents;
+}
+
+.markdown-editor-toolbar .image-link-fields {
+    min-width: 0;
+    grid-column: 1 / -1;
+    grid-template-columns: minmax(0, 1fr);
 }
 
 .markdown-mode {
@@ -2148,6 +2154,15 @@ div.markdown-task-text {
         padding: 0 6px;
     }
 
+    .page-nav-label {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip: rect(0 0 0 0);
+        white-space: nowrap;
+    }
+
     .journal-list {
         gap: 8px;
         padding: 6px 12px 12px;
@@ -2324,7 +2339,17 @@ div.markdown-task-text {
     }
 
     .brand {
+        flex: 0 0 auto;
         gap: 9px;
+    }
+
+    .topbar .page-nav {
+        min-width: 0;
+        flex: 1 1 auto;
+    }
+
+    .page-nav .segment-button {
+        padding-inline: 3px;
     }
 
     .brand-mark {
@@ -3151,6 +3176,35 @@ div.markdown-task-text {
     flex: none;
 }
 
+.idea-editor-chips {
+    flex-wrap: nowrap;
+    justify-content: space-between;
+}
+
+.idea-editor-chips > .chip-select:not(:last-child) {
+    min-width: 0;
+    flex: 0 1 auto;
+}
+
+.idea-editor-chips > .chip-select:not(:last-child) .select-label {
+    min-width: 0;
+    flex: 0 1 auto;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+@media (max-width: 540px) {
+    .idea-editor-chips > .chip-select {
+        gap: 4px;
+        padding-inline: 6px;
+    }
+
+    .idea-editor-chips .select-prefix {
+        display: none;
+    }
+}
+
 .select-prefix {
     color: var(--quiet);
 }
@@ -3164,7 +3218,7 @@ div.markdown-task-text {
 
 /* The Details toolbar matches the 28px editor chips. */
 .markdown-editor-toolbar > .markdown-mode {
-    width: 128px;
+    width: 100%;
     padding: 2px;
 }
 
@@ -3190,6 +3244,18 @@ div.markdown-task-text {
     font-size: 12.5px;
 }
 
+@media (max-width: 540px) {
+    .markdown-editor-toolbar > .markdown-add-section,
+    .markdown-editor-toolbar > .image-link-editor > .secondary-button {
+        width: 28px;
+        padding: 0;
+    }
+
+    .markdown-editor-toolbar .editor-action-full {
+        display: none;
+    }
+}
+
 /* Page filter pills (Notes, Tasks, Ideas) share one look: equal segments sized to the widest label, the same padding,
    and an icon on every option. */
 .segmented.page-pill {
@@ -3205,6 +3271,13 @@ div.markdown-task-text {
 
 .page-pill .segment-fill {
     width: calc((100% - 6px) / var(--segment-count));
+}
+
+@media (max-width: 540px) {
+    .notes-toolbar-actions > .page-pill,
+    .workspace-tools > .page-pill {
+        width: 100%;
+    }
 }
 
 /* An action at the end of a menu sits under a rule, apart from the choices. */

@@ -37,6 +37,11 @@ to its opener. Empty idea dialogs close from the X, Escape or the backdrop. Edit
 On desktop, idea, note and task editors have the same height and use the extra space for writing. Dialogs open near
 the top of the page; touch layouts stay centered.
 
+On phones, page filters fill their rows and header navigation uses icons with accessible link names.
+The Details toolbar stays on one row, with Edit/Preview left, Add image link right and equal gaps around Add section.
+The two actions are icon-only on phones. Idea editors keep Solution left and Priority right, with Status between them
+when a solution is selected; long solution names shorten visually to fit.
+
 Manage solutions saves checkbox changes immediately and closes with OK.
 The borderless header Refresh and Theme buttons change fill and text color only while active.
 Refresh stays active until ideas, notes, tasks and solutions finish refreshing, including after a failed request.
