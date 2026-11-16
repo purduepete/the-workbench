@@ -42,6 +42,9 @@ The Details toolbar stays on one row, with Edit/Preview left, Add image link rig
 The two actions are icon-only on phones. Idea editors keep Solution left and Priority right, with Status between them
 when a solution is selected; long solution names shorten visually to fit.
 
+Rendered Markdown code blocks, inline code and help examples use bundled Fira Code. Regular text and the
+Markdown editor keep the app font.
+
 Manage solutions saves checkbox changes immediately and closes with OK.
 The borderless header Refresh and Theme buttons change fill and text color only while active.
 Refresh stays active until ideas, notes, tasks and solutions finish refreshing, including after a failed request.

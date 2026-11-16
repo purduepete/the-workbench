@@ -2,6 +2,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App';
 import { ThemeProvider } from './ThemeContext';
+import '@fontsource-variable/fira-code';
 import './styles.css';
 import './first-load.css';
 
