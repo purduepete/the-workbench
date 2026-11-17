@@ -1891,6 +1891,30 @@ div.markdown-task-text {
     display: none;
 }
 
+.markdown-indent-hint {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 4px 12px;
+    color: var(--quiet);
+    font-size: 11px;
+}
+
+.markdown-indent-hint[hidden] {
+    display: none;
+}
+
+.markdown-indent-arrows {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 2px;
+}
+
+.markdown-editor-textarea {
+    tab-size: 4;
+}
+
 .markdown-editor-preview {
     min-height: 150px;
     padding: 11px;

@@ -44,6 +44,9 @@ when a solution is selected; long solution names shorten visually to fit.
 
 Rendered Markdown code blocks, inline code and help examples use bundled Fira Code. Regular text and the
 Markdown editor keep the app font.
+In Details edit mode, Tab inserts 4 spaces and Shift+Tab removes one indentation level.
+Selected lines indent or outdent together. Small arrows below the edit area show the current line's indentation
+depth, one per level. Press Escape then Tab to move focus out of the editor.
 
 Manage solutions saves checkbox changes immediately and closes with OK.
 The borderless header Refresh and Theme buttons change fill and text color only while active.

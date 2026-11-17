@@ -562,6 +562,40 @@ test('note editor keeps its existing phone width', async ({ page }) => {
     expect(box?.width).toBeCloseTo(358, 0);
 });
 
+for (const [route, opener] of [
+    ['/notes', 'New note'],
+    ['/tasks', 'New task'],
+    ['/ideas', 'New idea'],
+] as const) {
+    test(`${opener} Details indents with Tab and shows depth below the editor`, async ({ page }) => {
+        await page.goto(route);
+        await openEditor(page, opener);
+        const dialog = page.getByRole('dialog');
+        const body = dialog.getByRole('textbox', { name: 'Details', exact: true });
+        await body.fill('- Parent\n- Child');
+        await body.press('Home');
+        await body.press('Tab');
+        await expect(body).toHaveValue('- Parent\n    - Child');
+        await expect(body).toBeFocused();
+        const depth = dialog.getByRole('img', { name: 'Indentation depth: 1', exact: true });
+        await expect(depth.locator('svg')).toHaveCount(1);
+        expect((await depth.boundingBox())!.y).toBeGreaterThanOrEqual(
+            await body.evaluate((element) => element.getBoundingClientRect().bottom)
+        );
+        await body.press('Shift+Tab');
+        await expect(body).toHaveValue('- Parent\n- Child');
+        await body.evaluate((element: HTMLTextAreaElement) => element.setSelectionRange(0, element.value.length));
+        await body.press('Tab');
+        await expect(body).toHaveValue('    - Parent\n    - Child');
+        await body.press('Shift+Tab');
+        await expect(body).toHaveValue('- Parent\n- Child');
+        await body.press('Escape');
+        await body.press('Tab');
+        await expect(body).not.toBeFocused();
+        await expect(dialog).toBeVisible();
+    });
+}
+
 test('Add section inserts a heading at the editor cursor', async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 900 });
     await page.goto('/notes');

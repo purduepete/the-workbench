@@ -17,11 +17,12 @@ import remarkBreaks from 'remark-breaks';
 import remarkGfm from 'remark-gfm';
 import type { Root, RootContent } from 'mdast';
 import type { Plugin } from 'unified';
-import { ChevronDown, Ellipsis, Info, Plus } from 'lucide-react';
+import { ArrowRight, ChevronDown, Ellipsis, Info, Plus } from 'lucide-react';
 import { ImageLinkEditor } from './ImageLinks';
 import { OneDriveThumbnail } from './OneDriveThumbnail';
 import { oneDriveImageUrl } from './oneDriveLinks';
 import { setMarkdownTask } from './markdownTasks';
+import { indentMarkdown, markdownIndentDepth } from './markdownIndent';
 
 interface NoteSection {
     type: 'noteSection';
@@ -540,9 +541,12 @@ export function MarkdownNoteEditor({
     onChange?: (event: ChangeEvent<HTMLTextAreaElement>) => void;
 }) {
     const [mode, setMode] = useState<'edit' | 'preview'>('edit');
-    const [previewBody, setPreviewBody] = useState('');
+    const [previewBody, setPreviewBody] = useState(defaultValue);
     const [sectionError, setSectionError] = useState('');
+    const [indentDepth, setIndentDepth] = useState(() => markdownIndentDepth(defaultValue, 0));
+    const leaveOnTab = useRef(false);
     const labelId = useId();
+    const indentHintId = useId();
     const style = { '--segment-index': mode === 'edit' ? 0 : 1 } as CSSProperties & {
         '--segment-index': number;
     };
@@ -614,12 +618,60 @@ export function MarkdownNoteEditor({
                 maxLength={maxLength}
                 defaultValue={defaultValue}
                 hidden={mode === 'preview'}
+                aria-describedby={indentHintId}
+                onInput={(event) => {
+                    setPreviewBody(event.currentTarget.value);
+                }}
+                onBlur={() => {
+                    leaveOnTab.current = false;
+                }}
+                onSelect={(event) => {
+                    setIndentDepth(markdownIndentDepth(event.currentTarget.value, event.currentTarget.selectionStart));
+                }}
+                onKeyDown={(event) => {
+                    if (event.key === 'Escape') {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        leaveOnTab.current = true;
+                        return;
+                    }
+                    const leave = leaveOnTab.current;
+                    leaveOnTab.current = false;
+                    if (event.key !== 'Tab' || leave || event.ctrlKey || event.altKey || event.metaKey) return;
+                    event.preventDefault();
+                    const textarea = event.currentTarget;
+                    const result = indentMarkdown(
+                        textarea.value,
+                        textarea.selectionStart,
+                        textarea.selectionEnd,
+                        event.shiftKey
+                    );
+                    if (result.value.length > maxLength) {
+                        setSectionError('Remove some text before indenting.');
+                        return;
+                    }
+                    textarea.setRangeText(result.value, 0, textarea.value.length, 'preserve');
+                    textarea.setSelectionRange(result.start, result.end);
+                    setPreviewBody(result.value);
+                    setIndentDepth(markdownIndentDepth(result.value, result.start));
+                    setSectionError('');
+                    textarea.dispatchEvent(new Event('input', { bubbles: true }));
+                }}
                 onChange={(event) => {
                     setPreviewBody(event.currentTarget.value);
+                    setIndentDepth(markdownIndentDepth(event.currentTarget.value, event.currentTarget.selectionStart));
                     setSectionError('');
                     onChange?.(event);
                 }}
             />
+            <div id={indentHintId} className="markdown-indent-hint" hidden={mode === 'preview'}>
+                <span className="markdown-indent-arrows" role="img" aria-label={`Indentation depth: ${indentDepth}`}>
+                    {Array.from({ length: indentDepth }, (_, index) => (
+                        <ArrowRight key={index} size={12} aria-hidden="true" />
+                    ))}
+                </span>
+                <span>Tab indents · Shift+Tab outdents · Esc then Tab leaves editor</span>
+            </div>
             {sectionError && mode === 'edit' && (
                 <span className="field-hint" role="alert">
                     {sectionError}
