@@ -161,7 +161,8 @@ marked entry days; click a day (or press Enter on it) to open its entry or start
 deletes it.
 
 Global notes have titles and tags, are not tied to a date, and appear above the daily notes. The global group and
-each weekly group can be collapsed independently. The search box and tag filter cover both kinds of notes. A Global note
+each weekly group can be collapsed independently. Each Global note has a small pill in its header to expand or collapse
+its details. The search box and tag filter cover both kinds of notes. A Global note
 needs a title or details; without a title, its first line becomes the title.
 
 Daily notes group by week for the current week and the 3 before it; every earlier day goes in one Older group, still split by date. Only the current week starts expanded; other weeks, Older and global notes start collapsed. Modals close from an X in the upper-right corner,

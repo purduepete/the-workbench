@@ -722,6 +722,13 @@ test('global notes can be searched and reopened without pin controls', async ({ 
     await expect(page.getByRole('button', { name: `Pin ${title}` })).toHaveCount(0);
     await expect(page.getByRole('button', { name: `Unpin ${title}` })).toHaveCount(0);
 
+    const card = page.locator('.global-note-card').filter({ hasText: title });
+    await card.getByRole('button', { name: `Collapse ${title}` }).click();
+    await expect(card.getByText('Reference for later')).toBeHidden();
+    await expect(card.getByRole('button', { name: `Collapse ${title}` })).toHaveAttribute('aria-pressed', 'true');
+    await card.getByRole('button', { name: `Expand ${title}` }).click();
+    await expect(card.getByText('Reference for later')).toBeVisible();
+
     await page.getByRole('searchbox', { name: 'Search notes' }).fill(title);
     await expect(page.getByText('Reference for later')).toBeVisible();
     await page.reload();

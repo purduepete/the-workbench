@@ -322,10 +322,18 @@ function SectionsPill({
     label,
     expanded,
     onChange,
+    expandLabel = 'Expand all sections',
+    collapseLabel = 'Collapse all sections',
+    controlsId,
+    iconSize = 10,
 }: {
     label: string;
     expanded: boolean;
     onChange: (expanded: boolean) => void;
+    expandLabel?: string;
+    collapseLabel?: string;
+    controlsId?: string;
+    iconSize?: number;
 }) {
     const style = { '--segment-index': expanded ? 0 : 1, '--segment-count': 2 } as CSSProperties;
     return (
@@ -334,20 +342,24 @@ function SectionsPill({
             <button
                 type="button"
                 className="segment-button"
-                aria-label="Expand all sections"
+                aria-label={expandLabel}
                 aria-pressed={expanded}
+                aria-controls={controlsId}
+                aria-expanded={controlsId ? expanded : undefined}
                 onClick={() => onChange(true)}
             >
-                <ChevronsUpDown size={10} aria-hidden="true" />
+                <ChevronsUpDown size={iconSize} aria-hidden="true" />
             </button>
             <button
                 type="button"
                 className="segment-button"
-                aria-label="Collapse all sections"
+                aria-label={collapseLabel}
                 aria-pressed={!expanded}
+                aria-controls={controlsId}
+                aria-expanded={controlsId ? expanded : undefined}
                 onClick={() => onChange(false)}
             >
-                <ChevronsDownUp size={10} aria-hidden="true" />
+                <ChevronsDownUp size={iconSize} aria-hidden="true" />
             </button>
         </div>
     );
@@ -381,6 +393,7 @@ export function NotesPage({
     const [datedNew, setDatedNew] = useState(false);
     const [selectedTag, setSelectedTag] = useState<string | null>(null);
     const [expandedNotes, setExpandedNotes] = useState<Record<string, boolean>>({});
+    const [expandedGlobalNotes, setExpandedGlobalNotes] = useState<Record<string, boolean>>({});
     const [expandedWeeks, setExpandedWeeks] = useState<Record<string, boolean>>({});
     const [sectionCommands, setSectionCommands] = useState<Record<string, SectionCommand>>({});
     const { entries } = journal;
@@ -561,49 +574,66 @@ export function NotesPage({
     const renderGlobalSection = (notes: GlobalNote[]) =>
         notes.length > 0 && (
             <NoteGroup id="global-notes" title="Global notes" count={notes.length} item="note" isGlobal defaultExpanded>
-                {notes.map((note) => (
-                    <article key={note.id} className="idea-card global-note-card">
-                        <div className="idea-card-top">
-                            <h4 className="global-note-title">{note.title}</h4>
-                        </div>
-                        {commentaryBody(note.id, note.title, note.body || 'No body text.', null, (body) =>
-                            globalNotes.save({ id: note.id, title: note.title, body, tags: note.tags })
-                        )}
-                        {note.tags.length > 0 && (
-                            <div className="idea-tags">
-                                {note.tags.map((tag) => (
-                                    <button
-                                        key={tag.toLocaleLowerCase()}
-                                        className="tag-chip tag-filter"
-                                        type="button"
-                                        aria-label={`Filter by ${tag}`}
-                                        onClick={() => setSelectedTag(tag)}
-                                    >
-                                        <Tag size={10} aria-hidden="true" />
-                                        {tag}
-                                    </button>
-                                ))}
+                {notes.map((note) => {
+                    const expanded = expandedGlobalNotes[note.id] ?? true;
+                    const detailsId = `global-note-${note.id}-details`;
+                    return (
+                        <article key={note.id} className="idea-card global-note-card">
+                            <div className="idea-card-top journal-card-head">
+                                <h4 className="global-note-title">{note.title}</h4>
+                                <SectionsPill
+                                    label={`Display ${note.title}`}
+                                    expanded={expanded}
+                                    expandLabel={`Expand ${note.title}`}
+                                    collapseLabel={`Collapse ${note.title}`}
+                                    controlsId={detailsId}
+                                    iconSize={12}
+                                    onChange={(next) =>
+                                        setExpandedGlobalNotes((current) => ({ ...current, [note.id]: next }))
+                                    }
+                                />
                             </div>
-                        )}
-                        <div className="idea-card-bottom">
-                            <span className="idea-date">
-                                <Clock3 size={12} aria-hidden="true" />
-                                <time dateTime={note.updatedAt}>{formatIdeaTimestamp(note.updatedAt)}</time>
-                            </span>
-                            <button
-                                type="button"
-                                className="card-action"
-                                aria-label={`Edit ${note.title}`}
-                                onClick={() => {
-                                    setDatedNew(false);
-                                    setEditingNote({ id: note.id, entryDate: today });
-                                }}
-                            >
-                                <Pencil size={15} aria-hidden="true" />
-                            </button>
-                        </div>
-                    </article>
-                ))}
+                            <div id={detailsId} hidden={!expanded}>
+                                {commentaryBody(note.id, note.title, note.body || 'No body text.', null, (body) =>
+                                    globalNotes.save({ id: note.id, title: note.title, body, tags: note.tags })
+                                )}
+                                {note.tags.length > 0 && (
+                                    <div className="idea-tags">
+                                        {note.tags.map((tag) => (
+                                            <button
+                                                key={tag.toLocaleLowerCase()}
+                                                className="tag-chip tag-filter"
+                                                type="button"
+                                                aria-label={`Filter by ${tag}`}
+                                                onClick={() => setSelectedTag(tag)}
+                                            >
+                                                <Tag size={10} aria-hidden="true" />
+                                                {tag}
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                                <div className="idea-card-bottom">
+                                    <span className="idea-date">
+                                        <Clock3 size={12} aria-hidden="true" />
+                                        <time dateTime={note.updatedAt}>{formatIdeaTimestamp(note.updatedAt)}</time>
+                                    </span>
+                                    <button
+                                        type="button"
+                                        className="card-action"
+                                        aria-label={`Edit ${note.title}`}
+                                        onClick={() => {
+                                            setDatedNew(false);
+                                            setEditingNote({ id: note.id, entryDate: today });
+                                        }}
+                                    >
+                                        <Pencil size={15} aria-hidden="true" />
+                                    </button>
+                                </div>
+                            </div>
+                        </article>
+                    );
+                })}
             </NoteGroup>
         );
 

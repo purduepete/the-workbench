@@ -1404,7 +1404,8 @@ form.idea-form > .field-group:first-child {
     gap: 10px;
 }
 
-.journal-card-head > .journal-date {
+.journal-card-head > .journal-date,
+.journal-card-head > .global-note-title {
     flex: 1;
     min-width: 0;
 }
@@ -1436,6 +1437,21 @@ form.idea-form > .field-group:first-child {
     height: 12px;
     padding: 0;
     border-radius: 999px;
+}
+
+.global-note-card .sections-pill {
+    grid-template-columns: repeat(2, 24px);
+    border-radius: 0;
+}
+
+.global-note-card .sections-pill .segment-fill,
+.global-note-card .sections-pill .segment-button {
+    border-radius: 0;
+}
+
+.global-note-card .sections-pill .segment-button {
+    width: 24px;
+    height: 16px;
 }
 
 .journal-day-toggle {
